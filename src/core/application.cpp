@@ -143,28 +143,14 @@ void Application::run()
 			glfwSetWindowShouldClose(window_, true);
 		}
 
-		// process UI display
-		if (input.enableImguiPressed)
-		{
-			ui_->setUIDisplayEnabled(true);
-		}
-		if (input.disableImguiPressed)
-		{
-			ui_->setUIDisplayEnabled(false);
-		}
-
 		// process camera active/inactive mouse cursor
 		if (input.enableCameraPressed)
 		{
 			glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-			ui_->setCameraModeUIEnabled(true);
-			ui_->setUIInputEnabled(false);
 		}
 		if (input.disableCameraPressed)
 		{
 			glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-			ui_->setCameraModeUIEnabled(false);
-			ui_->setUIInputEnabled(true);
 		}
 		///////////////////////////////////
 

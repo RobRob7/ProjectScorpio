@@ -163,11 +163,15 @@ void UI::buildUI(float dt, IScene& scene)
 		glDisable(GL_FRAMEBUFFER_SRGB);
 	}
 
-	drawTopBar();
+	drawTitleBar();
+	drawMenuBar(scene);
 
-	if (enabled_)
+	if (statsEnabled_)
 	{
-		drawStatsFPS(dt);
+		drawStatsFPS(scene, dt);
+	}
+	if (inspectorEnabled_)
+	{
 		drawInspector(scene);
 	}
 
@@ -221,29 +225,6 @@ void UI::renderVk(FrameContext& frame)
 	}
 } // end of renderVk()
 
-void UI::setUIInputEnabled(bool enabled)
-{
-	ImGuiIO& io = ImGui::GetIO();
-
-	io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableKeyboard;
-	io.ConfigFlags &= ~ImGuiConfigFlags_NavEnableGamepad;
-
-	io.WantCaptureKeyboard = enabled;
-	io.WantCaptureMouse = enabled;
-
-	io.MouseDrawCursor = enabled;
-} // end of setUIInputEnabled()
-
-void UI::setUIDisplayEnabled(bool enabled)
-{
-	enabled_ = enabled;
-} // end of setUIDisplayEnabled()
-
-void UI::setCameraModeUIEnabled(bool enabled)
-{
-	cameraModeOn_ = enabled;
-} // end of setCameraModeUIEnabled()
-
 std::string_view UI::backendToString(Backend backend) const
 {
 	switch (backend)
@@ -283,7 +264,7 @@ void UI::onSwapchainRecreated()
 
 
 //--- PRIVATE ---//
-void UI::drawTopBar()
+void UI::drawTitleBar()
 {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 
@@ -302,47 +283,43 @@ void UI::drawTopBar()
 		ImGuiWindowFlags_NoScrollbar |
 		ImGuiWindowFlags_NoSavedSettings;
 
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padding, 6));
-	ImGui::Begin("##TopBar", nullptr, flags);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padding, 4));
+	ImGui::Begin("##TitleBar", nullptr, flags);
 	ImGui::PopStyleVar();
 
 	// ----- logo -----
-	float h = barHeight;
-	float logoWidth = vk_ ? 
-		static_cast<float>(logoTexVk_->width()) : static_cast<float>(logoTexGL_->getWidth());
-	float logoHeight = vk_ ? 
-		static_cast<float>(logoTexVk_->height()) : static_cast<float>(logoTexGL_->getHeight());
+	float h = barHeight - 4.0f;
+	float logoWidth = vk_
+		? static_cast<float>(logoTexVk_->width())
+		: static_cast<float>(logoTexGL_->getWidth());
+	float logoHeight = vk_
+		? static_cast<float>(logoTexVk_->height())
+		: static_cast<float>(logoTexGL_->getHeight());
 	float aspect = logoWidth / logoHeight;
 
-	// vulkan
 	if (vk_)
-	{
 		ImGui::Image(logoIdVk_, ImVec2(h * aspect, h));
-	}
-	// opengl
 	else
-	{
 		ImGui::Image((void*)(intptr_t)logoTexGL_->ID(), ImVec2(h * aspect, h));
-	}
-	ImGui::SameLine(0.0f, 1.0f);
+
+	ImGui::SameLine();
 
 	// ----- title -----
 	std::string title = "Project Atlas - " + std::string(backendToString(activeBackend_));
-	ImGui::TextUnformatted(title.data());
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(title.c_str());
+
 	ImGui::SameLine();
 
-	// right-aligned window buttons
+	// ----- right-aligned buttons -----
 	float right = ImGui::GetWindowContentRegionMax().x;
-
 	ImGui::SetCursorPosX(right - (btnSize * 3 + padding * 2));
 
-	// minimize
 	if (ImGui::Button("_", ImVec2(btnSize, btnSize)))
 		glfwIconifyWindow(window_);
 
 	ImGui::SameLine();
 
-	// maximize/restore
 	if (ImGui::Button("[]", ImVec2(btnSize, btnSize)))
 	{
 		if (glfwGetWindowAttrib(window_, GLFW_MAXIMIZED))
@@ -353,13 +330,11 @@ void UI::drawTopBar()
 
 	ImGui::SameLine();
 
-	// close
 	if (ImGui::Button("X", ImVec2(btnSize, btnSize)))
 		glfwSetWindowShouldClose(window_, true);
 
-	// ----- window dragging -----
-	if (ImGui::IsWindowHovered() &&
-		ImGui::IsMouseDragging(ImGuiMouseButton_Left))
+	// ----- dragging -----
+	if (ImGui::IsWindowHovered() && ImGui::IsMouseDragging(ImGuiMouseButton_Left))
 	{
 		double dx = ImGui::GetIO().MouseDelta.x;
 		double dy = ImGui::GetIO().MouseDelta.y;
@@ -370,23 +345,148 @@ void UI::drawTopBar()
 	}
 
 	ImGui::End();
-} // end of drawTopBar()
+} // end of drawTitleBar()
 
-void UI::drawStatsFPS(float dt)
+void UI::drawMenuBar(IScene& scene)
+{
+	ImGuiViewport* vp = ImGui::GetMainViewport();
+
+	const float titleBarHeight = 30.0f;
+	const float menuBarHeight = 26.0f;
+	const float padding = 8.0f;
+
+	ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + titleBarHeight));
+	ImGui::SetNextWindowSize(ImVec2(vp->Size.x, menuBarHeight));
+
+	ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoDocking |
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_MenuBar;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padding, 2));
+	ImGui::Begin("##MenuBarWindow", nullptr, flags);
+	ImGui::PopStyleVar();
+
+	if (ImGui::BeginMenuBar())
+	{
+		// VIEW OPTIONS
+		if (ImGui::BeginMenu("View"))
+		{
+			ImGui::MenuItem("Inspector", nullptr, &inspectorEnabled_);
+			ImGui::MenuItem("Stats", nullptr, &statsEnabled_);
+			ImGui::EndMenu();
+		}
+
+		// DISPLAY OPTIONS
+		if (ImGui::BeginMenu("Display"))
+		{
+			if (vk_)
+			{
+				std::string vsyncLabel = "VSync [" + vk::to_string(vk_->getVsyncMode()) + "]";
+				if (ImGui::Checkbox(vsyncLabel.c_str(), &renderSettings_.enableVsync))
+				{
+					vk_->setVSync(renderSettings_.enableVsync);
+				}
+			}
+			else
+			{
+				if (ImGui::Checkbox("VSync", &renderSettings_.enableVsync))
+				{
+					glfwSwapInterval(renderSettings_.enableVsync);
+				}
+			}
+
+			ImGui::EndMenu();
+		}
+
+		// GRAPHICS OPTIONS
+		if (ImGui::BeginMenu("Graphics"))
+		{
+			if (ImGui::Checkbox("Shadows##graphics", &renderSettings_.useShadowMap))
+			{
+			}
+			if (ImGui::Checkbox("SSAO##graphics", &renderSettings_.useSSAO))
+			{
+			}
+			if (ImGui::Checkbox("FXAA##graphics", &renderSettings_.useFXAA))
+			{
+			}
+			if (ImGui::Checkbox("Fog##graphics", &renderSettings_.useFog))
+			{
+			}
+			ImGui::EndMenu();
+		}
+
+		// RENDERER OPTIONS
+		if (ImGui::BeginMenu("Renderer"))
+		{
+			// API selection
+			if (ImGui::BeginMenu("API"))
+			{
+				if (ImGui::Selectable("OpenGL", selectedBackend_ == Backend::OpenGL, ImGuiSelectableFlags_DontClosePopups))
+					selectedBackend_ = Backend::OpenGL;
+
+				if (ImGui::Selectable("Vulkan", selectedBackend_ == Backend::Vulkan, ImGuiSelectableFlags_DontClosePopups))
+					selectedBackend_ = Backend::Vulkan;
+
+				if (selectedBackend_ != activeBackend_)
+				{
+					ImGui::Separator();
+
+					if (ImGui::MenuItem("Apply Backend Change"))
+					{
+						backendApplyRequested_ = true;
+					}
+
+					if (ImGui::MenuItem("Cancel Backend Change"))
+					{
+						selectedBackend_ = activeBackend_;
+					}
+				}
+				ImGui::EndMenu();
+			}
+
+			// Culling selection
+			if (ImGui::BeginMenu("Culling"))
+			{
+				ChunkManager& world = scene.getWorld();
+				bool frustumCulling = world.statusFrustumCulling();
+				if (ImGui::Checkbox("Frustum Culling##render", &frustumCulling))
+				{
+					world.enableFrustumCulling(frustumCulling);
+				}
+				bool distanceCulling = world.statusDistanceCulling();
+				if (ImGui::Checkbox("Distance Culling##render", &distanceCulling))
+				{
+					world.enableDistanceCulling(distanceCulling);
+				}
+				ImGui::EndMenu();
+			}
+			ImGui::EndMenu();
+		}
+		ImGui::EndMenuBar();
+	}
+	ImGui::End();
+} // end of drawMenuBar()
+
+void UI::drawStatsFPS(IScene& scene, float dt)
 {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 
 	const float padding = 10.0f;
 
 	const float renderLeft = vp->Pos.x + INSPECTOR_WIDTH;
-	const float renderTop = vp->Pos.y + TOP_BAR_HEIGHT;
+	const float renderTop = vp->Pos.y + TOP_BAR_HEIGHT*2;
 	const float renderRight = vp->Pos.x + vp->Size.x;
 
 	ImVec2 anchor = ImVec2(renderRight - padding, renderTop + padding);
 
 	ImGui::SetNextWindowViewport(vp->ID);
 	ImGui::SetNextWindowPos(anchor, ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-	ImGui::SetNextWindowBgAlpha(0.35f);
 
 	ImGuiWindowFlags flags =
 		ImGuiWindowFlags_NoDocking |
@@ -422,6 +522,12 @@ void UI::drawStatsFPS(float dt)
 			ImGui::Text("Device: %s", glGetString(GL_RENDERER));
 		}
 	}
+
+	ImGui::Separator();
+
+	ChunkManager& world = scene.getWorld();
+	ImGui::Text("Chunks Rendered: %d", world.getFrameChunksRendered());
+	ImGui::Text("Blocks Rendered: %d", world.getFrameBlocksRendered());
 	ImGui::End();
 } // end of drawStatsFPS()
 
@@ -429,8 +535,8 @@ void UI::drawInspector(IScene& scene)
 {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 
-	ImVec2 pos = ImVec2(vp->Pos.x, vp->Pos.y + TOP_BAR_HEIGHT);
-	ImVec2 size = ImVec2(INSPECTOR_WIDTH, vp->Size.y - TOP_BAR_HEIGHT);
+	ImVec2 pos = ImVec2(vp->Pos.x, vp->Pos.y + TOP_BAR_HEIGHT*2);
+	ImVec2 size = ImVec2(INSPECTOR_WIDTH, vp->Size.y - TOP_BAR_HEIGHT*2);
 
 	ImGui::SetNextWindowViewport(vp->ID);
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
@@ -446,9 +552,9 @@ void UI::drawInspector(IScene& scene)
 	ImGui::Begin("Inspector", nullptr, flags);
 
 	// ------- renderer -------
+#ifdef _DEBUG
 	if (ImGui::CollapsingHeader("Renderer", ImGuiTreeNodeFlags_DefaultOpen))
 	{
-#ifdef _DEBUG
 		// render mode
 		std::string_view mode = "ERROR!";
 
@@ -475,152 +581,9 @@ void UI::drawInspector(IScene& scene)
 		{
 			ImGui::Text("Swapchain Image Format:\n %s", vk::to_string(vk_->getSwapChainImageFormat()).data());
 		}
-
 		ImGui::Separator();
+	}
 #endif
-
-		{
-			// backend mode
-			ImGui::Text("Backend: %s", backendToString(activeBackend_).data());
-
-			int backendIndex = 0;
-			switch (selectedBackend_)
-			{
-			case Backend::OpenGL: backendIndex = 0; break;
-			case Backend::Vulkan: backendIndex = 1; break;
-			case Backend::DX12:   backendIndex = 2; break;
-			}
-
-			const char* backendItems[] = { "OpenGL", "Vulkan" };
-
-			if (ImGui::Combo("Graphics API##render", &backendIndex, backendItems, 2))
-			{
-				switch (backendIndex)
-				{
-				case 0: selectedBackend_ = Backend::OpenGL; break;
-				case 1: selectedBackend_ = Backend::Vulkan; break;
-				}
-			}
-
-			if (selectedBackend_ != activeBackend_)
-			{
-				ImGui::Text("Backend change pending.");
-
-				if (ImGui::Button("Apply Backend"))
-				{
-					// save world
-					scene.getWorld().saveWorld();
-
-					backendApplyRequested_ = true;
-				}
-
-				ImGui::SameLine();
-
-				if (ImGui::Button("Cancel Backend Change"))
-				{
-					selectedBackend_ = activeBackend_;
-				}
-			}
-		}
-
-		ImGui::Separator();
-
-		// camera/cursor mode
-		ImGui::Text("Mode:\n %s", cameraModeOn_ ? "Camera" : "Cursor");
-		ImGui::Separator();
-
-		// render count + status
-		ChunkManager& world = scene.getWorld();
-		bool frustumCulling = world.statusFrustumCulling();
-		if (ImGui::Checkbox("Frustum Culling##render", &frustumCulling))
-		{
-			world.enableFrustumCulling(frustumCulling);
-		}
-		bool distanceCulling = world.statusDistanceCulling();
-		if (ImGui::Checkbox("Distance Culling##render", &distanceCulling))
-		{
-			world.enableDistanceCulling(distanceCulling);
-		}
-		ImGui::Text("Chunks Rendered: %d", world.getFrameChunksRendered());
-		ImGui::Text("Blocks Rendered: %d", world.getFrameBlocksRendered());
-
-		ImGui::Separator();
-
-		// DISPLAY OPTIONS
-		ImGui::Text("Display Options:");
-		// VSync toggle
-		// vulkan
-		if (vk_)
-		{
-			std::string vsyncMode = "VSync [" + vk::to_string(vk_->getVsyncMode()) + "]##render";
-			if (ImGui::Checkbox(vsyncMode.data(), &renderSettings_.enableVsync))
-			{
-				vk_->setVSync(renderSettings_.enableVsync);
-			}
-		}
-		// opengl
-		else
-		{
-			if (ImGui::Checkbox("VSync##render", &renderSettings_.enableVsync))
-			{
-				glfwSwapInterval(renderSettings_.enableVsync);
-			}
-		}
-
-		// GRAPHICS OPTIONS
-		ImGui::Text("Graphics Options:");
-		// Shadow Map Toggle
-		ImGui::Checkbox("Shadows##render", &renderSettings_.useShadowMap);
-
-		// SSAO toggle
-		ImGui::Checkbox("SSAO##render", &renderSettings_.useSSAO);
-
-		// FXAA toggle
-		ImGui::Checkbox("FXAA##render", &renderSettings_.useFXAA);
-
-		// Fog toggle
-		ImGui::Checkbox("Fog##render", &renderSettings_.useFog);
-
-		ImGui::Separator();
-	}
-
-	// ------- fog -------
-	if (ImGui::CollapsingHeader("Fog", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		bool changed = false;
-
-		changed |= ImGui::DragFloat3("Color##fog", glm::value_ptr(renderSettings_.fogSettings.color), 0.1f, 0.0f, 1.0f);
-		if (ImGui::Button("Reset##fog_color"))
-		{
-			renderSettings_.fogSettings.color = glm::vec3{ 1.0f, 1.0f, 1.0f };
-		}
-		changed |= ImGui::DragFloat("Start Pos##fog", &renderSettings_.fogSettings.start, 0.1f, 0.0f, renderSettings_.fogSettings.end);
-		if (ImGui::Button("Reset##fog_start"))
-		{
-			renderSettings_.fogSettings.start = 50.0f;
-		}
-		changed |= ImGui::DragFloat("End Pos##fog", &renderSettings_.fogSettings.end, 0.1f, renderSettings_.fogSettings.start, 2000.0f);
-		if (ImGui::Button("Reset##fog_end"))
-		{
-			renderSettings_.fogSettings.end = 200.0f;
-		}
-
-		// ensure start + kMinGap <= end ALWAYS
-		if (changed)
-		{
-			const float kMinGap = 100.0f;
-			const float minFogStart = 25.0f;
-			if (renderSettings_.fogSettings.start < minFogStart)
-				renderSettings_.fogSettings.start = minFogStart;
-
-			if (renderSettings_.fogSettings.start > renderSettings_.fogSettings.end - kMinGap)
-			{
-				renderSettings_.fogSettings.start = std::max(minFogStart, renderSettings_.fogSettings.end - kMinGap);
-				renderSettings_.fogSettings.end = renderSettings_.fogSettings.start + kMinGap;
-			}
-		}
-		ImGui::Separator();
-	}
 
 	// ------- camera -------
 	if (ImGui::CollapsingHeader("Camera", ImGuiTreeNodeFlags_DefaultOpen))
@@ -629,7 +592,7 @@ void UI::drawInspector(IScene& scene)
 		float movementSpeed = camera.getMovementSpeed();
 		glm::vec3 pos = camera.getCameraPosition();
 		float fp = camera.getFarPlane();
-
+		 
 		bool changed = false;
 
 		changed |= ImGui::DragFloat("Movement Speed##cam", &movementSpeed, 0.1f);
@@ -655,6 +618,36 @@ void UI::drawInspector(IScene& scene)
 			camera.setCameraPosition(pos);
 			camera.setFarPlane(fp);
 		}
+		ImGui::Separator();
+	}
+
+	// ------- world -------
+	if (ImGui::CollapsingHeader("World", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		bool changed = false;
+
+		ChunkManager& world = scene.getWorld();
+		float ambientStrength = world.getAmbientStrength();
+		changed |= ImGui::DragFloat("Ambient Strength##world", &ambientStrength, 0.01f);
+		if (ImGui::Button("Reset##amb"))
+		{
+			ambientStrength = World::MAX_AMBSTR;
+			world.setAmbientStrength(ambientStrength);
+		}
+		int renderRadius = world.getViewRadius();
+		changed |= ImGui::DragInt("Render Radius##world", &renderRadius, 1);
+		if (ImGui::Button("Reset##radius"))
+		{
+			renderRadius = World::MIN_RADIUS;
+			world.setViewRadius(renderRadius);
+		}
+
+		if (changed)
+		{
+			world.setAmbientStrength(ambientStrength);
+			world.setViewRadius(renderRadius);
+		}
+
 		ImGui::Separator();
 	}
 
@@ -687,33 +680,41 @@ void UI::drawInspector(IScene& scene)
 		ImGui::Separator();
 	}
 
-	// ------- world -------
-	if (ImGui::CollapsingHeader("World", ImGuiTreeNodeFlags_DefaultOpen))
+	// ------- fog -------
+	if (ImGui::CollapsingHeader("Fog", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		bool changed = false;
 
-		ChunkManager& world = scene.getWorld();
-		float ambientStrength = world.getAmbientStrength();
-		changed |= ImGui::DragFloat("Ambient Strength##world", &ambientStrength, 0.01f);
-		if (ImGui::Button("Reset##amb"))
+		changed |= ImGui::ColorEdit3("Color##fog", glm::value_ptr(renderSettings_.fogSettings.color));
+		if (ImGui::Button("Reset##fog_color"))
 		{
-			ambientStrength = World::MAX_AMBSTR;
-			world.setAmbientStrength(ambientStrength);
+			renderSettings_.fogSettings.color = glm::vec3{ 1.0f, 1.0f, 1.0f };
 		}
-		int renderRadius = world.getViewRadius();
-		changed |= ImGui::DragInt("Render Radius##world", &renderRadius, 1);
-		if (ImGui::Button("Reset##radius"))
+		changed |= ImGui::DragFloat("Start Pos##fog", &renderSettings_.fogSettings.start, 0.1f, 0.0f, renderSettings_.fogSettings.end);
+		if (ImGui::Button("Reset##fog_start"))
 		{
-			renderRadius = World::MIN_RADIUS;
-			world.setViewRadius(renderRadius);
+			renderSettings_.fogSettings.start = 50.0f;
+		}
+		changed |= ImGui::DragFloat("End Pos##fog", &renderSettings_.fogSettings.end, 0.1f, renderSettings_.fogSettings.start, 2000.0f);
+		if (ImGui::Button("Reset##fog_end"))
+		{
+			renderSettings_.fogSettings.end = 200.0f;
 		}
 
+		// ensure start + kMinGap <= end ALWAYS
 		if (changed)
 		{
-			world.setAmbientStrength(ambientStrength);
-			world.setViewRadius(renderRadius);
-		}
+			const float kMinGap = 100.0f;
+			const float minFogStart = 25.0f;
+			if (renderSettings_.fogSettings.start < minFogStart)
+				renderSettings_.fogSettings.start = minFogStart;
 
+			if (renderSettings_.fogSettings.start > renderSettings_.fogSettings.end - kMinGap)
+			{
+				renderSettings_.fogSettings.start = std::max(minFogStart, renderSettings_.fogSettings.end - kMinGap);
+				renderSettings_.fogSettings.end = renderSettings_.fogSettings.start + kMinGap;
+			}
+		}
 		ImGui::Separator();
 	}
 
