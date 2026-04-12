@@ -36,10 +36,6 @@ public:
 	void renderGL();
 	void renderVk(FrameContext& frame);
 
-	void setUIInputEnabled(bool enabled);
-	void setUIDisplayEnabled(bool enabled);
-	void setCameraModeUIEnabled(bool enabled);
-
 	std::string_view backendToString(Backend backend) const;
 	void setActiveBackend(Backend backend);
 	bool applyBackendRequest(Backend& outBackend);
@@ -47,8 +43,9 @@ public:
 	void onSwapchainRecreated();
 
 private:
-	void drawTopBar();
-	void drawStatsFPS(float dt);
+	void drawTitleBar();
+	void drawMenuBar(IScene& scene);
+	void drawStatsFPS(IScene& scene, float dt);
 	void drawInspector(IScene& scene);
 	void setDarkTheme();
 private:
@@ -66,8 +63,8 @@ private:
 	std::unique_ptr<Texture2DVk> logoTexVk_;
 	ImTextureID logoIdVk_;
 
-	bool enabled_{ true };
-	bool cameraModeOn_{ true };
+	bool inspectorEnabled_{ true };
+	bool statsEnabled_{ true };
 };
 
 #endif
