@@ -31,8 +31,6 @@ Features:
   - Allows free-look camera movement (mouse + keyboard).
 - **`-`** — Enable cursor mode
   - Releases the mouse cursor for interacting with the ImGui control panel.
-- **`Left Arrow`** — Hide ImGui panels
-- **`Right Arrow`** — Show ImGui panels
 
 <h2>
 Preview
@@ -40,7 +38,7 @@ Preview
 
 ![Shadow Mapping](./milestones/demo/shadow_maps.gif)
 
-![Project Demo](./milestones/demo/demo3.gif)
+![Project Demo](./milestones/demo/demo4.gif)
 
 <!--  -->
 <h2>
