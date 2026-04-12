@@ -50,6 +50,7 @@ private:
 	void drawTopBar();
 	void drawStatsFPS(float dt);
 	void drawInspector(IScene& scene);
+	void setDarkTheme();
 private:
 	Backend activeBackend_;
 	Backend selectedBackend_;
