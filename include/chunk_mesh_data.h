@@ -10,6 +10,7 @@ struct ChunkMeshData
 {
     // opaque
     std::vector<World::Vertex> opaqueVertices;
+    std::vector<World::RTVertex> opaqueRTVertices;
     std::vector<uint32_t> opaqueIndices;
     int32_t opaqueIndexCount = 0;
 

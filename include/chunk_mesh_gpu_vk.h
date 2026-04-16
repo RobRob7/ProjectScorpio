@@ -3,6 +3,7 @@
 
 #include "i_chunk_mesh_gpu.h"
 
+#include "acceleration_structure_vk.h"
 #include "buffer_vk.h"
 
 #include <vulkan/vulkan.hpp>
@@ -23,10 +24,32 @@ public:
 	void drawOpaque(vk::CommandBuffer cmd) override;
 	void drawWater(vk::CommandBuffer cmd) override;
 
+	vk::Buffer getOpaqueRTVertexBuffer() const { return opaqueRTVB_.getBuffer(); }
+	vk::Buffer getOpaqueRTIndexBuffer() const { return opaqueRTIB_.getBuffer(); }
+
+	vk::DeviceAddress getOpaqueRTVertexAddress() const { return opaqueRTVB_.getDeviceAddress(); }
+	vk::DeviceAddress getOpaqueRTIndexAddress() const { return opaqueRTIB_.getDeviceAddress(); }
+
+	uint32_t getOpaqueRTIndexCount() const { return opaqueRTIndexCount_; }
+	uint32_t getOpaqueRTVertexCount() const { return opaqueRTVertexCount_; }
+
+	// BLAS
+	vk::AccelerationStructureKHR getOpaqueBLAS() const { return opaqueBLAS_.handle(); }
+	vk::DeviceAddress getOpaqueBLASAddress() const { return opaqueBLAS_.deviceAddress(); }
+	bool hasOpaqueBLAS() const { return opaqueBLAS_.valid(); }
+
 private:
 	void retireCurrentBuffers(uint32_t frameIndex);
 private:
 	VulkanMain* vk_{};
+
+	AccelerationStructureVk opaqueBLAS_;
+
+	// RT opaque
+	BufferVk opaqueRTVB_;
+	BufferVk opaqueRTIB_;
+	uint32_t opaqueRTIndexCount_{ 0 };
+	uint32_t opaqueRTVertexCount_{ 0 };
 
 	// opaque
 	BufferVk opaqueVB_;

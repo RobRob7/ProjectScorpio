@@ -58,6 +58,11 @@ namespace World
 		uint32_t sample;
 	};
 
+	struct RTVertex
+	{
+		glm::vec3 position;
+	};
+
 	struct VertexWater
 	{
 		glm::vec3 pos;

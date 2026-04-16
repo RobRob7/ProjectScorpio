@@ -52,6 +52,17 @@ namespace VkUtils
 			srcStage = vk::PipelineStageFlagBits::eTransfer;
 			dstStage = vk::PipelineStageFlagBits::eFragmentShader;
 		}
+		else if (oldLayout == vk::ImageLayout::eUndefined &&
+			newLayout == vk::ImageLayout::eGeneral)
+		{
+			barrier.srcAccessMask = {};
+			barrier.dstAccessMask =
+				vk::AccessFlagBits::eShaderRead |
+				vk::AccessFlagBits::eShaderWrite;
+
+			srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+			dstStage = vk::PipelineStageFlagBits::eRayTracingShaderKHR;
+		}
 		else
 		{
 			throw std::runtime_error("Unsupported immediate image layout transition");
@@ -197,6 +208,26 @@ namespace VkUtils
 
 			srcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
 			dstStage = vk::PipelineStageFlagBits::eBottomOfPipe;
+		}
+		else if (oldLayout == vk::ImageLayout::eGeneral &&
+			newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
+			barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+			srcStage = vk::PipelineStageFlagBits::eRayTracingShaderKHR;
+			dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+		}
+		else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal &&
+			newLayout == vk::ImageLayout::eGeneral)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eShaderRead;
+			barrier.dstAccessMask =
+				vk::AccessFlagBits::eShaderRead |
+				vk::AccessFlagBits::eShaderWrite;
+
+			srcStage = vk::PipelineStageFlagBits::eFragmentShader;
+			dstStage = vk::PipelineStageFlagBits::eRayTracingShaderKHR;
 		}
 		else
 		{

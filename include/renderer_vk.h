@@ -15,6 +15,8 @@ struct RenderInputs;
 struct RenderSettings;
 struct FrameContext;
 
+class RayTracingPassVk;
+
 class GBufferPassVk;
 class ShadowMapPassVk;
 class DebugPassVk;
@@ -65,6 +67,8 @@ private:
 	vk::Format sceneDepthFormat_{ vk::Format::eD32Sfloat };
 
 	std::unique_ptr<RenderSettings> renderSettings_;
+
+	std::unique_ptr<RayTracingPassVk> rayTracingPass_;
 
 	std::unique_ptr<GBufferPassVk> gbufferPass_;
 	std::unique_ptr<ShadowMapPassVk> shadowMapPass_;

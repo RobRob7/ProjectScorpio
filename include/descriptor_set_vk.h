@@ -25,6 +25,8 @@ public:
 
 	void allocate();
 
+	void destroy();
+
 	void writeUniformBuffer(
 		uint32_t binding,
 		vk::Buffer buffer,
@@ -52,6 +54,17 @@ public:
 		vk::DeviceSize range
 	);
 
+	void writeStorageImage(
+		uint32_t binding,
+		vk::ImageView imageView,
+		vk::ImageLayout imageLayout = vk::ImageLayout::eGeneral
+	);
+
+	void writeAccelerationStructure(
+		uint32_t binding,
+		vk::AccelerationStructureKHR accel
+	);
+
 	bool valid() const 
 	{ 
 		return static_cast<bool>(setLayout_) && 
@@ -62,8 +75,6 @@ public:
 	vk::DescriptorSetLayout getLayout() const { return setLayout_.get(); };
 	vk::DescriptorSet getSet() const { return descSet_; };
 
-private:
-	void destroy();
 private:
 	VulkanMain& vk_;
 

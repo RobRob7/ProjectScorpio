@@ -73,6 +73,7 @@ void ChunkMesh::rebuild()
 void ChunkMesh::buildChunkMesh()
 {
 	data_.opaqueVertices.clear();
+	data_.opaqueRTVertices.clear();
 	data_.opaqueIndices.clear();
 
 	// check if block is opaque
@@ -111,6 +112,11 @@ void ChunkMesh::buildChunkMesh()
 					static_cast<uint32_t>(corners[c].z)
 				);
 				data_.opaqueVertices.push_back(v);
+
+				// unpacked RT vertex data
+				RTVertex rtv{};
+				rtv.position = glm::vec3(corners[c]);
+				data_.opaqueRTVertices.push_back(rtv);
 			}
 
 			data_.opaqueIndices.push_back(start + 0);

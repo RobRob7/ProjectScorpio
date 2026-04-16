@@ -13,6 +13,9 @@ using namespace World;
 //--- PUBLIC ---//
 ChunkMeshGPUVk::ChunkMeshGPUVk(VulkanMain& vk)
 	: vk_(&vk),
+	opaqueBLAS_(vk),
+	opaqueRTVB_(vk),
+	opaqueRTIB_(vk),
 	opaqueVB_(vk),
 	opaqueIB_(vk),
 	waterVB_(vk),
@@ -30,17 +33,83 @@ ChunkMeshGPUVk::~ChunkMeshGPUVk()
 
 void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 {
+	BufferVk newOpaqueRTVB(*vk_);
+	BufferVk newOpaqueRTIB(*vk_);
 	BufferVk newOpaqueVB(*vk_);
 	BufferVk newOpaqueIB(*vk_);
 	BufferVk newWaterVB(*vk_);
 	BufferVk newWaterIB(*vk_);
 
+	uint32_t newOpaqueRTVertexCount = 0;
+	uint32_t newOpaqueRTIndexCount = 0;
 	uint32_t newOpaqueIndexCount = 0;
 	uint32_t newWaterIndexCount = 0;
 
 	vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 	std::vector<BufferVk> stagingBuffers;
-	stagingBuffers.reserve(4);
+	stagingBuffers.reserve(6);
+
+	// -------- RT OPAQUE --------
+	if (!data.opaqueRTVertices.empty() && !data.opaqueIndices.empty())
+	{
+		vk::DeviceSize vbSize = sizeof(RTVertex) * data.opaqueRTVertices.size();
+		vk::DeviceSize ibSize = sizeof(uint32_t) * data.opaqueIndices.size();
+
+		// RT VB staging
+		BufferVk stagingVB(*vk_);
+		stagingVB.create(
+			vbSize,
+			vk::BufferUsageFlagBits::eTransferSrc,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+		stagingVB.upload(data.opaqueRTVertices.data(), vbSize);
+
+		// RT VB device local
+		newOpaqueRTVB.create(
+			vbSize,
+			vk::BufferUsageFlagBits::eTransferDst |
+			vk::BufferUsageFlagBits::eShaderDeviceAddress |
+			vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR,
+			vk::MemoryPropertyFlagBits::eDeviceLocal,
+			true
+		);
+		stagingBuffers.push_back(std::move(stagingVB));
+		vk_->recordCopyBuffer(
+			cmd,
+			stagingBuffers.back().getBuffer(),
+			newOpaqueRTVB.getBuffer(),
+			vbSize
+		);
+
+		// RT IB staging
+		BufferVk stagingIB(*vk_);
+		stagingIB.create(
+			ibSize,
+			vk::BufferUsageFlagBits::eTransferSrc,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+		stagingIB.upload(data.opaqueIndices.data(), ibSize);
+
+		// RT IB device local
+		newOpaqueRTIB.create(
+			ibSize,
+			vk::BufferUsageFlagBits::eTransferDst |
+			vk::BufferUsageFlagBits::eShaderDeviceAddress |
+			vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR,
+			vk::MemoryPropertyFlagBits::eDeviceLocal,
+			true
+		);
+		stagingBuffers.push_back(std::move(stagingIB));
+		vk_->recordCopyBuffer(
+			cmd,
+			stagingBuffers.back().getBuffer(),
+			newOpaqueRTIB.getBuffer(),
+			ibSize
+		);
+
+		newOpaqueRTIndexCount = static_cast<uint32_t>(data.opaqueIndices.size());
+		newOpaqueRTVertexCount = static_cast<uint32_t>(data.opaqueRTVertices.size());
+	}
 
 	// -------- OPAQUE --------
 	if (!data.opaqueVertices.empty() && !data.opaqueIndices.empty())
@@ -154,11 +223,15 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 
 	retireCurrentBuffers(vk_->currentFrameIndex());
 
+	opaqueRTVB_ = std::move(newOpaqueRTVB);
+	opaqueRTIB_ = std::move(newOpaqueRTIB);
 	opaqueVB_ = std::move(newOpaqueVB);
 	opaqueIB_ = std::move(newOpaqueIB);
 	waterVB_ = std::move(newWaterVB);
 	waterIB_ = std::move(newWaterIB);
 
+	opaqueRTVertexCount_ = newOpaqueRTVertexCount;
+	opaqueRTIndexCount_ = newOpaqueRTIndexCount;
 	opaqueIndexCount_ = newOpaqueIndexCount;
 	waterIndexCount_ = newWaterIndexCount;
 
@@ -169,6 +242,26 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 	else
 	{
 		vk_->discardSingleTimeCommands(cmd);
+	}
+
+	// build BLAS
+	if (opaqueRTVB_.valid() && opaqueRTIB_.valid() &&
+		opaqueRTVertexCount_ > 0 && opaqueRTIndexCount_ > 0)
+	{
+		opaqueBLAS_.buildBLAS(
+			opaqueRTVB_.getBuffer(),
+			opaqueRTVB_.getDeviceAddress(),
+			opaqueRTVertexCount_,
+			sizeof(RTVertex),
+			opaqueRTIB_.getBuffer(),
+			opaqueRTIB_.getDeviceAddress(),
+			opaqueRTIndexCount_,
+			vk::IndexType::eUint32
+		);
+	}
+	else
+	{
+		opaqueBLAS_.destroy();
 	}
 } // end of upload()
 
@@ -202,7 +295,8 @@ void ChunkMeshGPUVk::drawWater(vk::CommandBuffer cmd)
 //--- PRIVATE ---//
 void ChunkMeshGPUVk::retireCurrentBuffers(uint32_t frameIndex)
 {
-	if (!opaqueVB_.valid() && !opaqueIB_.valid() &&
+	if (!opaqueRTVB_.valid() && !opaqueRTIB_.valid() &&
+		!opaqueVB_.valid() && !opaqueIB_.valid() &&
 		!waterVB_.valid() && !waterIB_.valid())
 	{
 		return;
@@ -210,6 +304,8 @@ void ChunkMeshGPUVk::retireCurrentBuffers(uint32_t frameIndex)
 
 	vk_->retireChunkBuffers(
 		frameIndex,
+		std::move(opaqueRTVB_),
+		std::move(opaqueRTIB_),
 		std::move(opaqueVB_),
 		std::move(opaqueIB_),
 		std::move(waterVB_),

@@ -21,6 +21,11 @@ void GraphicsPipelineVk::create(const GraphicsPipelineDescVk& desc)
 
 	vk::Device device = vk_.getDevice();
 
+	if (!desc.vertShader || !desc.fragShader)
+	{
+		throw std::runtime_error("GraphicsPipelineVk::create - need vertex AND fragment shaders!");
+	}
+
 	// shader stages
 	vk::PipelineShaderStageCreateInfo stages[2]{};
 	stages[0].stage = vk::ShaderStageFlagBits::eVertex;

@@ -18,7 +18,8 @@ BufferVk::~BufferVk() = default;
 void BufferVk::create(
 	vk::DeviceSize size,
 	vk::BufferUsageFlags usage,
-	vk::MemoryPropertyFlags properties
+	vk::MemoryPropertyFlags properties,
+	bool enableDeviceAddress
 )
 {
 	destroy();
@@ -27,6 +28,8 @@ void BufferVk::create(
 	{
 		throw std::runtime_error("BufferVk::create - size must be greater than 0");
 	}
+
+	deviceAddressEnabled_ = enableDeviceAddress;
 
 	size_ = size;
 	properties_ = properties;
@@ -53,6 +56,13 @@ void BufferVk::create(
 	mai.allocationSize = req.size;
 	mai.memoryTypeIndex = vk_->findMemoryType(req.memoryTypeBits, properties);
 
+	vk::MemoryAllocateFlagsInfo flagsInfo{};
+	if (enableDeviceAddress)
+	{
+		flagsInfo.flags = vk::MemoryAllocateFlagBits::eDeviceAddress;
+		mai.pNext = &flagsInfo;
+	}
+
 	{
 		vk::ResultValue rv = device.allocateMemoryUnique(mai);
 		if (rv.result != vk::Result::eSuccess)
@@ -70,6 +80,15 @@ void BufferVk::create(
 		}
 	}
 } // end of create()
+
+void BufferVk::destroy()
+{
+	memory_.reset();
+	buffer_.reset();
+	size_ = 0;
+	properties_ = {};
+	deviceAddressEnabled_ = false;
+} // end of destroy
 
 void BufferVk::upload(const void* data, vk::DeviceSize size, vk::DeviceSize offset)
 {
@@ -122,12 +141,20 @@ void BufferVk::upload(const void* data, vk::DeviceSize size, vk::DeviceSize offs
 	device.unmapMemory(memory_.get());
 } // end of upload()
 
-
-//--- PRIVATE ---//
-void BufferVk::destroy()
+vk::DeviceAddress BufferVk::getDeviceAddress() const
 {
-	memory_.reset();
-	buffer_.reset();
-	size_ = 0;
-	properties_ = {};
-} // end of destroy
+	if (!buffer_)
+	{
+		throw std::runtime_error("BufferVk::getDeviceAddress - buffer not created yet!");
+	}
+
+	if (!deviceAddressEnabled_)
+	{
+		throw std::runtime_error("BufferVk::getDeviceAddress - device address not enabled for this buffer!");
+	}
+
+	vk::BufferDeviceAddressInfo info{};
+	info.buffer = buffer_.get();
+
+	return vk_->getDevice().getBufferAddress(info);
+} // end of getDeviceAddress()

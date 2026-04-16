@@ -20,8 +20,11 @@ public:
 	void create(
 		vk::DeviceSize size,
 		vk::BufferUsageFlags usage,
-		vk::MemoryPropertyFlags properties
+		vk::MemoryPropertyFlags properties,
+		bool enableDeviceAddress = false
 	);
+
+	void destroy();
 
 	void upload(
 		const void* data,
@@ -29,16 +32,19 @@ public:
 		vk::DeviceSize offset = 0
 	);
 
+	vk::DeviceAddress getDeviceAddress() const;
+
 	bool valid() const { return static_cast<bool>(buffer_); }
 	
 	vk::Buffer getBuffer() const { return buffer_.get(); }
 	vk::DeviceMemory getMemory() const { return memory_.get(); }
 
-private:
-	void destroy();
+	vk::DeviceSize size() const { return size_; }
 
 private:
 	VulkanMain* vk_;
+
+	bool deviceAddressEnabled_{ false };
 
 	vk::UniqueBuffer buffer_{};
 	vk::UniqueDeviceMemory memory_{};
