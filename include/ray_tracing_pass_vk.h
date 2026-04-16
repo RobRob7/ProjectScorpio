@@ -1,6 +1,8 @@
 #ifndef RAY_TRACING_PASS_VK_H
 #define RAY_TRACING_PASS_VK_H
 
+#include "constants.h"
+
 #include <vulkan/vulkan.hpp>
 
 #include "image_vk.h"
@@ -9,6 +11,8 @@
 #include "ray_tracing_pipeline_vk.h"
 #include "acceleration_structure_vk.h"
 
+#include <glm/glm.hpp>
+
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -16,6 +20,7 @@
 class VulkanMain;
 class RayTracingShaderModuleVk;
 struct FrameContext;
+struct RenderInputs;
 
 class RayTracingPassVk
 {
@@ -26,7 +31,12 @@ public:
 	void init();
 	void resize();
 
-	void render(const FrameContext& frame);
+	void render(
+		const RenderInputs& in, 
+		const FrameContext& frame,
+		const glm::mat4& view,
+		const glm::mat4& proj
+	);
 
 	void setTopLevelAS(
 		uint32_t frameIndex,
@@ -55,6 +65,9 @@ private:
 	ImageVk outputImage_;
 
 	std::unique_ptr<RayTracingShaderModuleVk> shader_;
+
+	std::vector<BufferVk> cameraUBOs_;
+	RayTracing::RTCameraUBO cameraData_{};
 
 	std::vector<DescriptorSetVk> descriptorSets_;
 	RayTracingPipelineVk pipeline_;

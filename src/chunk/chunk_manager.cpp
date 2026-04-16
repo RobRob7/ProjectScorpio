@@ -478,7 +478,6 @@ void ChunkManager::setBlock(int wx, int wy, int wz, BlockID id)
 
 	it->second->cpu->setBlock(localX, localY, localZ, id);
 
-	vk_->waitIdle();
 	it->second->rebuildAndUpload();
 
 	// mark chunk as modified

@@ -14,6 +14,16 @@ enum class Backend
 	DX12
 };
 
+namespace RayTracing
+{
+	struct RTCameraUBO
+	{
+		glm::mat4 invView;
+		glm::mat4 invProj;
+		glm::vec4 cameraPos;
+	};
+};
+
 namespace World
 {
 	const int WATER_TEX_FACTOR = 2;

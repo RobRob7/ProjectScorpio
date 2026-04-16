@@ -151,7 +151,12 @@ void RendererVk::renderFrame(
 			1
 		);
 
-		rayTracingPass_->render(frame);
+		rayTracingPass_->render(
+			in, 
+			frame,
+			view,
+			proj
+		);
 
 		VkUtils::TransitionImageLayout(
 			cmd,

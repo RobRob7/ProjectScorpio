@@ -1,10 +1,18 @@
 #include "ray_tracing_pass_vk.h"
 
+#include "render_inputs.h"
+
+#include "camera.h"
+
 #include "utils_vk.h"
 #include "vulkan_main.h"
 #include "frame_context_vk.h"
 
 #include "ray_tracing_shader_vk.h"
+
+#include <glm/glm.hpp>
+
+using namespace RayTracing;
 
 //--- PUBLIC ---//
 RayTracingPassVk::RayTracingPassVk(VulkanMain& vk)
@@ -14,6 +22,7 @@ RayTracingPassVk::RayTracingPassVk(VulkanMain& vk)
 	sbt_(vk)
 {
 	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
+	cameraUBOs_.reserve(vk_.getMaxFramesInFlight());
 } // end of constructor
 
 RayTracingPassVk::~RayTracingPassVk() = default;
@@ -45,7 +54,12 @@ void RayTracingPassVk::resize()
 	} // end for
 } // end of resize()
 
-void RayTracingPassVk::render(const FrameContext& frame)
+void RayTracingPassVk::render(
+	const RenderInputs& in,
+	const FrameContext& frame,
+	const glm::mat4& view,
+	const glm::mat4& proj
+)
 {
 	vk::CommandBuffer cmd = frame.cmd;
 
@@ -67,6 +81,12 @@ void RayTracingPassVk::render(const FrameContext& frame)
 	);
 
 	vk::Extent2D extent = vk_.getSwapChainExtent();
+
+	cameraData_.invView = glm::inverse(view);
+	cameraData_.invProj = glm::inverse(proj);
+	cameraData_.cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
+
+	cameraUBOs_[frame.frameIndex].upload(&cameraData_, sizeof(cameraData_));
 
 	cmd.traceRaysKHR(
 		&sbt_.rayGenRegion(),
@@ -91,25 +111,33 @@ void RayTracingPassVk::setTopLevelAS(
 
 void RayTracingPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
-	for (auto& set : descriptorSets_)
+	if (frameIndex >= descriptorSets_.size())
 	{
-		DescriptorSetVk& set = descriptorSets_[frameIndex];
-		if (!set.valid())
-		{
-			return;
-		}
+		return;
+	}
 
-		set.writeStorageImage(
-			0,
-			outputImage_.view(),
-			vk::ImageLayout::eGeneral
-		);
+	DescriptorSetVk& set = descriptorSets_[frameIndex];
+	if (!set.valid())
+	{
+		return;
+	}
 
-		if (topLevelAS_)
-		{
-			set.writeAccelerationStructure(1, topLevelAS_);
-		}
-	} // end for
+	set.writeStorageImage(
+		0,
+		outputImage_.view(),
+		vk::ImageLayout::eGeneral
+	);
+
+	set.writeUniformBuffer(
+		2,
+		cameraUBOs_[frameIndex].getBuffer(),
+		sizeof(RTCameraUBO)
+	);
+
+	if (topLevelAS_)
+	{
+		set.writeAccelerationStructure(1, topLevelAS_);
+	}
 } // end of updateDescriptorSet()
 
 
@@ -162,7 +190,17 @@ void RayTracingPassVk::createOutputImage()
 
 void RayTracingPassVk::createResources()
 {
-
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		BufferVk ubo(vk_);
+		ubo.create(
+			sizeof(RTCameraUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible |
+			vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+		cameraUBOs_.push_back(std::move(ubo));
+	} // end for
 } // end of createResources()
 
 void RayTracingPassVk::createDescriptorSet()
@@ -185,7 +223,13 @@ void RayTracingPassVk::createDescriptorSet()
 		tlasBinding.descriptorCount = 1;
 		tlasBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
 
-		set.createLayout({ outputBinding, tlasBinding });
+		vk::DescriptorSetLayoutBinding cameraUBOBinding{};
+		cameraUBOBinding.binding = 2;
+		cameraUBOBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		cameraUBOBinding.descriptorCount = 1;
+		cameraUBOBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
+
+		set.createLayout({ outputBinding, tlasBinding, cameraUBOBinding });
 
 		vk::DescriptorPoolSize outputPool{};
 		outputPool.type = vk::DescriptorType::eStorageImage;
@@ -195,7 +239,11 @@ void RayTracingPassVk::createDescriptorSet()
 		tlasPool.type = vk::DescriptorType::eAccelerationStructureKHR;
 		tlasPool.descriptorCount = 1;
 
-		set.createPool({ outputPool, tlasPool }, 1);
+		vk::DescriptorPoolSize cameraUBOPool{};
+		cameraUBOPool.type = vk::DescriptorType::eUniformBuffer;
+		cameraUBOPool.descriptorCount = 1;
+
+		set.createPool({ outputPool, tlasPool, cameraUBOPool }, 1);
 		set.allocate();
 
 		descriptorSets_.push_back(std::move(set));

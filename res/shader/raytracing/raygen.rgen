@@ -4,6 +4,13 @@
 layout(set = 0, binding = 0, rgba8) uniform image2D outputImage;
 layout(set = 0, binding = 1) uniform accelerationStructureEXT topLevelAS;
 
+layout(set = 0, binding = 2) uniform CameraUBO
+{
+    mat4 invView;
+    mat4 invProj;
+    vec4 cameraPos;
+} cameraData;
+
 layout(location = 0) rayPayloadEXT vec3 payloadColor;
 
 void main()
@@ -14,8 +21,12 @@ void main()
     vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size);
     vec2 ndc = uv * 2.0 - 1.0;
 
-    vec3 origin = vec3(0.0, 120.0, 0.0);
-    vec3 dir    = normalize(vec3(ndc.x, -ndc.y, -1.5));
+    vec4 clip = vec4(ndc.x, ndc.y, 1.0, 1.0);
+    vec4 viewPos = cameraData.invProj * clip;
+    viewPos /= viewPos.w;
+
+    vec3 dir = normalize((cameraData.invView * vec4(normalize(viewPos.xyz), 0.0)).xyz);
+    vec3 origin = cameraData.cameraPos.xyz;
 
     payloadColor = vec3(0.0);
 
