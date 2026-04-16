@@ -44,6 +44,10 @@ void AccelerationStructureVk::buildBLAS(
 	{
 		throw std::runtime_error("AccelerationStructureVk::buildBLAS - invalid counts!");
 	}
+	if (vertexAddress == 0 || indexAddress == 0)
+	{
+		throw std::runtime_error("AccelerationStructureVk::buildBLAS - invalid buffer device address!");
+	}
 
 	vk::Device device = vk_.getDevice();
 
@@ -135,8 +139,7 @@ void AccelerationStructureVk::buildBLAS(
 	deviceAddress_ = device.getAccelerationStructureAddressKHR(addrInfo);
 } // end of buildBLAS()
 
-void AccelerationStructureVk::buildTLAS(
-	const std::vector<vk::AccelerationStructureInstanceKHR>& instances)
+void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStructureInstanceKHR>& instances)
 {
 	destroy();
 
@@ -173,6 +176,11 @@ void AccelerationStructureVk::buildTLAS(
 
 	const uint32_t primitiveCount = static_cast<uint32_t>(instances.size());
 
+	if (primitiveCount == 0)
+	{
+		throw std::runtime_error("AccelerationStructureVk::buildTLAS - primitive count is 0!");
+	}
+
 	// build info
 	vk::AccelerationStructureBuildGeometryInfoKHR buildInfo{};
 	buildInfo.type = vk::AccelerationStructureTypeKHR::eTopLevel;
@@ -203,6 +211,42 @@ void AccelerationStructureVk::buildTLAS(
 	asInfo.size = sizeInfo.accelerationStructureSize;
 	asInfo.type = vk::AccelerationStructureTypeKHR::eTopLevel;
 
+	{
+		vk::ResultValue rv = device.createAccelerationStructureKHRUnique(asInfo);
+		if (rv.result != vk::Result::eSuccess)
+		{
+			throw std::runtime_error("AccelerationStructureVk::buildTLAS - createAccelerationStructureKHRUnique failed: " +
+				vk::to_string(rv.result));
+		}
+		as_ = std::move(rv.value);
+	}
 
+	// scratch buffer
+	BufferVk scratch(vk_);
+	scratch.create(
+		sizeInfo.buildScratchSize,
+		vk::BufferUsageFlagBits::eStorageBuffer |
+		vk::BufferUsageFlagBits::eShaderDeviceAddress,
+		vk::MemoryPropertyFlagBits::eDeviceLocal,
+		true
+	);
 
+	buildInfo.dstAccelerationStructure = as_.get();
+	buildInfo.scratchData.deviceAddress = scratch.getDeviceAddress();
+
+	vk::AccelerationStructureBuildRangeInfoKHR rangeInfo{};
+	rangeInfo.primitiveCount = primitiveCount;
+	rangeInfo.primitiveOffset = 0;
+	rangeInfo.firstVertex = 0;
+	rangeInfo.transformOffset = 0;
+
+	const vk::AccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
+
+	vk::CommandBuffer cmd = vk_.beginSingleTimeCommands();
+	cmd.buildAccelerationStructuresKHR(1, &buildInfo, &pRangeInfo);
+	vk_.endSingleTimeCommands(cmd);
+
+	vk::AccelerationStructureDeviceAddressInfoKHR addrInfo{};
+	addrInfo.accelerationStructure = as_.get();
+	deviceAddress_ = device.getAccelerationStructureAddressKHR(addrInfo);
 } // end of buildTLAS()

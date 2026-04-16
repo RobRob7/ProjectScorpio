@@ -35,9 +35,7 @@ public:
 		vk::IndexType indexType = vk::IndexType::eUint32
 	);
 
-	void buildTLAS(
-		const std::vector<vk::AccelerationStructureInstanceKHR>& instances
-	);
+	void buildTLAS(const std::vector<vk::AccelerationStructureInstanceKHR>& instances);
 
 	bool valid() const { return static_cast<bool>(as_); }
 
