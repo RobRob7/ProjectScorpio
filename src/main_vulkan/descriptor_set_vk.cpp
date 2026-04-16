@@ -99,6 +99,13 @@ void DescriptorSetVk::allocate()
 	descSet_ = rv.value[0];
 } // end of allocate()
 
+void DescriptorSetVk::destroy()
+{
+	setLayout_.reset();
+	descPool_.reset();
+	descSet_ = vk::DescriptorSet{};
+} // end of destroy()
+
 void DescriptorSetVk::writeUniformBuffer(
 	uint32_t binding,
 	vk::Buffer buffer,
@@ -271,11 +278,54 @@ void DescriptorSetVk::createSingleUniformBuffer(
 	device.updateDescriptorSets(1, &write, 0, nullptr);
 } // end of createSingleUniformBuffer()
 
-
-//--- PRIVATE ---//
-void DescriptorSetVk::destroy()
+void DescriptorSetVk::writeStorageImage(
+	uint32_t binding,
+	vk::ImageView imageView,
+	vk::ImageLayout imageLayout
+)
 {
-	setLayout_.reset();
-	descPool_.reset();
-	descSet_ = vk::DescriptorSet{};
-} // end of destroy()
+	if (!descSet_)
+	{
+		throw std::runtime_error("DescriptorSetVk::writeStorageImage - descriptor set not allocated");
+	}
+
+	vk::DescriptorImageInfo dii{};
+	dii.imageLayout = imageLayout;
+	dii.imageView = imageView;
+	dii.sampler = vk::Sampler{};
+
+	vk::WriteDescriptorSet write{};
+	write.dstSet = descSet_;
+	write.dstBinding = binding;
+	write.dstArrayElement = 0;
+	write.descriptorType = vk::DescriptorType::eStorageImage;
+	write.descriptorCount = 1;
+	write.pImageInfo = &dii;
+
+	vk_.getDevice().updateDescriptorSets(1, &write, 0, nullptr);
+} // end of writeStorageImage()
+
+void DescriptorSetVk::writeAccelerationStructure(
+	uint32_t binding,
+	vk::AccelerationStructureKHR accel
+)
+{
+	if (!descSet_)
+	{
+		throw std::runtime_error("DescriptorSetVk::writeAccelerationStructure - descriptor set not allocated");
+	}
+
+	vk::WriteDescriptorSetAccelerationStructureKHR asInfo{};
+	asInfo.accelerationStructureCount = 1;
+	asInfo.pAccelerationStructures = &accel;
+
+	vk::WriteDescriptorSet write{};
+	write.pNext = &asInfo;
+	write.dstSet = descSet_;
+	write.dstBinding = binding;
+	write.dstArrayElement = 0;
+	write.descriptorType = vk::DescriptorType::eAccelerationStructureKHR;
+	write.descriptorCount = 1;
+
+	vk_.getDevice().updateDescriptorSets(1, &write, 0, nullptr);
+} // end of writeAccelerationStructure()

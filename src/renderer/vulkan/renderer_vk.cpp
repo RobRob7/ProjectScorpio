@@ -15,6 +15,7 @@
 #include "chunk_manager.h"
 #include "ui.h"
 
+#include "ray_tracing_pass_vk.h"
 #include "gbuffer_pass_vk.h"
 #include "shadow_map_pass_vk.h"
 #include "debug_pass_vk.h"
@@ -41,6 +42,8 @@ void RendererVk::init()
 {
 	if (!renderSettings_) renderSettings_ = std::make_unique<RenderSettings>();
 
+	if (!rayTracingPass_)	rayTracingPass_ = std::make_unique<RayTracingPassVk>(vk_);
+
 	if (!gbufferPass_)		gbufferPass_ = std::make_unique<GBufferPassVk>(vk_);
 	if (!shadowMapPass_)	shadowMapPass_ = std::make_unique<ShadowMapPassVk>(vk_);
 	if (!debugPass_)		debugPass_ = std::make_unique<DebugPassVk>(vk_, gbufferPass_->getNormalImage(), gbufferPass_->getDepthImage(), shadowMapPass_->getImage());
@@ -52,6 +55,8 @@ void RendererVk::init()
 	if (!fxaaPass_)			fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
 	if (!fogPass_)			fogPass_ = std::make_unique<FogPassVk>(vk_, *renderSettings_);
 	if (!presentPass_)		presentPass_ = std::make_unique<PresentPassVk>(vk_);
+
+	rayTracingPass_->init();
 
 	gbufferPass_->init();
 	shadowMapPass_->init();
@@ -74,6 +79,8 @@ void RendererVk::resize(int w, int h)
 
 	width_ = w;
 	height_ = h;
+
+	if (rayTracingPass_) rayTracingPass_->resize();
 
 	if (gbufferPass_)	gbufferPass_->resize(width_, height_);
 	if (debugPass_)		debugPass_->resize(width_, height_);
@@ -114,6 +121,69 @@ void RendererVk::renderFrame(
 	proj[1][1] *= -1.0f;
 
 	vk::CommandBuffer cmd = frame.cmd;
+
+
+	// RT test
+	if (rayTracingPass_)
+	{
+		VkUtils::TransitionImageLayout(
+			cmd,
+			rayTracingPass_->getOutputImageVk().image(),
+			vk::ImageAspectFlagBits::eColor,
+			rayTracingPass_->getOutputLayout(),
+			vk::ImageLayout::eGeneral,
+			1,
+			1
+		);
+
+		rayTracingPass_->render(frame);
+
+		VkUtils::TransitionImageLayout(
+			cmd,
+			rayTracingPass_->getOutputImageVk().image(),
+			vk::ImageAspectFlagBits::eColor,
+			rayTracingPass_->getOutputLayout(),
+			vk::ImageLayout::eShaderReadOnlyOptimal,
+			1,
+			1
+		);
+	}
+
+
+	VkUtils::TransitionImageLayout(
+		cmd,
+		frame.colorImage,
+		vk::ImageAspectFlagBits::eColor,
+		frame.colorLayout,
+		vk::ImageLayout::eColorAttachmentOptimal,
+		1,
+		1
+	);
+
+	if (presentPass_)
+	{
+		presentPass_->setInput(rayTracingPass_->getOutputImageVk());
+		presentPass_->render(frame);
+	}
+
+	if (ui)
+	{
+		ui->renderVk(frame);
+	}
+
+	VkUtils::TransitionImageLayout(
+		cmd,
+		frame.colorImage,
+		vk::ImageAspectFlagBits::eColor,
+		frame.colorLayout,
+		vk::ImageLayout::ePresentSrcKHR,
+		1,
+		1
+	);
+	vk_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
+	return;
+
+
 
 	// ----------------- PASSES ----------------- //
 	// gbuffer pass

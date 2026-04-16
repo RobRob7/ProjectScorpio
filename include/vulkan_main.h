@@ -33,6 +33,8 @@ struct SwapChainSupportDetails
 
 struct RetiredChunkBuffers
 {
+    BufferVk opaqueRTVB;
+    BufferVk opaqueRTIB;
     BufferVk opaqueVB;
     BufferVk opaqueIB;
     BufferVk waterVB;
@@ -127,6 +129,8 @@ public:
 
     void retireChunkBuffers(
         uint32_t frameIndex,
+        BufferVk&& opaqueRTVB,
+        BufferVk&& opaqueRTIB,
         BufferVk&& opaqueVB,
         BufferVk&& opaqueIB,
         BufferVk&& waterVB,
@@ -134,6 +138,8 @@ public:
     {
         retiredChunkBuffers_[frameIndex].push_back(
             RetiredChunkBuffers{
+                std::move(opaqueRTVB),
+                std::move(opaqueRTIB),
                 std::move(opaqueVB),
                 std::move(opaqueIB),
                 std::move(waterVB),
