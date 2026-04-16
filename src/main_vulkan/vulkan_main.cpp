@@ -145,6 +145,7 @@ bool VulkanMain::beginFrame(FrameContext& out)
 		}
 	}
 
+	retiredAS_[currentFrame_].clear();
 	retiredChunkBuffers_[currentFrame_].clear();
 
 	// reset + begin command buffer
@@ -1308,11 +1309,16 @@ void VulkanMain::flushRetiredResources()
 		}
 
 		upload.stagingBuffers.clear();
-	}
+	} // end for
 	pendingUploads_.clear();
 
 	for (auto& retired : retiredChunkBuffers_)
 	{
 		retired.clear();
-	}
+	} // end for
+
+	for (auto& retired : retiredAS_)
+	{
+		retired.clear();
+	} // end for
 } // end of flushRetiredResources()

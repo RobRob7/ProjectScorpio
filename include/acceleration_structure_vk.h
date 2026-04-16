@@ -43,7 +43,7 @@ public:
 	vk::DeviceAddress deviceAddress() const { return deviceAddress_; }
 
 private:
-	VulkanMain& vk_;
+	VulkanMain* vk_;
 
 	BufferVk buffer_;
 	vk::UniqueAccelerationStructureKHR as_{};

@@ -10,6 +10,8 @@
 #include "acceleration_structure_vk.h"
 
 #include <memory>
+#include <vector>
+#include <cstdint>
 
 class VulkanMain;
 class RayTracingShaderModuleVk;
@@ -26,9 +28,12 @@ public:
 
 	void render(const FrameContext& frame);
 
-	void setTopLevelAS(vk::AccelerationStructureKHR tlas);
+	void setTopLevelAS(
+		uint32_t frameIndex,
+		vk::AccelerationStructureKHR tlas
+	);
 
-	void updateDescriptorSet();
+	void updateDescriptorSet(uint32_t frameIndex);
 
 	bool valid() const { return outputImage_.valid(); }
 
@@ -51,7 +56,7 @@ private:
 
 	std::unique_ptr<RayTracingShaderModuleVk> shader_;
 
-	DescriptorSetVk descriptorSet_;
+	std::vector<DescriptorSetVk> descriptorSets_;
 	RayTracingPipelineVk pipeline_;
 	ShaderBindingTableVk sbt_;
 	vk::AccelerationStructureKHR topLevelAS_{};
