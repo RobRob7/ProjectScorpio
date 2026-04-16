@@ -32,7 +32,8 @@
 RendererVk::RendererVk(VulkanMain& vk)
 	: vk_(vk),
 	sceneColor_(vk),
-	sceneDepth_(vk)
+	sceneDepth_(vk),
+	topLevelAS_(vk)
 {
 } // end of constructor
 
@@ -122,6 +123,14 @@ void RendererVk::renderFrame(
 
 	vk::CommandBuffer cmd = frame.cmd;
 
+	// update world TLAS
+	std::vector<vk::AccelerationStructureInstanceKHR> instances;
+	in.world->buildTLASInstances(instances);
+	if (!instances.empty())
+	{
+		topLevelAS_.buildTLAS(instances);
+		rayTracingPass_->setTopLevelAS(topLevelAS_.handle());
+	}
 
 	// RT test
 	if (rayTracingPass_)

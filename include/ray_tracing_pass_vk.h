@@ -7,6 +7,7 @@
 #include "shader_binding_table_vk.h"
 #include "descriptor_set_vk.h"
 #include "ray_tracing_pipeline_vk.h"
+#include "acceleration_structure_vk.h"
 
 #include <memory>
 
@@ -24,6 +25,10 @@ public:
 	void resize();
 
 	void render(const FrameContext& frame);
+
+	void setTopLevelAS(vk::AccelerationStructureKHR tlas);
+
+	void updateDescriptorSet();
 
 	bool valid() const { return outputImage_.valid(); }
 
@@ -49,6 +54,7 @@ private:
 	DescriptorSetVk descriptorSet_;
 	RayTracingPipelineVk pipeline_;
 	ShaderBindingTableVk sbt_;
+	vk::AccelerationStructureKHR topLevelAS_{};
 
 	vk::ImageLayout outputLayout_ = vk::ImageLayout::eGeneral;
 };

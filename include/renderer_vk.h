@@ -4,6 +4,7 @@
 #include "i_renderer.h"
 
 #include "image_vk.h"
+#include "acceleration_structure_vk.h"
 
 #include <memory>
 
@@ -68,6 +69,7 @@ private:
 
 	std::unique_ptr<RenderSettings> renderSettings_;
 
+	AccelerationStructureVk topLevelAS_;
 	std::unique_ptr<RayTracingPassVk> rayTracingPass_;
 
 	std::unique_ptr<GBufferPassVk> gbufferPass_;

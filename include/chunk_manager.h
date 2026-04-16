@@ -1,6 +1,8 @@
 #ifndef CHUNK_MANAGER_H
 #define CHUNK_MANAGER_H
 
+#include <vulkan/vulkan.hpp>
+
 #include "constants.h"
 
 #include "save.h"
@@ -14,6 +16,7 @@
 #include <queue>
 #include <memory>
 #include <cstdint>
+#include <vector>
 
 struct ChunkEntry;
 struct ChunkDrawList;
@@ -54,6 +57,8 @@ public:
 		const glm::mat4& proj, 
 		ChunkDrawList& out
 	);
+
+	void buildTLASInstances(std::vector<vk::AccelerationStructureInstanceKHR>& out);
 
 	BlockID getBlock(int wx, int wy, int wz) const;
 	void setBlock(int wx, int wy, int wz, BlockID id);

@@ -380,6 +380,55 @@ void ChunkManager::buildWaterDrawList(
 	} // end for
 } // end of buildWaterDrawList()
 
+void ChunkManager::buildTLASInstances(std::vector<vk::AccelerationStructureInstanceKHR>& out)
+{
+	out.clear();
+
+	for (auto& [coord, entry] : chunks_)
+	{
+		if (!entry || !entry->gpu)
+		{
+			continue;
+		}
+
+		auto* gpuVk = dynamic_cast<ChunkMeshGPUVk*>(entry->gpu.get());
+
+		if (!gpuVk->hasOpaqueBLAS())
+		{
+			continue;
+		}
+
+		const float tx = static_cast<float>(coord.x * CHUNK_SIZE);
+		const float ty = 0.0f;
+		const float tz = static_cast<float>(coord.z * CHUNK_SIZE);
+
+		vk::AccelerationStructureInstanceKHR inst{};
+
+		inst.transform.matrix[0][0] = 1.0f;
+		inst.transform.matrix[0][1] = 0.0f;
+		inst.transform.matrix[0][2] = 0.0f;
+		inst.transform.matrix[0][3] = tx;
+
+		inst.transform.matrix[1][0] = 0.0f;
+		inst.transform.matrix[1][1] = 1.0f;
+		inst.transform.matrix[1][2] = 0.0f;
+		inst.transform.matrix[1][3] = ty;
+
+		inst.transform.matrix[2][0] = 0.0f;
+		inst.transform.matrix[2][1] = 0.0f;
+		inst.transform.matrix[2][2] = 1.0f;
+		inst.transform.matrix[2][3] = tz;
+
+		inst.instanceCustomIndex = 0;
+		inst.mask = 0xFF;
+		inst.instanceShaderBindingTableRecordOffset = 0;
+		inst.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
+		inst.accelerationStructureReference = gpuVk->getOpaqueBLASAddress();
+
+		out.push_back(inst);
+	} // end for
+} // end of buildTLASInstances()
+
 BlockID ChunkManager::getBlock(int wx, int wy, int wz) const
 {
 	int chunkX = static_cast<int>(std::floor(wx / static_cast<float>(CHUNK_SIZE)));
