@@ -244,6 +244,16 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 		vk_->discardSingleTimeCommands(cmd);
 	}
 
+	// retire old BLAS
+	if (opaqueBLAS_.valid())
+	{
+		vk_->retireAccelerationStructure(
+			vk_->currentFrameIndex(),
+			std::move(opaqueBLAS_)
+		);
+		opaqueBLAS_ = AccelerationStructureVk(*vk_);
+	}
+
 	// build BLAS
 	if (opaqueRTVB_.valid() && opaqueRTIB_.valid() &&
 		opaqueRTVertexCount_ > 0 && opaqueRTIndexCount_ > 0)
@@ -258,10 +268,6 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 			opaqueRTIndexCount_,
 			vk::IndexType::eUint32
 		);
-	}
-	else
-	{
-		opaqueBLAS_.destroy();
 	}
 } // end of upload()
 

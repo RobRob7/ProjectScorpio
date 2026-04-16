@@ -2,6 +2,7 @@
 #define VULKAN_MAIN_H
 
 #include "buffer_vk.h"
+#include "acceleration_structure_vk.h"
 
 #include <vulkan/vulkan.hpp>
 
@@ -127,6 +128,17 @@ public:
 
     uint32_t currentFrameIndex() const { return currentFrame_; }
 
+    void retireAccelerationStructure(
+        uint32_t frameIndex,
+        AccelerationStructureVk&& as
+    )
+    {
+        if (as.valid())
+        {
+            retiredAS_[frameIndex].push_back(std::move(as));
+        }
+    } // end of retireAccelerationStructure()
+
     void retireChunkBuffers(
         uint32_t frameIndex,
         BufferVk&& opaqueRTVB,
@@ -217,6 +229,7 @@ private:
     std::vector<PendingUpload> pendingUploads_;
 
     std::array<std::vector<RetiredChunkBuffers>, MAX_FRAMES_IN_FLIGHT> retiredChunkBuffers_;
+    std::array<std::vector<AccelerationStructureVk>, MAX_FRAMES_IN_FLIGHT> retiredAS_;
 
     bool framebufferResized_{ false };
     uint32_t currentFrame_ = 0;

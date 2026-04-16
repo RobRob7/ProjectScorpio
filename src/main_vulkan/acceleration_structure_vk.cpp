@@ -9,7 +9,7 @@
 
 //--- PUBLIC ---//
 AccelerationStructureVk::AccelerationStructureVk(VulkanMain& vk)
-	: vk_(vk),
+	: vk_(&vk),
 	buffer_(vk)
 {
 } // end of constructor
@@ -49,7 +49,7 @@ void AccelerationStructureVk::buildBLAS(
 		throw std::runtime_error("AccelerationStructureVk::buildBLAS - invalid buffer device address!");
 	}
 
-	vk::Device device = vk_.getDevice();
+	vk::Device device = vk_->getDevice();
 
 	// triangle geometry
 	vk::AccelerationStructureGeometryTrianglesDataKHR triangles{};
@@ -108,7 +108,7 @@ void AccelerationStructureVk::buildBLAS(
 	}
 
 	// scratch buffer
-	BufferVk scratch(vk_);
+	BufferVk scratch(*vk_);
 	scratch.create(
 		sizeInfo.buildScratchSize,
 		vk::BufferUsageFlagBits::eStorageBuffer |
@@ -129,9 +129,9 @@ void AccelerationStructureVk::buildBLAS(
 	const vk::AccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 
 	// record + submit build
-	vk::CommandBuffer cmd = vk_.beginSingleTimeCommands();
+	vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 	cmd.buildAccelerationStructuresKHR(1, &buildInfo, &pRangeInfo);
-	vk_.endSingleTimeCommands(cmd);
+	vk_->endSingleTimeCommands(cmd);
 
 	// get device address
 	vk::AccelerationStructureDeviceAddressInfoKHR addrInfo{};
@@ -148,13 +148,13 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 		throw std::runtime_error("AccelerationStructureVk::buildTLAS - instances cannot be empty!");
 	}
 
-	vk::Device device = vk_.getDevice();
+	vk::Device device = vk_->getDevice();
 
 	// upload instance data
 	vk::DeviceSize instanceBufferSize =
 		sizeof(vk::AccelerationStructureInstanceKHR) * instances.size();
 
-	BufferVk instanceBuffer(vk_);
+	BufferVk instanceBuffer(*vk_);
 	instanceBuffer.create(
 		instanceBufferSize,
 		vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR |
@@ -222,7 +222,7 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 	}
 
 	// scratch buffer
-	BufferVk scratch(vk_);
+	BufferVk scratch(*vk_);
 	scratch.create(
 		sizeInfo.buildScratchSize,
 		vk::BufferUsageFlagBits::eStorageBuffer |
@@ -242,9 +242,9 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 
 	const vk::AccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 
-	vk::CommandBuffer cmd = vk_.beginSingleTimeCommands();
+	vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 	cmd.buildAccelerationStructuresKHR(1, &buildInfo, &pRangeInfo);
-	vk_.endSingleTimeCommands(cmd);
+	vk_->endSingleTimeCommands(cmd);
 
 	vk::AccelerationStructureDeviceAddressInfoKHR addrInfo{};
 	addrInfo.accelerationStructure = as_.get();

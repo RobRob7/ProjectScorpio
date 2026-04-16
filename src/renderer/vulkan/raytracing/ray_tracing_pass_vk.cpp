@@ -10,10 +10,10 @@
 RayTracingPassVk::RayTracingPassVk(VulkanMain& vk)
 	: vk_(vk),
 	outputImage_(vk),
-	descriptorSet_(vk),
 	pipeline_(vk),
 	sbt_(vk)
 {
+	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
 } // end of constructor
 
 RayTracingPassVk::~RayTracingPassVk() = default;
@@ -38,14 +38,18 @@ void RayTracingPassVk::resize()
 {
 	outputImage_.destroy();
 	createOutputImage();
-	updateDescriptorSet();
+
+	for (uint32_t i = 0; i < descriptorSets_.size(); ++i)
+	{
+		updateDescriptorSet(i);
+	} // end for
 } // end of resize()
 
 void RayTracingPassVk::render(const FrameContext& frame)
 {
 	vk::CommandBuffer cmd = frame.cmd;
 
-	vk::DescriptorSet set = descriptorSet_.getSet();
+	vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
 	cmd.bindPipeline(
 		vk::PipelineBindPoint::eRayTracingKHR,
@@ -75,30 +79,37 @@ void RayTracingPassVk::render(const FrameContext& frame)
 	);
 } // end of render()
 
-void RayTracingPassVk::setTopLevelAS(vk::AccelerationStructureKHR tlas)
+void RayTracingPassVk::setTopLevelAS(
+	uint32_t frameIndex,
+	vk::AccelerationStructureKHR tlas
+)
 {
 	topLevelAS_ = tlas;
 
-	updateDescriptorSet();
+	updateDescriptorSet(frameIndex);
 } // end of setTopLevelAS()
 
-void RayTracingPassVk::updateDescriptorSet()
+void RayTracingPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
-	if (!descriptorSet_.valid())
+	for (auto& set : descriptorSets_)
 	{
-		return;
-	}
+		DescriptorSetVk& set = descriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
 
-	descriptorSet_.writeStorageImage(
-		0,
-		outputImage_.view(),
-		vk::ImageLayout::eGeneral
-	);
+		set.writeStorageImage(
+			0,
+			outputImage_.view(),
+			vk::ImageLayout::eGeneral
+		);
 
-	if (topLevelAS_)
-	{
-		descriptorSet_.writeAccelerationStructure(1, topLevelAS_);
-	}
+		if (topLevelAS_)
+		{
+			set.writeAccelerationStructure(1, topLevelAS_);
+		}
+	} // end for
 } // end of updateDescriptorSet()
 
 
@@ -156,34 +167,44 @@ void RayTracingPassVk::createResources()
 
 void RayTracingPassVk::createDescriptorSet()
 {
-	descriptorSet_.destroy();
+	descriptorSets_.clear();
 
-	vk::DescriptorSetLayoutBinding outputBinding{};
-	outputBinding.binding = 0;
-	outputBinding.descriptorType = vk::DescriptorType::eStorageImage;
-	outputBinding.descriptorCount = 1;
-	outputBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		DescriptorSetVk set(vk_);
 
-	vk::DescriptorSetLayoutBinding tlasBinding{};
-	tlasBinding.binding = 1;
-	tlasBinding.descriptorType = vk::DescriptorType::eAccelerationStructureKHR;
-	tlasBinding.descriptorCount = 1;
-	tlasBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
+		vk::DescriptorSetLayoutBinding outputBinding{};
+		outputBinding.binding = 0;
+		outputBinding.descriptorType = vk::DescriptorType::eStorageImage;
+		outputBinding.descriptorCount = 1;
+		outputBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
 
-	descriptorSet_.createLayout({ outputBinding, tlasBinding });
+		vk::DescriptorSetLayoutBinding tlasBinding{};
+		tlasBinding.binding = 1;
+		tlasBinding.descriptorType = vk::DescriptorType::eAccelerationStructureKHR;
+		tlasBinding.descriptorCount = 1;
+		tlasBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
 
-	vk::DescriptorPoolSize outputPool{};
-	outputPool.type = vk::DescriptorType::eStorageImage;
-	outputPool.descriptorCount = 1;
+		set.createLayout({ outputBinding, tlasBinding });
 
-	vk::DescriptorPoolSize tlasPool{};
-	tlasPool.type = vk::DescriptorType::eAccelerationStructureKHR;
-	tlasPool.descriptorCount = 1;
+		vk::DescriptorPoolSize outputPool{};
+		outputPool.type = vk::DescriptorType::eStorageImage;
+		outputPool.descriptorCount = 1;
 
-	descriptorSet_.createPool({ outputPool, tlasPool }, 1);
-	descriptorSet_.allocate();
+		vk::DescriptorPoolSize tlasPool{};
+		tlasPool.type = vk::DescriptorType::eAccelerationStructureKHR;
+		tlasPool.descriptorCount = 1;
 
-	updateDescriptorSet();
+		set.createPool({ outputPool, tlasPool }, 1);
+		set.allocate();
+
+		descriptorSets_.push_back(std::move(set));
+	} // end for
+
+	for (uint32_t i = 0; i < descriptorSets_.size(); ++i)
+	{
+		updateDescriptorSet(i);
+	} // end for
 } // end of createDescriptorSet()
 
 void RayTracingPassVk::createPipeline()
@@ -193,7 +214,7 @@ void RayTracingPassVk::createPipeline()
 	desc.missShader = shader_->missShader();
 	desc.closestHitShader = shader_->closestHitShader();
 	
-	desc.setLayouts = { descriptorSet_.getLayout() };
+	desc.setLayouts = { descriptorSets_[0].getLayout()};
 	desc.maxRecursionDepth = 1;
 
 	pipeline_.create(desc);

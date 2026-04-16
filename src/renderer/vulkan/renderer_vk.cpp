@@ -126,11 +126,17 @@ void RendererVk::renderFrame(
 	// update world TLAS
 	std::vector<vk::AccelerationStructureInstanceKHR> instances;
 	in.world->buildTLASInstances(instances);
-	if (!instances.empty())
+	if (topLevelAS_.valid())
 	{
-		topLevelAS_.buildTLAS(instances);
-		rayTracingPass_->setTopLevelAS(topLevelAS_.handle());
+		vk_.retireAccelerationStructure(
+			vk_.currentFrameIndex(),
+			std::move(topLevelAS_)
+		);
+		topLevelAS_ = AccelerationStructureVk(vk_);
 	}
+
+	topLevelAS_.buildTLAS(instances);
+	rayTracingPass_->setTopLevelAS(frame.frameIndex, topLevelAS_.handle());
 
 	// RT test
 	if (rayTracingPass_)
