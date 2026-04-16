@@ -38,8 +38,7 @@ void RayTracingPassVk::resize()
 {
 	outputImage_.destroy();
 	createOutputImage();
-
-	createDescriptorSet();
+	updateDescriptorSet();
 } // end of resize()
 
 void RayTracingPassVk::render(const FrameContext& frame)
@@ -75,6 +74,32 @@ void RayTracingPassVk::render(const FrameContext& frame)
 		1
 	);
 } // end of render()
+
+void RayTracingPassVk::setTopLevelAS(vk::AccelerationStructureKHR tlas)
+{
+	topLevelAS_ = tlas;
+
+	updateDescriptorSet();
+} // end of setTopLevelAS()
+
+void RayTracingPassVk::updateDescriptorSet()
+{
+	if (!descriptorSet_.valid())
+	{
+		return;
+	}
+
+	descriptorSet_.writeStorageImage(
+		0,
+		outputImage_.view(),
+		vk::ImageLayout::eGeneral
+	);
+
+	if (topLevelAS_)
+	{
+		descriptorSet_.writeAccelerationStructure(1, topLevelAS_);
+	}
+} // end of updateDescriptorSet()
 
 
 //--- PRIVATE ---//
@@ -121,6 +146,7 @@ void RayTracingPassVk::createOutputImage()
 		1,
 		1
 	);
+	outputLayout_ = vk::ImageLayout::eGeneral;
 } // end of createOutputImage
 
 void RayTracingPassVk::createResources()
@@ -138,20 +164,26 @@ void RayTracingPassVk::createDescriptorSet()
 	outputBinding.descriptorCount = 1;
 	outputBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
 
-	descriptorSet_.createLayout({ outputBinding });
+	vk::DescriptorSetLayoutBinding tlasBinding{};
+	tlasBinding.binding = 1;
+	tlasBinding.descriptorType = vk::DescriptorType::eAccelerationStructureKHR;
+	tlasBinding.descriptorCount = 1;
+	tlasBinding.stageFlags = vk::ShaderStageFlagBits::eRaygenKHR;
 
-	vk::DescriptorPoolSize poolSize{};
-	poolSize.type = vk::DescriptorType::eStorageImage;
-	poolSize.descriptorCount = 1;
+	descriptorSet_.createLayout({ outputBinding, tlasBinding });
 
-	descriptorSet_.createPool({ poolSize }, 1);
+	vk::DescriptorPoolSize outputPool{};
+	outputPool.type = vk::DescriptorType::eStorageImage;
+	outputPool.descriptorCount = 1;
+
+	vk::DescriptorPoolSize tlasPool{};
+	tlasPool.type = vk::DescriptorType::eAccelerationStructureKHR;
+	tlasPool.descriptorCount = 1;
+
+	descriptorSet_.createPool({ outputPool, tlasPool }, 1);
 	descriptorSet_.allocate();
 
-	descriptorSet_.writeStorageImage(
-		0,
-		outputImage_.view(),
-		vk::ImageLayout::eGeneral
-	);
+	updateDescriptorSet();
 } // end of createDescriptorSet()
 
 void RayTracingPassVk::createPipeline()
