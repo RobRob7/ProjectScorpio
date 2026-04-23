@@ -27,7 +27,9 @@ ChunkMeshGPUVk::~ChunkMeshGPUVk()
 {
 	if (vk_)
 	{
-		retireCurrentBuffers(vk_->currentFrameIndex());
+		const uint32_t frameIndex = vk_->currentFrameIndex();
+		retireCurrentBLAS(frameIndex);
+		retireCurrentBuffers(frameIndex);
 	}
 } // end of destructor
 
@@ -49,6 +51,10 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 	std::vector<BufferVk> stagingBuffers;
 	stagingBuffers.reserve(6);
 
+	// copy data to CPU side holders
+	opaqueRTVerticesCPU_ = data.opaqueRTVertices;
+	opaqueRTIndicesCPU_ = data.opaqueIndices;
+
 	// -------- RT OPAQUE --------
 	if (!data.opaqueRTVertices.empty() && !data.opaqueIndices.empty())
 	{
@@ -69,6 +75,7 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 			vbSize,
 			vk::BufferUsageFlagBits::eTransferDst |
 			vk::BufferUsageFlagBits::eShaderDeviceAddress |
+			vk::BufferUsageFlagBits::eStorageBuffer |
 			vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
 			true
@@ -95,6 +102,7 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 			ibSize,
 			vk::BufferUsageFlagBits::eTransferDst |
 			vk::BufferUsageFlagBits::eShaderDeviceAddress |
+			vk::BufferUsageFlagBits::eStorageBuffer |
 			vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR,
 			vk::MemoryPropertyFlagBits::eDeviceLocal,
 			true
@@ -221,7 +229,9 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 		newWaterIndexCount = static_cast<uint32_t>(data.waterIndices.size());
 	}
 
-	retireCurrentBuffers(vk_->currentFrameIndex());
+	const uint32_t frameIndex = vk_->currentFrameIndex();
+	retireCurrentBLAS(frameIndex);
+	retireCurrentBuffers(frameIndex);
 
 	opaqueRTVB_ = std::move(newOpaqueRTVB);
 	opaqueRTIB_ = std::move(newOpaqueRTIB);
@@ -235,30 +245,34 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 	opaqueIndexCount_ = newOpaqueIndexCount;
 	waterIndexCount_ = newWaterIndexCount;
 
-	if (!stagingBuffers.empty())
-	{
-		vk_->submitUpload(cmd, std::move(stagingBuffers));
-	}
-	else
-	{
-		vk_->discardSingleTimeCommands(cmd);
-	}
+	vk::BufferMemoryBarrier barriers[2]{};
 
-	// retire old BLAS
-	if (opaqueBLAS_.valid())
-	{
-		vk_->retireAccelerationStructure(
-			vk_->currentFrameIndex(),
-			std::move(opaqueBLAS_)
-		);
-		opaqueBLAS_ = AccelerationStructureVk(*vk_);
-	}
+	barriers[0].srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+	barriers[0].dstAccessMask = vk::AccessFlagBits::eAccelerationStructureReadKHR;
+	barriers[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barriers[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	barriers[0].buffer = opaqueRTVB_.getBuffer();
+	barriers[0].offset = 0;
+	barriers[0].size = VK_WHOLE_SIZE;
+
+	barriers[1] = barriers[0];
+	barriers[1].buffer = opaqueRTIB_.getBuffer();
+
+	cmd.pipelineBarrier(
+		vk::PipelineStageFlagBits::eTransfer,
+		vk::PipelineStageFlagBits::eAccelerationStructureBuildKHR,
+		{},
+		0, nullptr,
+		2, barriers,
+		0, nullptr
+	);
 
 	// build BLAS
 	if (opaqueRTVB_.valid() && opaqueRTIB_.valid() &&
 		opaqueRTVertexCount_ > 0 && opaqueRTIndexCount_ > 0)
 	{
-		opaqueBLAS_.buildBLAS(
+		opaqueBLAS_.buildBLASOnCmd(
+			cmd,
 			opaqueRTVB_.getBuffer(),
 			opaqueRTVB_.getDeviceAddress(),
 			opaqueRTVertexCount_,
@@ -268,6 +282,16 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 			opaqueRTIndexCount_,
 			vk::IndexType::eUint32
 		);
+	}
+
+	if (!stagingBuffers.empty())
+	{
+		vk_->endSingleTimeCommands(cmd);
+		stagingBuffers.clear();
+	}
+	else
+	{
+		vk_->discardSingleTimeCommands(cmd);
 	}
 } // end of upload()
 
@@ -308,13 +332,19 @@ void ChunkMeshGPUVk::retireCurrentBuffers(uint32_t frameIndex)
 		return;
 	}
 
-	vk_->retireChunkBuffers(
-		frameIndex,
-		std::move(opaqueRTVB_),
-		std::move(opaqueRTIB_),
-		std::move(opaqueVB_),
-		std::move(opaqueIB_),
-		std::move(waterVB_),
-		std::move(waterIB_)
-	);
+	vk_->retireBuffer(frameIndex, std::move(opaqueRTVB_));
+	vk_->retireBuffer(frameIndex, std::move(opaqueRTIB_));
+	vk_->retireBuffer(frameIndex, std::move(opaqueVB_));
+	vk_->retireBuffer(frameIndex, std::move(opaqueIB_));
+	vk_->retireBuffer(frameIndex, std::move(waterVB_));
+	vk_->retireBuffer(frameIndex, std::move(waterIB_));
 } // end of retireCurrentBuffers()
+
+void ChunkMeshGPUVk::retireCurrentBLAS(uint32_t frameIndex)
+{
+	if (opaqueBLAS_.valid())
+	{
+		vk_->retireAccelerationStructure(frameIndex, std::move(opaqueBLAS_));
+		opaqueBLAS_ = AccelerationStructureVk(*vk_);
+	}
+} // end of retireCurrentBLAS()

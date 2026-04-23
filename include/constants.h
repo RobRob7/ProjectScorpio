@@ -14,16 +14,6 @@ enum class Backend
 	DX12
 };
 
-namespace RayTracing
-{
-	struct RTCameraUBO
-	{
-		glm::mat4 invView;
-		glm::mat4 invProj;
-		glm::vec4 cameraPos;
-	};
-};
-
 namespace World
 {
 	const int WATER_TEX_FACTOR = 2;
@@ -70,7 +60,17 @@ namespace World
 
 	struct RTVertex
 	{
-		glm::vec3 position;
+		glm::vec4 position;
+		glm::vec4 normal;
+		glm::vec4 tileData; // x, y
+	};
+
+	struct RTChunkInfo
+	{
+		uint64_t vertexAddress;
+		uint64_t indexAddress;
+		glm::uvec4 countsPad;
+		glm::vec4 chunkOrigin;
 	};
 
 	struct VertexWater
@@ -240,6 +240,27 @@ namespace Cubemap_Constants
 	};
 };
 
+namespace RT_Chunk_Constants
+{
+	struct RayGenUBO
+	{
+		glm::mat4 u_invView;
+		glm::mat4 u_invProj;
+		glm::vec4 u_cameraPos;
+	};
+
+	struct MissUBO
+	{
+
+	};
+
+	struct ClosestHitUBO
+	{
+		glm::vec4 u_lightDir;
+		glm::vec4 u_lightColor;
+	};
+};
+
 namespace Chunk_Constants
 {
 	struct ChunkOpaqueUBO
@@ -401,8 +422,8 @@ namespace FXAA_Constants
 namespace Fog_Constants
 {
 	const glm::vec3 FOG_COLOR{ 1.0f, 1.0f, 1.0f };
-	const float FOG_START{ 25.0f };
-	const float FOG_END{ 125.0f };
+	const float FOG_START{ 50.0f };
+	const float FOG_END{ 175.0f };
 
 	struct FogPassUBO
 	{

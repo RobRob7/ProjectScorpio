@@ -20,7 +20,7 @@ using namespace Light_Constants;
 
 //--- PUBLIC ---//
 LightVk::LightVk(
-	VulkanMain& vk, 
+	VulkanMain& vk,
 	const glm::vec3& pos, 
 	const glm::vec3& dir,
 	const glm::vec3& color
@@ -242,7 +242,7 @@ void LightVk::createPipeline()
 	desc.vertexBinding = binding;
 	desc.vertexAttributes = { attr };
 
-	desc.colorFormat = vk::Format::eR32G32B32A32Sfloat;
+	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
 	desc.depthFormat = vk::Format::eD32Sfloat;
 
 	desc.cullMode = vk::CullModeFlagBits::eBack;
@@ -255,8 +255,5 @@ void LightVk::createPipeline()
 
 
 	// offscreen pipeline
-	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
-	desc.depthFormat = vk::Format::eD32Sfloat;
-
 	pipelineOffscreen_.create(desc);
 } // end of createPipeline()

@@ -10,6 +10,8 @@
 //--- PUBLIC ---//
 AccelerationStructureVk::AccelerationStructureVk(VulkanMain& vk)
 	: vk_(&vk),
+	instanceBuffer_(vk),
+	scratchBuffer_(vk),
 	buffer_(vk)
 {
 } // end of constructor
@@ -19,11 +21,14 @@ AccelerationStructureVk::~AccelerationStructureVk() = default;
 void AccelerationStructureVk::destroy()
 {
 	as_.reset();
+	instanceBuffer_.destroy();
+	scratchBuffer_.destroy();
 	buffer_.destroy();
 	deviceAddress_ = 0;
 } // end of destroy()
 
-void AccelerationStructureVk::buildBLAS(
+void AccelerationStructureVk::buildBLASOnCmd(
+	vk::CommandBuffer cmd,
 	vk::Buffer vertexBuffer,
 	vk::DeviceAddress vertexAddress,
 	uint32_t vertexCount,
@@ -34,8 +39,6 @@ void AccelerationStructureVk::buildBLAS(
 	vk::IndexType indexType
 )
 {
-	destroy();
-
 	if (!vertexBuffer || !indexBuffer)
 	{
 		throw std::runtime_error("AccelerationStructureVk::buildBLAS - invalid vertex/index buffer!");
@@ -108,8 +111,7 @@ void AccelerationStructureVk::buildBLAS(
 	}
 
 	// scratch buffer
-	BufferVk scratch(*vk_);
-	scratch.create(
+	scratchBuffer_.create(
 		sizeInfo.buildScratchSize,
 		vk::BufferUsageFlagBits::eStorageBuffer |
 		vk::BufferUsageFlagBits::eShaderDeviceAddress,
@@ -118,7 +120,7 @@ void AccelerationStructureVk::buildBLAS(
 	);
 
 	buildInfo.dstAccelerationStructure = as_.get();
-	buildInfo.scratchData.deviceAddress = scratch.getDeviceAddress();
+	buildInfo.scratchData.deviceAddress = scratchBuffer_.getDeviceAddress();
 
 	vk::AccelerationStructureBuildRangeInfoKHR rangeInfo{};
 	rangeInfo.primitiveCount = primitiveCount;
@@ -128,34 +130,44 @@ void AccelerationStructureVk::buildBLAS(
 
 	const vk::AccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 
-	// record + submit build
-	vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 	cmd.buildAccelerationStructuresKHR(1, &buildInfo, &pRangeInfo);
-	vk_->endSingleTimeCommands(cmd);
 
-	// get device address
+	vk::MemoryBarrier barrier{};
+	barrier.srcAccessMask = vk::AccessFlagBits::eAccelerationStructureWriteKHR;
+	barrier.dstAccessMask = vk::AccessFlagBits::eAccelerationStructureReadKHR |
+		vk::AccessFlagBits::eShaderRead;
+
+	cmd.pipelineBarrier(
+		vk::PipelineStageFlagBits::eAccelerationStructureBuildKHR,
+		vk::PipelineStageFlagBits::eAccelerationStructureBuildKHR |
+		vk::PipelineStageFlagBits::eRayTracingShaderKHR,
+		{},
+		1, &barrier,
+		0, nullptr,
+		0, nullptr
+	);
+
 	vk::AccelerationStructureDeviceAddressInfoKHR addrInfo{};
 	addrInfo.accelerationStructure = as_.get();
 	deviceAddress_ = device.getAccelerationStructureAddressKHR(addrInfo);
 } // end of buildBLAS()
 
-void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStructureInstanceKHR>& instances)
+void AccelerationStructureVk::buildTLASOnCmd(
+	vk::CommandBuffer cmd,
+	const std::vector<vk::AccelerationStructureInstanceKHR>& instances
+)
 {
-	destroy();
-
 	if (instances.empty())
 	{
-		throw std::runtime_error("AccelerationStructureVk::buildTLAS - instances cannot be empty!");
+		throw std::runtime_error("AccelerationStructureVk::buildTLASOnCmd - instances cannot be empty!");
 	}
 
 	vk::Device device = vk_->getDevice();
 
-	// upload instance data
 	vk::DeviceSize instanceBufferSize =
 		sizeof(vk::AccelerationStructureInstanceKHR) * instances.size();
 
-	BufferVk instanceBuffer(*vk_);
-	instanceBuffer.create(
+	instanceBuffer_.create(
 		instanceBufferSize,
 		vk::BufferUsageFlagBits::eAccelerationStructureBuildInputReadOnlyKHR |
 		vk::BufferUsageFlagBits::eShaderDeviceAddress,
@@ -163,12 +175,11 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 		vk::MemoryPropertyFlagBits::eHostCoherent,
 		true
 	);
-	instanceBuffer.upload(instances.data(), instanceBufferSize);
+	instanceBuffer_.upload(instances.data(), instanceBufferSize);
 
-	// describe instance data
 	vk::AccelerationStructureGeometryInstancesDataKHR instanceData{};
 	instanceData.arrayOfPointers = vk::False;
-	instanceData.data.deviceAddress = instanceBuffer.getDeviceAddress();
+	instanceData.data.deviceAddress = instanceBuffer_.getDeviceAddress();
 
 	vk::AccelerationStructureGeometryKHR geometry{};
 	geometry.geometryType = vk::GeometryTypeKHR::eInstances;
@@ -176,12 +187,6 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 
 	const uint32_t primitiveCount = static_cast<uint32_t>(instances.size());
 
-	if (primitiveCount == 0)
-	{
-		throw std::runtime_error("AccelerationStructureVk::buildTLAS - primitive count is 0!");
-	}
-
-	// build info
 	vk::AccelerationStructureBuildGeometryInfoKHR buildInfo{};
 	buildInfo.type = vk::AccelerationStructureTypeKHR::eTopLevel;
 	buildInfo.flags = vk::BuildAccelerationStructureFlagBitsKHR::ePreferFastTrace;
@@ -196,7 +201,6 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 			{ primitiveCount }
 		);
 
-	// create TLAS storage buffer
 	buffer_.create(
 		sizeInfo.accelerationStructureSize,
 		vk::BufferUsageFlagBits::eAccelerationStructureStorageKHR |
@@ -205,25 +209,24 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 		true
 	);
 
-	// create TLAS handle
 	vk::AccelerationStructureCreateInfoKHR asInfo{};
 	asInfo.buffer = buffer_.getBuffer();
 	asInfo.size = sizeInfo.accelerationStructureSize;
 	asInfo.type = vk::AccelerationStructureTypeKHR::eTopLevel;
 
 	{
-		vk::ResultValue rv = device.createAccelerationStructureKHRUnique(asInfo);
+		auto rv = device.createAccelerationStructureKHRUnique(asInfo);
 		if (rv.result != vk::Result::eSuccess)
 		{
-			throw std::runtime_error("AccelerationStructureVk::buildTLAS - createAccelerationStructureKHRUnique failed: " +
-				vk::to_string(rv.result));
+			throw std::runtime_error(
+				"AccelerationStructureVk::buildTLASOnCmd - createAccelerationStructureKHRUnique failed: " +
+				vk::to_string(rv.result)
+			);
 		}
 		as_ = std::move(rv.value);
 	}
 
-	// scratch buffer
-	BufferVk scratch(*vk_);
-	scratch.create(
+	scratchBuffer_.create(
 		sizeInfo.buildScratchSize,
 		vk::BufferUsageFlagBits::eStorageBuffer |
 		vk::BufferUsageFlagBits::eShaderDeviceAddress,
@@ -232,7 +235,7 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 	);
 
 	buildInfo.dstAccelerationStructure = as_.get();
-	buildInfo.scratchData.deviceAddress = scratch.getDeviceAddress();
+	buildInfo.scratchData.deviceAddress = scratchBuffer_.getDeviceAddress();
 
 	vk::AccelerationStructureBuildRangeInfoKHR rangeInfo{};
 	rangeInfo.primitiveCount = primitiveCount;
@@ -242,11 +245,24 @@ void AccelerationStructureVk::buildTLAS(const std::vector<vk::AccelerationStruct
 
 	const vk::AccelerationStructureBuildRangeInfoKHR* pRangeInfo = &rangeInfo;
 
-	vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 	cmd.buildAccelerationStructuresKHR(1, &buildInfo, &pRangeInfo);
-	vk_->endSingleTimeCommands(cmd);
+
+	vk::MemoryBarrier barrier{};
+	barrier.srcAccessMask = vk::AccessFlagBits::eAccelerationStructureWriteKHR;
+	barrier.dstAccessMask = vk::AccessFlagBits::eAccelerationStructureReadKHR |
+		vk::AccessFlagBits::eShaderRead;
+
+	cmd.pipelineBarrier(
+		vk::PipelineStageFlagBits::eAccelerationStructureBuildKHR,
+		vk::PipelineStageFlagBits::eAccelerationStructureBuildKHR |
+		vk::PipelineStageFlagBits::eRayTracingShaderKHR,
+		{},
+		1, &barrier,
+		0, nullptr,
+		0, nullptr
+	);
 
 	vk::AccelerationStructureDeviceAddressInfoKHR addrInfo{};
 	addrInfo.accelerationStructure = as_.get();
 	deviceAddress_ = device.getAccelerationStructureAddressKHR(addrInfo);
-} // end of buildTLAS()
+} // end of buildTLASOnCmd()

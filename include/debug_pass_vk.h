@@ -17,19 +17,18 @@ class DebugPassVk
 {
 public:
 	DebugPassVk(
-		VulkanMain& vk, 
-		ImageVk& normalImage, 
-		ImageVk& depthImage,
-		ImageVk& shadowMapImage
+		VulkanMain& vk,
+		const ImageVk& normalImage,
+		const ImageVk& depthImage,
+		const ImageVk& shadowMapImage
 	);
 	~DebugPassVk();
 
 	void init();
-	void resize(int w, int h);
+	void resize();
 
 	void render(
-		const FrameContext& frame,
-		vk::ImageLayout layout,
+		FrameContext& frame,
 		float nearPlane,
 		float farPlane,
 		int mode
@@ -42,18 +41,16 @@ private:
 	void createPipeline();
 private:
 	VulkanMain& vk_;
-	ImageVk& normalImage_;
-	ImageVk& depthImage_;
-	ImageVk& shadowMapImage_;
+
+	const ImageVk& normalImage_;
+	const ImageVk& depthImage_;
+	const ImageVk& shadowMapImage_;
 	
 	std::unique_ptr<ShaderModuleVk> shader_;
 
 	BufferVk uboBuffer_;
 	DescriptorSetVk descriptorSet_;
 	GraphicsPipelineVk pipeline_;
-
-	int width_{};
-	int height_{};
 };
 
 #endif

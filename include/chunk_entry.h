@@ -10,11 +10,14 @@ class IChunkMeshGPU;
 class VulkanMain;
 
 #include <memory>
+#include <cstdint>
 
 struct ChunkEntry
 {
 	std::unique_ptr<ChunkMesh> cpu;
-	std::unique_ptr<IChunkMeshGPU> gpu;
+	std::shared_ptr<IChunkMeshGPU> gpu;
+
+	uint64_t geometryVersion = 0;
 
 	ChunkEntry(int chunkX, int chunkZ, VulkanMain* vk)
 	{
@@ -22,20 +25,19 @@ struct ChunkEntry
 
 		if (vk)
 		{
-			gpu = std::make_unique<ChunkMeshGPUVk>(*vk);
+			gpu = std::make_shared<ChunkMeshGPUVk>(*vk);
 		}
 		else
 		{
-			gpu = std::make_unique<ChunkMeshGPUGL>();
+			gpu = std::make_shared<ChunkMeshGPUGL>();
 		}
-
-		gpu->upload(cpu->data());
 	}
 
 	void rebuildAndUpload()
 	{
 		cpu->rebuild();
 		gpu->upload(cpu->data());
+		++geometryVersion;
 	}
 };
 

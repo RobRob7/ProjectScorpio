@@ -23,9 +23,9 @@ using namespace Debug_Constants;
 //--- PUBLIC ---//
 DebugPassVk::DebugPassVk(
 	VulkanMain& vk, 
-	ImageVk& normalImage, 
-	ImageVk& depthImage,
-	ImageVk& shadowMapImage
+	const ImageVk& normalImage, 
+	const ImageVk& depthImage,
+	const ImageVk& shadowMapImage
 )
 	: vk_(vk),
 	normalImage_(normalImage),
@@ -41,9 +41,6 @@ DebugPassVk::~DebugPassVk() = default;
 
 void DebugPassVk::init()
 {
-	width_ = static_cast<int>(vk_.getSwapChainExtent().width);
-	height_ = static_cast<int>(vk_.getSwapChainExtent().height);
-
 	shader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
 		"debugpass/debugpass.vert.spv",
@@ -56,22 +53,13 @@ void DebugPassVk::init()
 	refreshInputs();
 } // end of init()
 
-void DebugPassVk::resize(int w, int h)
+void DebugPassVk::resize()
 {
-	if (w == 0 || h == 0) return;
-	if (w == width_ && h == height_) return;
-
-	vk_.waitIdle();
-
-	width_ = w;
-	height_ = h;
-
 	refreshInputs();
 } // end of resize()
 
 void DebugPassVk::render(
-	const FrameContext& frame,
-	vk::ImageLayout layout,
+	FrameContext& frame,
 	float nearPlane,
 	float farPlane,
 	int mode
@@ -90,7 +78,7 @@ void DebugPassVk::render(
 		cmd,
 		frame.colorImage,
 		vk::ImageAspectFlagBits::eColor,
-		layout,
+		frame.colorLayout,
 		vk::ImageLayout::eColorAttachmentOptimal,
 		1,
 		1
@@ -151,7 +139,7 @@ void DebugPassVk::render(
 		cmd,
 		frame.colorImage,
 		vk::ImageAspectFlagBits::eColor,
-		layout,
+		frame.colorLayout,
 		vk::ImageLayout::ePresentSrcKHR,
 		1,
 		1
@@ -271,7 +259,6 @@ void DebugPassVk::createPipeline()
 	desc.setLayouts = { descriptorSet_.getLayout() };
 
 	desc.colorFormat = vk_.getSwapChainImageFormat();
-	desc.depthFormat = vk::Format::eUndefined;
 
 	desc.cullMode = vk::CullModeFlagBits::eNone;
 	desc.frontFace = vk::FrontFace::eClockwise;

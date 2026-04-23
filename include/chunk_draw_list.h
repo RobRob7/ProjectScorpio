@@ -3,6 +3,7 @@
 
 #include <glm/glm.hpp>
 
+#include <memory>
 #include <cstdint>
 #include <vector>
 
@@ -11,12 +12,14 @@ class IChunkMeshGPU;
 struct ChunkDrawItem
 {
 	glm::vec3 chunkOrigin{};
-	IChunkMeshGPU* gpu = nullptr;
+	std::shared_ptr<IChunkMeshGPU> gpu;
 
 	uint32_t opaqueIndexCount = 0;
 	uint32_t waterIndexCount = 0;
 
 	uint32_t renderedBlockCount = 0;
+
+	uint64_t geometryVersion = 0;
 
 	bool validOpaque() const noexcept { return gpu && opaqueIndexCount > 0; }
 	bool validWater() const noexcept { return gpu && waterIndexCount > 0; }

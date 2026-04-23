@@ -1,7 +1,7 @@
 #include "shadow_map_pass_vk.h"
 
-#include "bindings.h"
 #include "constants.h"
+#include "render_target_vk.h"
 #include "render_inputs.h"
 #include "chunk_manager.h"
 
@@ -15,17 +15,13 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <memory>
 #include <cstddef>
 #include <algorithm>
 
 //--- PUBLIC ---//
 ShadowMapPassVk::ShadowMapPassVk(VulkanMain& vk)
 	: vk_(vk),
-	depthImage_(vk),
-	uboBuffer_(vk),
-	descriptorSet_(vk),
-	pipeline_(vk)
+	depthImage_(vk)
 {
 } // end of constructor
 
@@ -33,25 +29,17 @@ ShadowMapPassVk::~ShadowMapPassVk() = default;
 
 void ShadowMapPassVk::init()
 {
-	shader_ = std::make_unique<ShaderModuleVk>(
-		vk_.getDevice(),
-		"shadowmappass/shadowmappass.vert.spv",
-		"shadowmappass/shadowmappass.frag.spv"
-	);
-
 	createAttachments();
-	createResources();
-	createDescriptorSet();
-	createPipeline();
 } // end of init()
 
-void ShadowMapPassVk::renderOffscreen(
+void ShadowMapPassVk::render(
 	ChunkPassVk& chunk,
 	const RenderInputs& in,
 	const FrameContext& frame
 )
 {
 	vk::CommandBuffer cmd = frame.cmd;
+	vk::Extent2D extent = vk::Extent2D{ width_, height_ };
 
 	VkUtils::TransitionImageLayout(
 		cmd,
@@ -72,10 +60,7 @@ void ShadowMapPassVk::renderOffscreen(
 
 	vk::RenderingInfo renderingInfo{};
 	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = vk::Extent2D{
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_)
-	};
+	renderingInfo.renderArea.extent = extent;
 	renderingInfo.layerCount = 1;
 	renderingInfo.pDepthAttachment = &depthAttachment;
 
@@ -92,22 +77,8 @@ void ShadowMapPassVk::renderOffscreen(
 
 		vk::Rect2D scissor{};
 		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = vk::Extent2D{
-			static_cast<uint32_t>(width_),
-			static_cast<uint32_t>(height_)
-		};
+		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
-
-		vk::DescriptorSet set = descriptorSet_.getSet();
-
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_.getLayout(),
-			0,
-			1, &set,
-			0, nullptr
-		);
 
 		// configure light space transform
 		glm::vec3 minWS, maxWS;
@@ -127,17 +98,27 @@ void ShadowMapPassVk::renderOffscreen(
 
 			return;
 		}
+
+		// expand bounds for shadow casters
+		const float shadowPadXZ = CHUNK_SIZE * 4.0f;
+		const float shadowPadY = CHUNK_SIZE_Y * 8.0f;
+
+		minWS.x -= shadowPadXZ;
+		minWS.z -= shadowPadXZ;
+		maxWS.x += shadowPadXZ;
+		maxWS.z += shadowPadXZ;
+
+		minWS.y -= shadowPadY;
+		maxWS.y += shadowPadY;
 		buildLightSpaceBounds(in, minWS, maxWS);
 
-		uboData_.u_lightSpaceMatrix = lightSpaceMatrix_;
-		uboBuffer_.upload(&uboData_, sizeof(uboData_));
-
-		chunk.renderOpaqueShadowMap(
+		chunk.renderOpaque(
+			RenderTargetVk::Shadow,
 			in,
 			frame,
-			pipeline_.getLayout(),
 			lightView_,
-			lightProj_
+			lightProj_,
+			lightSpaceMatrix_
 		);
 	}
 	cmd.endRendering();
@@ -215,7 +196,8 @@ void ShadowMapPassVk::buildLightSpaceBounds(
 
 	glm::vec3 centerLS = 0.5f * (minLS + maxLS);
 
-	float texelSize = extent / static_cast<float>(std::max(1, width_));
+	float texelSize = extent / 
+		static_cast<float>(std::max(1, static_cast<int>(width_)));
 
 	centerLS.x = std::round(centerLS.x / texelSize) * texelSize;
 	centerLS.y = std::round(centerLS.y / texelSize) * texelSize;
@@ -274,75 +256,3 @@ void ShadowMapPassVk::createAttachments()
 	// RESET
 	depthLayout_ = vk::ImageLayout::eUndefined;
 } // end of createAttachments()
-
-void ShadowMapPassVk::createResources()
-{
-	uboBuffer_.create(
-		sizeof(ShadowMapPassUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
-} // end of createResources()
-
-void ShadowMapPassVk::createDescriptorSet()
-{
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(ShadowMapPassBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
-
-	descriptorSet_.createLayout({ uboBinding});
-
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
-
-	descriptorSet_.createPool({ uboPool}, 1);
-	descriptorSet_.allocate();
-
-	descriptorSet_.writeUniformBuffer(
-		TO_API_FORM(ShadowMapPassBinding::UBO),
-		uboBuffer_.getBuffer(),
-		sizeof(ShadowMapPassUBO)
-	);
-} // end of createDescriptorSet()
-
-void ShadowMapPassVk::createPipeline()
-{
-	GraphicsPipelineDescVk desc{};
-	desc.vertShader = shader_->vertShader();
-	desc.fragShader = shader_->fragShader();
-
-	vk::PushConstantRange pushRange{};
-	pushRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
-	pushRange.offset = 0;
-	pushRange.size = sizeof(Chunk_Constants::ChunkPushConstants);
-	desc.pushConstantRanges = { pushRange };
-
-	vk::VertexInputBindingDescription binding{};
-	binding.binding = 0;
-	binding.stride = sizeof(Vertex);
-	binding.inputRate = vk::VertexInputRate::eVertex;
-
-	vk::VertexInputAttributeDescription attr{};
-	attr.location = 0;
-	attr.binding = 0;
-	attr.format = vk::Format::eR32Uint;
-	attr.offset = offsetof(Vertex, sample);
-
-	desc.vertexBinding = binding;
-	desc.vertexAttributes = { attr };
-
-	desc.setLayouts = { descriptorSet_.getLayout() };
-
-	desc.depthFormat = depthFormat_;
-	desc.depthTestEnable = true;
-	desc.depthWriteEnable = true;
-	desc.depthCompareOp = vk::CompareOp::eLess;
-
-	desc.cullMode = vk::CullModeFlagBits::eFront;
-	desc.frontFace = vk::FrontFace::eClockwise;
-
-	pipeline_.create(desc);
-} // end of createPipeline()

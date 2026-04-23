@@ -160,7 +160,7 @@ void ShadowMapPassGL::buildLightSpaceBounds(
 	farPlane = std::max(nearPlane + 1.0f, farPlane);
 
 	// build fitted ortho projection
-	lightProj_ = glm::orthoRH_ZO(
+	lightProj_ = glm::ortho(
 		minLS.x, maxLS.x,
 		minLS.y, maxLS.y,
 		nearPlane, farPlane

@@ -1,42 +1,53 @@
 #version 460
 #extension GL_EXT_ray_tracing : require
 
-layout(set = 0, binding = 0, rgba8) uniform image2D outputImage;
+struct RayPayload
+{
+    vec3 color;
+    int shadowed;
+    int rayType;
+};
+
+layout(location = 0) rayPayloadEXT RayPayload payload;
+
+layout(set = 0, binding = 0, rgba32f) uniform image2D outputImage;
 layout(set = 0, binding = 1) uniform accelerationStructureEXT topLevelAS;
 
-layout(set = 0, binding = 2) uniform CameraUBO
+layout(set = 0, binding = 2) uniform UBO
 {
-    mat4 invView;
-    mat4 invProj;
-    vec4 cameraPos;
-} cameraData;
-
-layout(location = 0) rayPayloadEXT vec3 payloadColor;
+    mat4 u_invView;
+    mat4 u_invProj;
+    vec4 u_cameraPos;
+} ubo;
 
 void main()
 {
     ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
     ivec2 size  = ivec2(gl_LaunchSizeEXT.xy);
 
-    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(size);
+    vec2 uv  = (vec2(pixel) + vec2(0.5)) / vec2(size);
     vec2 ndc = uv * 2.0 - 1.0;
 
-    vec4 clip = vec4(ndc.x, ndc.y, 1.0, 1.0);
-    vec4 viewPos = cameraData.invProj * clip;
+    vec4 clip = vec4(ndc, 1.0, 1.0);
+
+    vec4 viewPos = ubo.u_invProj * clip;
     viewPos /= viewPos.w;
 
-    vec3 dir = normalize((cameraData.invView * vec4(normalize(viewPos.xyz), 0.0)).xyz);
-    vec3 origin = cameraData.cameraPos.xyz;
+    vec3 dir = normalize(
+        (ubo.u_invView * vec4(normalize(viewPos.xyz), 0.0)).xyz
+    );
 
-    payloadColor = vec3(0.0);
+    vec3 origin = ubo.u_cameraPos.xyz;
 
+    payload.color    = vec3(0.0);
+    payload.shadowed = 0;
+    payload.rayType  = 0; // primary
+    
     traceRayEXT(
         topLevelAS,
         gl_RayFlagsOpaqueEXT,
         0xFF,
-        0,
-        0,
-        0,
+        0, 0, 0,
         origin,
         0.001,
         dir,
@@ -44,5 +55,5 @@ void main()
         0
     );
 
-    imageStore(outputImage, pixel, vec4(payloadColor, 1.0));
+    imageStore(outputImage, pixel, vec4(payload.color, 1.0));
 }

@@ -10,6 +10,7 @@
 
 class VulkanMain;
 class ShaderModuleVk;
+class ImageVk;
 struct FrameContext;
 
 class CrosshairVk : public ICrosshair

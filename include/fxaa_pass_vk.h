@@ -24,7 +24,7 @@ public:
 	~FXAAPassVk();
 
 	void init();
-	void resize(int w, int h);
+	void resize();
 
 	void setInput(ImageVk& input);
 
@@ -33,29 +33,27 @@ public:
 	ImageVk& getOutputImage() { return outputImage_; }
 
 private:
-	void refreshInput(FrameContext& frame);
+	void refreshInput();
 	void createAttachment();
 	void createResources();
 	void createDescriptorSets();
 	void createPipeline();
 private:
-	int width_{};
-	int height_{};
-
 	VulkanMain& vk_;
+
 	ImageVk* inputImage_{ nullptr };
 
 	ImageVk outputImage_;
-
-	FXAA_Constants::FXAAPassUBO ubo_;
+	vk::Format outputFormat_{ vk::Format::eR16G16B16A16Sfloat };
+	vk::ImageLayout outputLayout_{ vk::ImageLayout::eUndefined };
 
 	std::unique_ptr<ShaderModuleVk> shader_;
 
 	std::vector<BufferVk> uboBuffers_;
+	FXAA_Constants::FXAAPassUBO uboData_{};
+
 	std::vector<DescriptorSetVk> descriptorSets_;
 	GraphicsPipelineVk pipeline_;
-
-	vk::ImageLayout outputLayout_{ vk::ImageLayout::eUndefined };
 };
 
 #endif

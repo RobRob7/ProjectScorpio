@@ -312,7 +312,7 @@ void CubemapVk::createPipeline()
 	desc.vertexBinding = binding;
 	desc.vertexAttributes = { attr };
 
-	desc.colorFormat = vk::Format::eR32G32B32A32Sfloat;
+	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
 	desc.depthFormat = vk::Format::eD32Sfloat;
 
 	desc.cullMode = vk::CullModeFlagBits::eFront;

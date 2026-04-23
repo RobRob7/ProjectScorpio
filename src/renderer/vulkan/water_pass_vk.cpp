@@ -31,7 +31,7 @@ using namespace World;
 //--- PUBLIC ---//
 WaterPassVk::WaterPassVk(
 	VulkanMain& vk,
-	ImageVk& shadowMapTex
+	const ImageVk& shadowMapTex
 )
 	: vk_(vk),
 	shadowMapImage_(shadowMapTex),
@@ -54,11 +54,11 @@ void WaterPassVk::init()
 		"water/water.vert.spv",
 		"water/water.frag.spv"
 	);
-	fullW_ = static_cast<int>(vk_.getSwapChainExtent().width);
-	fullH_ = static_cast<int>(vk_.getSwapChainExtent().height);
 
-	width_ = std::max(1, fullW_ / factor_);
-	height_ = std::max(1, fullH_ / factor_);
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+
+	width_ = std::max(1u, extent.width / factor_);
+	height_ = std::max(1u, extent.height / factor_);
 
 	dudvTex_.loadFromFile("dudv.png", true);
 	normalTex_.loadFromFile("waternormal.png", true);
@@ -69,17 +69,12 @@ void WaterPassVk::init()
 	createPipeline();
 } // end of init()
 
-void WaterPassVk::resize(int w, int h)
+void WaterPassVk::resize()
 {
-	if (w <= 0 || h <= 0) return;
-	if (w == fullW_ && h == fullH_) return;
+	vk::Extent2D extent = vk_.getSwapChainExtent();
 
-	vk_.waitIdle();
-
-	fullW_ = w;
-	fullH_ = h;
-	width_ = std::max(1, w / factor_);
-	height_ = std::max(1, h / factor_);
+	width_ = std::max(1u, extent.width / factor_);
+	height_ = std::max(1u, extent.height / factor_);
 
 	createAttachments();
 	createDescriptorSet();
@@ -338,7 +333,8 @@ void WaterPassVk::createDescriptorSet()
 	descriptorSet_.createLayout({ 
 		uboBinding,
 		reflColorBinding, refrColorBinding, refrDepthBinding,
-		dudvBinding, normalBinding, shadowMapBinding});
+		dudvBinding, normalBinding, shadowMapBinding
+		});
 
 	vk::DescriptorPoolSize uboPool{};
 	uboPool.type = vk::DescriptorType::eUniformBuffer;
@@ -371,7 +367,8 @@ void WaterPassVk::createDescriptorSet()
 	descriptorSet_.createPool({ 
 		uboPool, 
 		reflColorPool, refrColorPool, refrDepthPool,
-		dudvPool, normalPool, shadowMapPool}, 1);
+		dudvPool, normalPool, shadowMapPool
+		});
 	descriptorSet_.allocate();
 
 	descriptorSet_.writeUniformBuffer(
@@ -431,8 +428,8 @@ void WaterPassVk::createPipeline()
 
 	desc.setLayouts = { descriptorSet_.getLayout() };
 
-	desc.colorFormat = vk::Format::eR32G32B32A32Sfloat;
-	desc.depthFormat = vk::Format::eD32Sfloat;
+	desc.colorFormat = colorFormat_;
+	desc.depthFormat = depthFormat_;
 
 	desc.cullMode = vk::CullModeFlagBits::eBack;
 	desc.frontFace = vk::FrontFace::eClockwise;
@@ -634,28 +631,19 @@ void WaterPassVk::waterReflectionPass(
 		const float aspect = (height_ > 0)
 			? (static_cast<float>(width_) / static_cast<float>(height_))
 			: 1.0f;
-		glm::mat4 proj = camera.getProjectionMatrix(aspect);
+		glm::mat4 proj = camera.getProjectionMatrixVk(aspect);
 		proj[1][1] *= -1.0f;
 
-		ChunkOpaqueUBO ubo{};
-		ubo.u_useShadowMap = rs.useShadowMap ? 1 : 0;
-		ubo.u_lightSpaceMatrix = lightSpaceMatrix;
-		ubo.u_clipPlane = clipPlane;
-		ubo.u_useSSAO = 0;
-		ubo.u_viewPos = camera.getCameraPosition();
-		ubo.u_lightDir = in.light->getDirection();
-		ubo.u_lightColor = in.light->getColor();
-
 		// render world
-		chunk.renderOpaqueOffscreen(
-			in, 
-			frame, 
-			reflView, 
+		chunk.renderOpaque(
+			RenderTargetVk::WaterReflection,
+			in,
+			frame,
+			reflView,
 			proj,
-			width_, height_, 
-			ubo,
-			chunk.getOpaqueOffscreenDescriptorSetReflection(),
-			chunk.getOpaqueOffscreenUBOBufferReflection()
+			lightSpaceMatrix,
+			width_,
+			height_
 		);
 		if (in.skybox) 
 		{
@@ -744,28 +732,19 @@ void WaterPassVk::waterRefractionPass(
 		const float aspect = (height_ > 0)
 			? (static_cast<float>(width_) / static_cast<float>(height_))
 			: 1.0f;
-		glm::mat4 proj = in.camera->getProjectionMatrix(aspect);
+		glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
 		proj[1][1] *= -1.0f;
 
-		ChunkOpaqueUBO ubo{};
-		ubo.u_useShadowMap = rs.useShadowMap ? 1 : 0;
-		ubo.u_lightSpaceMatrix = lightSpaceMatrix;
-		ubo.u_clipPlane = clipPlane;
-		ubo.u_useSSAO = 0;
-		ubo.u_viewPos = in.camera->getCameraPosition();
-		ubo.u_lightDir = in.light->getDirection();
-		ubo.u_lightColor = in.light->getColor();
-
 		// render world
-		chunk.renderOpaqueOffscreen(
-			in, 
-			frame, 
-			view, 
+		chunk.renderOpaque(
+			RenderTargetVk::WaterRefraction,
+			in,
+			frame,
+			view,
 			proj,
-			width_, height_, 
-			ubo,
-			chunk.getOpaqueOffscreenDescriptorSetRefraction(),
-			chunk.getOpaqueOffscreenUBOBufferRefraction()
+			lightSpaceMatrix,
+			width_,
+			height_
 		);
 	}
 	cmd.endRendering();

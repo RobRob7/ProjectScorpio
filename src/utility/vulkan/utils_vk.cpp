@@ -229,6 +229,51 @@ namespace VkUtils
 			srcStage = vk::PipelineStageFlagBits::eFragmentShader;
 			dstStage = vk::PipelineStageFlagBits::eRayTracingShaderKHR;
 		}
+		else if (oldLayout == vk::ImageLayout::eGeneral &&
+			newLayout == vk::ImageLayout::eTransferSrcOptimal)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eShaderWrite;
+			barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+
+			srcStage = vk::PipelineStageFlagBits::eRayTracingShaderKHR;
+			dstStage = vk::PipelineStageFlagBits::eTransfer;
+		}
+		else if (oldLayout == vk::ImageLayout::eUndefined &&
+			newLayout == vk::ImageLayout::eTransferDstOptimal)
+		{
+			barrier.srcAccessMask = {};
+			barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+			srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+			dstStage = vk::PipelineStageFlagBits::eTransfer;
+		}
+		else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+			newLayout == vk::ImageLayout::eColorAttachmentOptimal)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+			barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+
+			srcStage = vk::PipelineStageFlagBits::eTransfer;
+			dstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		}
+		else if (oldLayout == vk::ImageLayout::eTransferSrcOptimal &&
+			newLayout == vk::ImageLayout::eGeneral)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+			barrier.dstAccessMask = vk::AccessFlagBits::eShaderWrite;
+
+			srcStage = vk::PipelineStageFlagBits::eTransfer;
+			dstStage = vk::PipelineStageFlagBits::eRayTracingShaderKHR;
+		}
+		else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal &&
+			newLayout == vk::ImageLayout::eTransferDstOptimal)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eShaderRead;
+			barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+			srcStage = vk::PipelineStageFlagBits::eFragmentShader;
+			dstStage = vk::PipelineStageFlagBits::eTransfer;
+		}
 		else
 		{
 			throw std::runtime_error(

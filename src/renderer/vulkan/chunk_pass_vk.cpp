@@ -24,34 +24,43 @@
 
 using namespace Chunk_Constants;
 using namespace Gbuffer_Constants;
+using namespace Shadow_Map_Constants;
 
 //--- PUBLIC ---//
 ChunkPassVk::ChunkPassVk(
-	VulkanMain& vk, 
-	ImageVk& ssaoBlurImage, 
-	ImageVk& shadowMapImage
+	VulkanMain& vk,
+	RenderSettings& rs,
+	const ImageVk& ssaoBlurImage,
+	const ImageVk& shadowMapImage
 )
 	: vk_(vk),
+	rs_(rs),
 	ssaoBlurImage_(ssaoBlurImage),
 	shadowMapImage_(shadowMapImage),
 	atlas_(vk),
 	opaqueUBOBuffer_(vk),
+	reflUBOBuffer_(vk),
+	refrUBOBuffer_(vk),
 	opaqueDescriptorSet_(vk),
+	reflectionDescriptorSet_(vk),
+	refractionDescriptorSet_(vk),
 	opaquePipeline_(vk),
 	opaqueGBufferUBOBuffer_(vk),
 	opaqueGBufferDescriptorSet_(vk),
 	opaqueGBufferPipeline_(vk),
-	opaqueOffscreenUBOBufferReflection_(vk),
-	opaqueOffscreenUBOBufferRefraction_(vk),
-	opaqueOffscreenDescriptorSetReflection_(vk),
-	opaqueOffscreenDescriptorSetRefraction_(vk),
-	opaquePipelineOffscreen_(vk)
+	opaqueShadowUBOBuffer_(vk),
+	opaqueShadowDescriptorSet_(vk),
+	opaqueShadowPipeline_(vk)
 {
 } // end of constructor
 
 ChunkPassVk::~ChunkPassVk() = default;
 
-void ChunkPassVk::init()
+void ChunkPassVk::init(
+	RenderTargetFormatsVk defaultFormats,
+	RenderTargetFormatsVk gbufferFormats,
+	RenderTargetFormatsVk shadowFormats
+)
 {
 	opaqueShader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(), 
@@ -63,570 +72,765 @@ void ChunkPassVk::init()
 		"gbuffer/gbuffer.vert.spv",
 		"gbuffer/gbuffer.frag.spv"
 	);
+	opaqueShadowShader_ = std::make_unique<ShaderModuleVk>(
+		vk_.getDevice(),
+		"shadowmappass/shadowmappass.vert.spv",
+		"shadowmappass/shadowmappass.frag.spv"
+	);
 
 	atlas_.loadFromFile("blocks_padded.png", true);
 
-	createOpaqueResources();
-	createOpaqueOffscreenResources();
-	createOpaqueGBufferResources();
-
-	createOpaqueDescriptorSet();
-	createOpaqueOffscreenDescriptorSet();
-	createOpaqueGBufferDescriptorSet();
-
-	createOpaquePipeline();
-	createOpaqueGBufferPipeline();
+	createResources();
+	createDescriptorSets();
+	createPipelines(
+		defaultFormats,
+		gbufferFormats,
+		shadowFormats
+	);
 } // end of init()
 
-void ChunkPassVk::refreshTexBinding()
+void ChunkPassVk::resize()
 {
-	opaqueDescriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::SSAOTex),
-		ssaoBlurImage_.view(),
-		ssaoBlurImage_.sampler()
-	);
-
-	opaqueDescriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
-
-	opaqueOffscreenDescriptorSetReflection_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::SSAOTex),
-		ssaoBlurImage_.view(),
-		ssaoBlurImage_.sampler()
-	);
-
-	opaqueOffscreenDescriptorSetReflection_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
-
-	opaqueOffscreenDescriptorSetRefraction_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::SSAOTex),
-		ssaoBlurImage_.view(),
-		ssaoBlurImage_.sampler()
-	);
-
-	opaqueOffscreenDescriptorSetRefraction_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
-} // end of refreshSSAOBinding()
+	refreshTexBinding();
+} // end of resize()
 
 void ChunkPassVk::renderOpaque(
+	RenderTargetVk renderTarget,
 	const RenderInputs& in,
-	const RenderSettings& rs,
 	const FrameContext& frame,
 	const glm::mat4& view,
 	const glm::mat4& proj,
 	const glm::mat4& lightSpaceMatrix,
-	int width, int height,
-	ChunkOpaqueUBO& ubo
+	const uint32_t waterPassWidth,
+	const uint32_t waterPassHeight
 )
 {
+	in.world->buildOpaqueDrawList(view, proj);
+
 	vk::CommandBuffer cmd = frame.cmd;
 
-	ChunkDrawList list;
-	in.world->buildOpaqueDrawList(view, proj, list);
-
-	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
-
-	vk::DescriptorSet set = opaqueDescriptorSet_.getSet();
-
-	ubo.u_lightSpaceMatrix = lightSpaceMatrix;
-
-	ubo.u_useSSAO = rs.useSSAO ? 1 : 0;
-	ubo.u_useShadowMap = rs.useShadowMap ? 1 : 0;
-
-	ubo.u_view = view;
-	ubo.u_proj = proj;
-	ubo.u_screenSize = glm::vec2(width, height);
-	ubo.u_ambientStrength = in.world->getAmbientStrength();
-
-	ubo.u_viewPos = in.camera->getCameraPosition();
-
-	ubo.u_lightDir = in.light->getDirection();
-	ubo.u_lightColor = in.light->getColor();
-
-	opaqueUBOBuffer_.upload(&ubo, sizeof(ubo), 0);
-
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		opaquePipeline_.getLayout(),
-		0,
-		1, &set,
-		0, nullptr
-	);
-	
-	for (const auto& item : list.items)
+	// default
+	if (renderTarget == RenderTargetVk::Default)
 	{
-		ChunkPushConstants pc{};
-		pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+		vk::Extent2D extent = frame.extent;
 
-		cmd.pushConstants(
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
+
+		vk::DescriptorSet set = opaqueDescriptorSet_.getSet();
+
+		chunkUBOData_ = {};
+
+		chunkUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
+
+		chunkUBOData_.u_useSSAO = rs_.useSSAO ? 1 : 0;
+		chunkUBOData_.u_useShadowMap = rs_.useShadowMap ? 1 : 0;
+
+		chunkUBOData_.u_view = view;
+		chunkUBOData_.u_proj = proj;
+		chunkUBOData_.u_screenSize = glm::vec2(extent.width, extent.height);
+		chunkUBOData_.u_ambientStrength = in.world->getAmbientStrength();
+
+		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
+
+		chunkUBOData_.u_lightDir = in.light->getDirection();
+		chunkUBOData_.u_lightColor = in.light->getColor();
+
+		opaqueUBOBuffer_.upload(&chunkUBOData_, sizeof(chunkUBOData_), 0);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
 			opaquePipeline_.getLayout(),
-			vk::ShaderStageFlagBits::eVertex,
 			0,
-			sizeof(ChunkPushConstants),
-			&pc
+			1, &set,
+			0, nullptr
 		);
 
-		item.gpu->drawOpaque(cmd);
-	} // end for
-} // end of renderOpaque()
+		const ChunkDrawList& list = in.world->getChunkDrawList();
+		for (const auto& item : list.items)
+		{
+			ChunkPushConstants pc{};
+			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
 
-void ChunkPassVk::renderOpaqueOffscreen(
-	const RenderInputs& in,
-	const FrameContext& frame,
-	const glm::mat4& view,
-	const glm::mat4& proj,
-	int width, int height,
-	ChunkOpaqueUBO& ubo,
-	DescriptorSetVk& descriptorSet,
-	BufferVk& uboBuffer
-)
-{
-	vk::CommandBuffer cmd = frame.cmd;
+			cmd.pushConstants(
+				opaquePipeline_.getLayout(),
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				sizeof(ChunkPushConstants),
+				&pc
+			);
 
-	ChunkDrawList list;
-	in.world->buildOpaqueDrawList(view, proj, list);
-
-	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipelineOffscreen_.getPipeline());
-
-	vk::DescriptorSet set = descriptorSet.getSet();
-
-	ubo.u_view = view;
-	ubo.u_proj = proj;
-	ubo.u_screenSize = glm::vec2(width, height);
-	ubo.u_ambientStrength = in.world->getAmbientStrength();
-
-	uboBuffer.upload(&ubo, sizeof(ubo), 0);
-
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		opaquePipelineOffscreen_.getLayout(),
-		0,
-		1, &set,
-		0, nullptr
-	);
-
-	for (const auto& item : list.items)
+			item.gpu->drawOpaque(cmd);
+		} // end for
+	}
+	// reflection
+	else if (renderTarget == RenderTargetVk::WaterReflection)
 	{
-		ChunkPushConstants pc{};
-		pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
 
-		cmd.pushConstants(
-			opaquePipelineOffscreen_.getLayout(),
-			vk::ShaderStageFlagBits::eVertex,
+		vk::DescriptorSet set = reflectionDescriptorSet_.getSet();
+
+		// build reflected view matrix
+		const float waterHeight = static_cast<float>(World::SEA_LEVEL) + 0.9f;
+		Camera camera = *in.camera;
+		glm::vec3 reflectedPos = camera.getCameraPosition();
+		reflectedPos.y = 2.0f * waterHeight - reflectedPos.y;
+		camera.setCameraPosition(reflectedPos);
+
+		// set clip plane (clip everything below water)
+		glm::vec4 clipPlane{ 0, 1, 0, -waterHeight };
+
+		chunkUBOData_ = {};
+
+		chunkUBOData_.u_clipPlane = clipPlane;
+		chunkUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
+
+		chunkUBOData_.u_useSSAO = 0;
+		chunkUBOData_.u_useShadowMap = rs_.useShadowMap ? 1 : 0;
+
+		chunkUBOData_.u_view = view;
+		chunkUBOData_.u_proj = proj;
+		chunkUBOData_.u_screenSize = glm::vec2(waterPassWidth, waterPassHeight);
+		chunkUBOData_.u_ambientStrength = in.world->getAmbientStrength();
+
+		chunkUBOData_.u_viewPos = camera.getCameraPosition();
+
+		chunkUBOData_.u_lightDir = in.light->getDirection();
+		chunkUBOData_.u_lightColor = in.light->getColor();
+
+		reflUBOBuffer_.upload(&chunkUBOData_, sizeof(chunkUBOData_), 0);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			opaquePipeline_.getLayout(),
 			0,
-			sizeof(ChunkPushConstants),
-			&pc
+			1, &set,
+			0, nullptr
 		);
 
-		item.gpu->drawOpaque(cmd);
-	} // end for
-} // end of renderOpaqueOffscreen()
+		const ChunkDrawList& list = in.world->getChunkDrawList();
+		for (const auto& item : list.items)
+		{
+			ChunkPushConstants pc{};
+			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
 
-void ChunkPassVk::renderOpaqueGBuffer(
-	const RenderInputs& in,
-	const FrameContext& frame,
-	const glm::mat4& view,
-	const glm::mat4& proj,
-	int width, int height
-)
-{
-	vk::CommandBuffer cmd = frame.cmd;
+			cmd.pushConstants(
+				opaquePipeline_.getLayout(),
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				sizeof(ChunkPushConstants),
+				&pc
+			);
 
-	ChunkDrawList list;
-	in.world->buildOpaqueDrawList(view, proj, list);
-
-	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaqueGBufferPipeline_.getPipeline());
-
-	vk::DescriptorSet set = opaqueGBufferDescriptorSet_.getSet();
-
-	GbufferUBO ubo{};
-	ubo.u_view = view;
-	ubo.u_proj = proj;
-
-	opaqueGBufferUBOBuffer_.upload(&ubo, sizeof(ubo), 0);
-
-	cmd.bindDescriptorSets(
-		vk::PipelineBindPoint::eGraphics,
-		opaqueGBufferPipeline_.getLayout(),
-		0,
-		1, &set,
-		0, nullptr
-	);
-
-	for (const auto& item : list.items)
+			item.gpu->drawOpaque(cmd);
+		} // end for
+	}
+	// refraction
+	else if (renderTarget == RenderTargetVk::WaterRefraction)
 	{
-		ChunkPushConstants pc{};
-		pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
 
-		cmd.pushConstants(
+		vk::DescriptorSet set = refractionDescriptorSet_.getSet();
+
+		// set clip plane (clip everything above water)
+		float waterHeight = static_cast<float>(World::SEA_LEVEL) + 0.9f;
+		glm::vec4 clipPlane{ 0, -1, 0, waterHeight };
+
+		chunkUBOData_ = {};
+
+		chunkUBOData_.u_clipPlane = clipPlane;
+		chunkUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
+
+		chunkUBOData_.u_useSSAO = 0;
+		chunkUBOData_.u_useShadowMap = rs_.useShadowMap ? 1 : 0;
+
+		chunkUBOData_.u_view = view;
+		chunkUBOData_.u_proj = proj;
+		chunkUBOData_.u_screenSize = glm::vec2(waterPassWidth, waterPassHeight);
+		chunkUBOData_.u_ambientStrength = in.world->getAmbientStrength();
+
+		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
+
+		chunkUBOData_.u_lightDir = in.light->getDirection();
+		chunkUBOData_.u_lightColor = in.light->getColor();
+
+		refrUBOBuffer_.upload(&chunkUBOData_, sizeof(chunkUBOData_), 0);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			opaquePipeline_.getLayout(),
+			0,
+			1, &set,
+			0, nullptr
+		);
+
+		const ChunkDrawList& list = in.world->getChunkDrawList();
+		for (const auto& item : list.items)
+		{
+			ChunkPushConstants pc{};
+			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+
+			cmd.pushConstants(
+				opaquePipeline_.getLayout(),
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				sizeof(ChunkPushConstants),
+				&pc
+			);
+
+			item.gpu->drawOpaque(cmd);
+		} // end for
+	}
+	// gbuffer
+	else if (renderTarget == RenderTargetVk::GBuffer)
+	{
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaqueGBufferPipeline_.getPipeline());
+
+		vk::DescriptorSet set = opaqueGBufferDescriptorSet_.getSet();
+
+		gbufferUBOData_ = {};
+
+		gbufferUBOData_.u_view = view;
+		gbufferUBOData_.u_proj = proj;
+
+		opaqueGBufferUBOBuffer_.upload(&gbufferUBOData_, sizeof(gbufferUBOData_), 0);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
 			opaqueGBufferPipeline_.getLayout(),
-			vk::ShaderStageFlagBits::eVertex,
 			0,
-			sizeof(ChunkPushConstants),
-			&pc
+			1, &set,
+			0, nullptr
 		);
 
-		item.gpu->drawOpaque(cmd);
-	} // end for
-} // end of renderOpaqueGBuffer()
+		const ChunkDrawList& list = in.world->getChunkDrawList();
+		for (const auto& item : list.items)
+		{
+			ChunkPushConstants pc{};
+			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
 
-void ChunkPassVk::renderOpaqueShadowMap(
-	const RenderInputs& in,
-	const FrameContext& frame,
-	const vk::PipelineLayout& layout,
-	const glm::mat4& view,
-	const glm::mat4& proj
-)
-{
-	vk::CommandBuffer cmd = frame.cmd;
+			cmd.pushConstants(
+				opaqueGBufferPipeline_.getLayout(),
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				sizeof(ChunkPushConstants),
+				&pc
+			);
 
-	ChunkDrawList list;
-	in.world->buildOpaqueDrawList(view, proj, list);
-
-	for (const auto& item : list.items)
+			item.gpu->drawOpaque(cmd);
+		} // end for
+	}
+	// shadow
+	else if (renderTarget == RenderTargetVk::Shadow)
 	{
-		ChunkPushConstants pc{};
-		pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaqueShadowPipeline_.getPipeline());
 
-		cmd.pushConstants(
-			layout,
-			vk::ShaderStageFlagBits::eVertex,
+		vk::DescriptorSet set = opaqueShadowDescriptorSet_.getSet();
+
+		shadowUBOData_ = {};
+
+		shadowUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
+
+		opaqueShadowUBOBuffer_.upload(&shadowUBOData_, sizeof(shadowUBOData_), 0);
+
+		cmd.bindDescriptorSets(
+			vk::PipelineBindPoint::eGraphics,
+			opaqueShadowPipeline_.getLayout(),
 			0,
-			sizeof(ChunkPushConstants),
-			&pc
+			1, &set,
+			0, nullptr
 		);
 
-		item.gpu->drawOpaque(cmd);
-	} // end for
-} // end of renderOpaqueShadowMap()
+		const ChunkDrawList& list = in.world->getChunkDrawList();
+		for (const auto& item : list.items)
+		{
+			ChunkPushConstants pc{};
+			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+
+			cmd.pushConstants(
+				opaqueShadowPipeline_.getLayout(),
+				vk::ShaderStageFlagBits::eVertex,
+				0,
+				sizeof(ChunkPushConstants),
+				&pc
+			);
+
+			item.gpu->drawOpaque(cmd);
+		} // end for
+	}
+} // end of renderOpaque()
 
 
 //--- PRIVATE ---//
-void ChunkPassVk::createOpaqueResources()
+void ChunkPassVk::refreshTexBinding()
 {
+	// opaque
+	opaqueDescriptorSet_.writeCombinedImageSampler(
+		TO_API_FORM(ChunkBinding::SSAOTex),
+		ssaoBlurImage_.view(),
+		ssaoBlurImage_.sampler()
+	);
+
+	opaqueDescriptorSet_.writeCombinedImageSampler(
+		TO_API_FORM(ChunkBinding::ShadowTex),
+		shadowMapImage_.view(),
+		shadowMapImage_.sampler()
+	);
+
+	// reflection
+	reflectionDescriptorSet_.writeCombinedImageSampler(
+		TO_API_FORM(ChunkBinding::SSAOTex),
+		ssaoBlurImage_.view(),
+		ssaoBlurImage_.sampler()
+	);
+
+	reflectionDescriptorSet_.writeCombinedImageSampler(
+		TO_API_FORM(ChunkBinding::ShadowTex),
+		shadowMapImage_.view(),
+		shadowMapImage_.sampler()
+	);
+
+	// refraction
+	refractionDescriptorSet_.writeCombinedImageSampler(
+		TO_API_FORM(ChunkBinding::SSAOTex),
+		ssaoBlurImage_.view(),
+		ssaoBlurImage_.sampler()
+	);
+
+	refractionDescriptorSet_.writeCombinedImageSampler(
+		TO_API_FORM(ChunkBinding::ShadowTex),
+		shadowMapImage_.view(),
+		shadowMapImage_.sampler()
+	);
+
+} // end of refreshTexBinding()
+
+void ChunkPassVk::createResources()
+{
+	// opaque
 	opaqueUBOBuffer_.create(
 		sizeof(ChunkOpaqueUBO),
 		vk::BufferUsageFlagBits::eUniformBuffer,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 	);
-} // end of createOpaqueResources()
 
-void ChunkPassVk::createOpaqueOffscreenResources()
-{
-	opaqueOffscreenUBOBufferReflection_.create(
+	// reflection
+	reflUBOBuffer_.create(
 		sizeof(ChunkOpaqueUBO),
 		vk::BufferUsageFlagBits::eUniformBuffer,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 	);
 
-	opaqueOffscreenUBOBufferRefraction_.create(
+	// refraction
+	refrUBOBuffer_.create(
 		sizeof(ChunkOpaqueUBO),
 		vk::BufferUsageFlagBits::eUniformBuffer,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 	);
-} // end of createOpaqueOffscreenResources()
 
-void ChunkPassVk::createOpaqueGBufferResources()
-{
+
+	// gbuffer
 	opaqueGBufferUBOBuffer_.create(
 		sizeof(GbufferUBO),
 		vk::BufferUsageFlagBits::eUniformBuffer,
 		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 	);
-} // end of createOpaqueGBufferResources()
 
-void ChunkPassVk::createOpaqueDescriptorSet()
+	// shadow
+	opaqueShadowUBOBuffer_.create(
+		sizeof(ShadowMapPassUBO),
+		vk::BufferUsageFlagBits::eUniformBuffer,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+	);
+} // end of createResources()
+
+void ChunkPassVk::createDescriptorSets()
 {
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(ChunkBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+	// opaque
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(ChunkBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding atlasBinding{};
-	atlasBinding.binding = TO_API_FORM(ChunkBinding::AtlasTex);
-	atlasBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	atlasBinding.descriptorCount = 1;
-	atlasBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding atlasBinding{};
+		atlasBinding.binding = TO_API_FORM(ChunkBinding::AtlasTex);
+		atlasBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		atlasBinding.descriptorCount = 1;
+		atlasBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding ssaoBinding{};
-	ssaoBinding.binding = TO_API_FORM(ChunkBinding::SSAOTex);
-	ssaoBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	ssaoBinding.descriptorCount = 1;
-	ssaoBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding ssaoBinding{};
+		ssaoBinding.binding = TO_API_FORM(ChunkBinding::SSAOTex);
+		ssaoBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		ssaoBinding.descriptorCount = 1;
+		ssaoBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding shadowMapBinding{};
-	shadowMapBinding.binding = TO_API_FORM(ChunkBinding::ShadowTex);
-	shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapBinding.descriptorCount = 1;
-	shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding shadowMapBinding{};
+		shadowMapBinding.binding = TO_API_FORM(ChunkBinding::ShadowTex);
+		shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapBinding.descriptorCount = 1;
+		shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	opaqueDescriptorSet_.createLayout({ uboBinding, atlasBinding, ssaoBinding, shadowMapBinding });
+		opaqueDescriptorSet_.createLayout({
+			uboBinding,
+			atlasBinding,
+			ssaoBinding,
+			shadowMapBinding
+			});
 
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize atlasPool{};
-	atlasPool.type = vk::DescriptorType::eCombinedImageSampler;
-	atlasPool.descriptorCount = 1;
+		vk::DescriptorPoolSize atlasPool{};
+		atlasPool.type = vk::DescriptorType::eCombinedImageSampler;
+		atlasPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize ssaoPool{};
-	ssaoPool.type = vk::DescriptorType::eCombinedImageSampler;
-	ssaoPool.descriptorCount = 1;
+		vk::DescriptorPoolSize ssaoPool{};
+		ssaoPool.type = vk::DescriptorType::eCombinedImageSampler;
+		ssaoPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize shadowMapPool{};
-	shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapPool.descriptorCount = 1;
+		vk::DescriptorPoolSize shadowMapPool{};
+		shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapPool.descriptorCount = 1;
 
-	opaqueDescriptorSet_.createPool({ uboPool, atlasPool, ssaoPool, shadowMapPool }, 1);
-	opaqueDescriptorSet_.allocate();
+		opaqueDescriptorSet_.createPool({
+			uboPool,
+			atlasPool,
+			ssaoPool,
+			shadowMapPool
+			});
+		opaqueDescriptorSet_.allocate();
 
-	opaqueDescriptorSet_.writeUniformBuffer(
-		TO_API_FORM(ChunkBinding::UBO),
-		opaqueUBOBuffer_.getBuffer(),
-		sizeof(ChunkOpaqueUBO)
-	);
+		opaqueDescriptorSet_.writeUniformBuffer(
+			TO_API_FORM(ChunkBinding::UBO),
+			opaqueUBOBuffer_.getBuffer(),
+			sizeof(ChunkOpaqueUBO)
+		);
 
-	opaqueDescriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::AtlasTex),
-		atlas_.view(),
-		atlas_.sampler()
-	);
+		opaqueDescriptorSet_.writeCombinedImageSampler(
+			TO_API_FORM(ChunkBinding::AtlasTex),
+			atlas_.view(),
+			atlas_.sampler()
+		);
+	}
 
-	opaqueDescriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::SSAOTex),
-		ssaoBlurImage_.view(),
-		ssaoBlurImage_.sampler()
-	);
+	// reflection
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(ChunkBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
-	opaqueDescriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
-} // end of createOpaqueDescriptorSet()
+		vk::DescriptorSetLayoutBinding atlasBinding{};
+		atlasBinding.binding = TO_API_FORM(ChunkBinding::AtlasTex);
+		atlasBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		atlasBinding.descriptorCount = 1;
+		atlasBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-void ChunkPassVk::createOpaqueOffscreenDescriptorSet()
+		vk::DescriptorSetLayoutBinding ssaoBinding{};
+		ssaoBinding.binding = TO_API_FORM(ChunkBinding::SSAOTex);
+		ssaoBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		ssaoBinding.descriptorCount = 1;
+		ssaoBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+		vk::DescriptorSetLayoutBinding shadowMapBinding{};
+		shadowMapBinding.binding = TO_API_FORM(ChunkBinding::ShadowTex);
+		shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapBinding.descriptorCount = 1;
+		shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+		reflectionDescriptorSet_.createLayout({
+			uboBinding,
+			atlasBinding,
+			ssaoBinding,
+			shadowMapBinding
+			});
+
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize atlasPool{};
+		atlasPool.type = vk::DescriptorType::eCombinedImageSampler;
+		atlasPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize ssaoPool{};
+		ssaoPool.type = vk::DescriptorType::eCombinedImageSampler;
+		ssaoPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize shadowMapPool{};
+		shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapPool.descriptorCount = 1;
+
+		reflectionDescriptorSet_.createPool({
+			uboPool,
+			atlasPool,
+			ssaoPool,
+			shadowMapPool
+			});
+		reflectionDescriptorSet_.allocate();
+
+		reflectionDescriptorSet_.writeUniformBuffer(
+			TO_API_FORM(ChunkBinding::UBO),
+			reflUBOBuffer_.getBuffer(),
+			sizeof(ChunkOpaqueUBO)
+		);
+
+		reflectionDescriptorSet_.writeCombinedImageSampler(
+			TO_API_FORM(ChunkBinding::AtlasTex),
+			atlas_.view(),
+			atlas_.sampler()
+		);
+	}
+
+	// reflection
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(ChunkBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+
+		vk::DescriptorSetLayoutBinding atlasBinding{};
+		atlasBinding.binding = TO_API_FORM(ChunkBinding::AtlasTex);
+		atlasBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		atlasBinding.descriptorCount = 1;
+		atlasBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+		vk::DescriptorSetLayoutBinding ssaoBinding{};
+		ssaoBinding.binding = TO_API_FORM(ChunkBinding::SSAOTex);
+		ssaoBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		ssaoBinding.descriptorCount = 1;
+		ssaoBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+		vk::DescriptorSetLayoutBinding shadowMapBinding{};
+		shadowMapBinding.binding = TO_API_FORM(ChunkBinding::ShadowTex);
+		shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapBinding.descriptorCount = 1;
+		shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+		refractionDescriptorSet_.createLayout({
+			uboBinding,
+			atlasBinding,
+			ssaoBinding,
+			shadowMapBinding
+			});
+
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize atlasPool{};
+		atlasPool.type = vk::DescriptorType::eCombinedImageSampler;
+		atlasPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize ssaoPool{};
+		ssaoPool.type = vk::DescriptorType::eCombinedImageSampler;
+		ssaoPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize shadowMapPool{};
+		shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapPool.descriptorCount = 1;
+
+		refractionDescriptorSet_.createPool({
+			uboPool,
+			atlasPool,
+			ssaoPool,
+			shadowMapPool
+			});
+		refractionDescriptorSet_.allocate();
+
+		refractionDescriptorSet_.writeUniformBuffer(
+			TO_API_FORM(ChunkBinding::UBO),
+			refrUBOBuffer_.getBuffer(),
+			sizeof(ChunkOpaqueUBO)
+		);
+
+		refractionDescriptorSet_.writeCombinedImageSampler(
+			TO_API_FORM(ChunkBinding::AtlasTex),
+			atlas_.view(),
+			atlas_.sampler()
+		);
+	}
+
+	// gbuffer
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(GbufferBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+
+		opaqueGBufferDescriptorSet_.createLayout({ uboBinding });
+
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
+
+		opaqueGBufferDescriptorSet_.createPool({ uboPool });
+		opaqueGBufferDescriptorSet_.allocate();
+
+		opaqueGBufferDescriptorSet_.writeUniformBuffer(
+			TO_API_FORM(GbufferBinding::UBO),
+			opaqueGBufferUBOBuffer_.getBuffer(),
+			sizeof(GbufferUBO)
+		);
+	}
+
+	
+	// shadow
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(ShadowMapPassBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex;
+
+		opaqueShadowDescriptorSet_.createLayout({ 
+			uboBinding 
+			});
+
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
+
+		opaqueShadowDescriptorSet_.createPool({
+			uboPool 
+			});
+		opaqueShadowDescriptorSet_.allocate();
+
+		opaqueShadowDescriptorSet_.writeUniformBuffer(
+			TO_API_FORM(ShadowMapPassBinding::UBO),
+			opaqueShadowUBOBuffer_.getBuffer(),
+			sizeof(ShadowMapPassUBO)
+		);
+	}
+} // end of createDescriptorSets()
+
+void ChunkPassVk::createPipelines(
+	RenderTargetFormatsVk defaultFormats,
+	RenderTargetFormatsVk gbufferFormats,
+	RenderTargetFormatsVk shadowFormats
+)
 {
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(ChunkBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+	// opaque
+	{
+		GraphicsPipelineDescVk desc{};
+		desc.vertShader = opaqueShader_->vertShader();
+		desc.fragShader = opaqueShader_->fragShader();
 
-	vk::DescriptorSetLayoutBinding atlasBinding{};
-	atlasBinding.binding = TO_API_FORM(ChunkBinding::AtlasTex);
-	atlasBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	atlasBinding.descriptorCount = 1;
-	atlasBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::PushConstantRange pushRange{};
+		pushRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+		pushRange.offset = 0;
+		pushRange.size = sizeof(ChunkPushConstants);
+		desc.pushConstantRanges = { pushRange };
 
-	vk::DescriptorSetLayoutBinding ssaoBinding{};
-	ssaoBinding.binding = TO_API_FORM(ChunkBinding::SSAOTex);
-	ssaoBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	ssaoBinding.descriptorCount = 1;
-	ssaoBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		desc.setLayouts = { opaqueDescriptorSet_.getLayout() };
 
-	vk::DescriptorSetLayoutBinding shadowMapBinding{};
-	shadowMapBinding.binding = TO_API_FORM(ChunkBinding::ShadowTex);
-	shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapBinding.descriptorCount = 1;
-	shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		desc.colorFormat = defaultFormats.colorFormat;
+		desc.depthFormat = defaultFormats.depthFormat;
 
-	// Reflection descriptor set
-	opaqueOffscreenDescriptorSetReflection_.createLayout({ uboBinding, atlasBinding, ssaoBinding, shadowMapBinding });
+		desc.cullMode = vk::CullModeFlagBits::eBack;
+		desc.frontFace = vk::FrontFace::eClockwise;
+		desc.depthTestEnable = true;
+		desc.depthWriteEnable = true;
+		desc.depthCompareOp = vk::CompareOp::eLessOrEqual;
 
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
+		vk::VertexInputBindingDescription binding{};
+		binding.binding = 0;
+		binding.stride = sizeof(Vertex);
+		binding.inputRate = vk::VertexInputRate::eVertex;
 
-	vk::DescriptorPoolSize atlasPool{};
-	atlasPool.type = vk::DescriptorType::eCombinedImageSampler;
-	atlasPool.descriptorCount = 1;
+		vk::VertexInputAttributeDescription attr{};
+		attr.location = 0;
+		attr.binding = 0;
+		attr.format = vk::Format::eR32Uint;
+		attr.offset = offsetof(Vertex, sample);
 
-	vk::DescriptorPoolSize ssaoPool{};
-	ssaoPool.type = vk::DescriptorType::eCombinedImageSampler;
-	ssaoPool.descriptorCount = 1;
+		desc.vertexBinding = binding;
+		desc.vertexAttributes = { attr };
 
-	vk::DescriptorPoolSize shadowMapPool{};
-	shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapPool.descriptorCount = 1;
+		opaquePipeline_.create(desc);
+	}
+	
+	// gbuffer
+	{
+		GraphicsPipelineDescVk desc{};
+		desc.vertShader = opaqueGBufferShader_->vertShader();
+		desc.fragShader = opaqueGBufferShader_->fragShader();
 
-	opaqueOffscreenDescriptorSetReflection_.createPool({ uboPool, atlasPool, ssaoPool, shadowMapPool }, 1);
-	opaqueOffscreenDescriptorSetReflection_.allocate();
+		vk::PushConstantRange pushRange{};
+		pushRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+		pushRange.offset = 0;
+		pushRange.size = sizeof(ChunkPushConstants);
+		desc.pushConstantRanges = { pushRange };
 
-	opaqueOffscreenDescriptorSetReflection_.writeUniformBuffer(
-		TO_API_FORM(ChunkBinding::UBO),
-		opaqueOffscreenUBOBufferReflection_.getBuffer(),
-		sizeof(ChunkOpaqueUBO)
-	);
+		desc.setLayouts = { opaqueGBufferDescriptorSet_.getLayout() };
 
-	opaqueOffscreenDescriptorSetReflection_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::AtlasTex),
-		atlas_.view(),
-		atlas_.sampler()
-	);
+		desc.colorFormat = gbufferFormats.colorFormat;
+		desc.depthFormat = gbufferFormats.depthFormat;
 
-	opaqueOffscreenDescriptorSetReflection_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::SSAOTex),
-		ssaoBlurImage_.view(),
-		ssaoBlurImage_.sampler()
-	);
+		desc.cullMode = vk::CullModeFlagBits::eBack;
+		desc.frontFace = vk::FrontFace::eClockwise;
+		desc.depthTestEnable = true;
+		desc.depthWriteEnable = true;
+		desc.depthCompareOp = vk::CompareOp::eLessOrEqual;
 
-	opaqueOffscreenDescriptorSetReflection_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
+		vk::VertexInputBindingDescription binding{};
+		binding.binding = 0;
+		binding.stride = sizeof(Vertex);
+		binding.inputRate = vk::VertexInputRate::eVertex;
 
-	// Refraction descriptor set
-	opaqueOffscreenDescriptorSetRefraction_.createLayout({ uboBinding, atlasBinding, ssaoBinding, shadowMapBinding });
-	opaqueOffscreenDescriptorSetRefraction_.createPool({ uboPool, atlasPool, ssaoPool, shadowMapPool }, 1);
-	opaqueOffscreenDescriptorSetRefraction_.allocate();
+		vk::VertexInputAttributeDescription attr{};
+		attr.location = 0;
+		attr.binding = 0;
+		attr.format = vk::Format::eR32Uint;
+		attr.offset = offsetof(Vertex, sample);
 
-	opaqueOffscreenDescriptorSetRefraction_.writeUniformBuffer(
-		TO_API_FORM(ChunkBinding::UBO),
-		opaqueOffscreenUBOBufferRefraction_.getBuffer(),
-		sizeof(ChunkOpaqueUBO)
-	);
+		desc.vertexBinding = binding;
+		desc.vertexAttributes = { attr };
 
-	opaqueOffscreenDescriptorSetRefraction_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::AtlasTex),
-		atlas_.view(),
-		atlas_.sampler()
-	);
+		opaqueGBufferPipeline_.create(desc);
+	}
 
-	opaqueOffscreenDescriptorSetRefraction_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::SSAOTex),
-		ssaoBlurImage_.view(),
-		ssaoBlurImage_.sampler()
-	);
+	// shadow
+	{
+		GraphicsPipelineDescVk desc{};
+		desc.vertShader = opaqueShadowShader_->vertShader();
+		desc.fragShader = opaqueShadowShader_->fragShader();
 
-	opaqueOffscreenDescriptorSetRefraction_.writeCombinedImageSampler(
-		TO_API_FORM(ChunkBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
-} // end of createOpaqueOffscreenDescriptorSet()
+		vk::PushConstantRange pushRange{};
+		pushRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
+		pushRange.offset = 0;
+		pushRange.size = sizeof(Chunk_Constants::ChunkPushConstants);
+		desc.pushConstantRanges = { pushRange };
 
-void ChunkPassVk::createOpaqueGBufferDescriptorSet()
-{
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(GbufferBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+		vk::VertexInputBindingDescription binding{};
+		binding.binding = 0;
+		binding.stride = sizeof(Vertex);
+		binding.inputRate = vk::VertexInputRate::eVertex;
 
-	opaqueGBufferDescriptorSet_.createLayout({ uboBinding });
+		vk::VertexInputAttributeDescription attr{};
+		attr.location = 0;
+		attr.binding = 0;
+		attr.format = vk::Format::eR32Uint;
+		attr.offset = offsetof(Vertex, sample);
 
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
+		desc.vertexBinding = binding;
+		desc.vertexAttributes = { attr };
 
-	opaqueGBufferDescriptorSet_.createPool({ uboPool });
-	opaqueGBufferDescriptorSet_.allocate();
+		desc.setLayouts = { opaqueShadowDescriptorSet_.getLayout() };
 
-	opaqueGBufferDescriptorSet_.writeUniformBuffer(
-		TO_API_FORM(GbufferBinding::UBO),
-		opaqueGBufferUBOBuffer_.getBuffer(),
-		sizeof(GbufferUBO)
-	);
-} // end of createOpaqueGBufferDescriptorSet()
+		desc.depthFormat = shadowFormats.depthFormat;
+		desc.depthTestEnable = true;
+		desc.depthWriteEnable = true;
+		desc.depthCompareOp = vk::CompareOp::eLess;
 
-void ChunkPassVk::createOpaquePipeline()
-{
-	// normal pipeline
-	GraphicsPipelineDescVk desc{};
-	desc.vertShader = opaqueShader_->vertShader();
-	desc.fragShader = opaqueShader_->fragShader();
+		desc.cullMode = vk::CullModeFlagBits::eFront;
+		desc.frontFace = vk::FrontFace::eClockwise;
 
-	vk::PushConstantRange pushRange{};
-	pushRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
-	pushRange.offset = 0;
-	pushRange.size = sizeof(ChunkPushConstants);
-	desc.pushConstantRanges = { pushRange };
-
-	desc.setLayouts = { opaqueDescriptorSet_.getLayout() };
-
-	desc.colorFormat = vk::Format::eR32G32B32A32Sfloat;
-	desc.depthFormat = vk::Format::eD32Sfloat;
-
-	desc.cullMode = vk::CullModeFlagBits::eBack;
-	desc.frontFace = vk::FrontFace::eClockwise;
-	desc.depthTestEnable = true;
-	desc.depthWriteEnable = true;
-	desc.depthCompareOp = vk::CompareOp::eLessOrEqual;
-
-	vk::VertexInputBindingDescription binding{};
-	binding.binding = 0;
-	binding.stride = sizeof(Vertex);
-	binding.inputRate = vk::VertexInputRate::eVertex;
-
-	vk::VertexInputAttributeDescription attr{};
-	attr.location = 0;
-	attr.binding = 0;
-	attr.format = vk::Format::eR32Uint;
-	attr.offset = offsetof(Vertex, sample);
-
-	desc.vertexBinding = binding;
-	desc.vertexAttributes = { attr };
-
-	opaquePipeline_.create(desc);
-
-	// offscreen pipeline
-	desc.setLayouts = { opaqueOffscreenDescriptorSetReflection_.getLayout() };
-	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
-	desc.depthFormat = vk::Format::eD32Sfloat;
-
-	opaquePipelineOffscreen_.create(desc);
-} // end of createOpaquePipeline()
-
-void ChunkPassVk::createOpaqueGBufferPipeline()
-{
-	GraphicsPipelineDescVk desc{};
-	desc.vertShader = opaqueGBufferShader_->vertShader();
-	desc.fragShader = opaqueGBufferShader_->fragShader();
-
-	vk::PushConstantRange pushRange{};
-	pushRange.stageFlags = vk::ShaderStageFlagBits::eVertex;
-	pushRange.offset = 0;
-	pushRange.size = sizeof(ChunkPushConstants);
-	desc.pushConstantRanges = { pushRange };
-
-	desc.setLayouts = { opaqueGBufferDescriptorSet_.getLayout() };
-
-	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
-	desc.depthFormat = vk::Format::eD32Sfloat;
-
-	desc.cullMode = vk::CullModeFlagBits::eBack;
-	desc.frontFace = vk::FrontFace::eClockwise;
-	desc.depthTestEnable = true;
-	desc.depthWriteEnable = true;
-	desc.depthCompareOp = vk::CompareOp::eLessOrEqual;
-
-	vk::VertexInputBindingDescription binding{};
-	binding.binding = 0;
-	binding.stride = sizeof(Vertex);
-	binding.inputRate = vk::VertexInputRate::eVertex;
-
-	vk::VertexInputAttributeDescription attr{};
-	attr.location = 0;
-	attr.binding = 0;
-	attr.format = vk::Format::eR32Uint;
-	attr.offset = offsetof(Vertex, sample);
-
-	desc.vertexBinding = binding;
-	desc.vertexAttributes = { attr };
-
-	opaqueGBufferPipeline_.create(desc);
-} // end of createOpaqueGBufferPipeline()
-
+		opaqueShadowPipeline_.create(desc);
+	}
+} // end of createPipelines()

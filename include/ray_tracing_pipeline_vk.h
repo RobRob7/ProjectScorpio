@@ -8,6 +8,13 @@
 
 class VulkanMain;
 
+struct NamedSetLayoutVk
+{
+	uint32_t setNumber{};
+	vk::DescriptorSetLayout layout{};
+};
+
+
 struct RayTracingPipelineDescVk
 {
 	// shaders
@@ -19,11 +26,12 @@ struct RayTracingPipelineDescVk
 	std::vector<vk::PushConstantRange> pushConstantRanges;
 
 	// descriptor layouts
-	std::vector<vk::DescriptorSetLayout> setLayouts;
+	std::vector<NamedSetLayoutVk> setLayouts;
 
+	// max bounces
 	uint32_t maxRecursionDepth{ 1 };
 };
-
+ 
 class RayTracingPipelineVk
 {
 public:

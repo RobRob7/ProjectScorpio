@@ -100,8 +100,22 @@ void ChunkMesh::buildChunkMesh()
 			// vert pos order
 			glm::ivec3 corners[4] = { p0, p1, p2, p3 };
 
+			// vert normal
+			glm::vec3 faceNormal{};
+			switch (dir)
+			{
+			case FaceDir::PosX: faceNormal = glm::vec3(1.0f, 0.0f, 0.0f); break;
+			case FaceDir::NegX: faceNormal = glm::vec3(-1.0f, 0.0f, 0.0f); break;
+			case FaceDir::PosY: faceNormal = glm::vec3(0.0f, 1.0f, 0.0f); break;
+			case FaceDir::NegY: faceNormal = glm::vec3(0.0f, -1.0f, 0.0f); break;
+			case FaceDir::PosZ: faceNormal = glm::vec3(0.0f, 0.0f, 1.0f); break;
+			case FaceDir::NegZ: faceNormal = glm::vec3(0.0f, 0.0f, -1.0f); break;
+			default:            faceNormal = glm::vec3(0.0f, 1.0f, 0.0f); break;
+			}
+
 			// pack vertex data
-			for (int c = 0; c < 4; ++c) {
+			for (int c = 0; c < 4; ++c) 
+			{
 				Vertex v{};
 				v.sample = PackVertexU32(
 					static_cast<uint32_t>(c),
@@ -113,11 +127,15 @@ void ChunkMesh::buildChunkMesh()
 				);
 				data_.opaqueVertices.push_back(v);
 
-				// unpacked RT vertex data
+				// RT vertex data
 				RTVertex rtv{};
-				rtv.position = glm::vec3(corners[c]);
+				rtv.position = glm::vec4(corners[c], 0.0f);
+				// RT normal data
+				rtv.normal = glm::vec4(faceNormal, 0.0f);
+				// RT tile data
+				rtv.tileData = glm::vec4(float(tileX), float(tileY), 0.0f, 0.0f);
 				data_.opaqueRTVertices.push_back(rtv);
-			}
+			} // end for
 
 			data_.opaqueIndices.push_back(start + 0);
 			data_.opaqueIndices.push_back(start + 1);

@@ -164,8 +164,9 @@ void main()
         shadowFactor = clamp(1.0 - shadow, 0.0, 1.0);
     }
 
-    vec3 direct = (diffuse + specular);
+    float aoDirect = mix(1.0, ao, 0.5);
+    vec3 direct = (diffuse + specular) * aoDirect;
     // final color
-    vec3 color = (ambient + shadowFactor * (direct));
+    vec3 color = (ambient + (shadowFactor * direct));
     FragColor = vec4(color, 1.0);
 }

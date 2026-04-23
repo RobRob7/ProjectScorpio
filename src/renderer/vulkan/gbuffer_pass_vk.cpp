@@ -24,22 +24,11 @@ GBufferPassVk::~GBufferPassVk() = default;
 
 void GBufferPassVk::init()
 {
-	width_ = static_cast<int>(vk_.getSwapChainExtent().width);
-	height_ = static_cast<int>(vk_.getSwapChainExtent().height);
-
 	createAttachments();
 } // end of init()
 
-void GBufferPassVk::resize(int w, int h)
+void GBufferPassVk::resize()
 {
-	if (w == 0 || h == 0) return;
-	if (w == width_ && h == height_) return;
-
-	vk_.waitIdle();
-
-	width_ = w;
-	height_ = h;
-
 	createAttachments();
 } // end of resize()
 
@@ -48,9 +37,12 @@ void GBufferPassVk::render(
 	const RenderInputs& in,
 	const FrameContext& frame,
 	const glm::mat4& view,
-	const glm::mat4& proj)
+	const glm::mat4& proj
+)
 {
 	vk::CommandBuffer cmd = frame.cmd;
+
+	vk::Extent2D extent = vk_.getSwapChainExtent();
 
 	VkUtils::TransitionImageLayout(
 		cmd,
@@ -97,10 +89,7 @@ void GBufferPassVk::render(
 
 	vk::RenderingInfo renderingInfo{};
 	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = vk::Extent2D{
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_)
-	};
+	renderingInfo.renderArea.extent = extent;
 	renderingInfo.layerCount = 1;
 	renderingInfo.colorAttachmentCount = 1;
 	renderingInfo.pColorAttachments = &colorAttachment;
@@ -111,28 +100,24 @@ void GBufferPassVk::render(
 		vk::Viewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(width_);
-		viewport.height = static_cast<float>(height_);
+		viewport.width = static_cast<float>(extent.width);
+		viewport.height = static_cast<float>(extent.height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		cmd.setViewport(0, 1, &viewport);
 
 		vk::Rect2D scissor{};
 		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = vk::Extent2D{
-			static_cast<uint32_t>(width_),
-			static_cast<uint32_t>(height_)
-		};
+		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
 
 		// render world
-		chunk.renderOpaqueGBuffer(
-			in, 
-			frame, 
-			view, 
-			proj, 
-			width_, 
-			height_
+		chunk.renderOpaque(
+			RenderTargetVk::GBuffer,
+			in,
+			frame,
+			view,
+			proj
 		);
 	}
 	cmd.endRendering();
@@ -162,10 +147,12 @@ void GBufferPassVk::render(
 //--- PRIVATE ---//
 void GBufferPassVk::createAttachments()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+
 	// NORMAL
 	gNormalImage_.createImage(
-		width_,
-		height_,
+		extent.width,
+		extent.height,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
@@ -191,8 +178,8 @@ void GBufferPassVk::createAttachments()
 
 	// DEPTH
 	gDepthImage_.createImage(
-		width_,
-		height_,
+		extent.width,
+		extent.height,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,

@@ -37,17 +37,15 @@ void PresentPassVk::init()
     createPipeline();
 } // end of init()
 
-void PresentPassVk::setInput(ImageVk& input)
+void PresentPassVk::resize()
 {
-    inputImage_ = &input;
-} // end of setInput()
+    refreshInput();
+} // end of resize()
 
 void PresentPassVk::render(
     FrameContext& frame
 )
 {
-    refreshInput(frame);
-
     if (!inputImage_ || !descriptorSets_[frame.frameIndex].valid() || !pipeline_.valid())
     {
         return;
@@ -110,16 +108,19 @@ void PresentPassVk::render(
 
 
 //--- PRIVATE ---//
-void PresentPassVk::refreshInput(FrameContext& frame)
+void PresentPassVk::refreshInput()
 {
     if (!inputImage_)
         return;
 
-    descriptorSets_[frame.frameIndex].writeCombinedImageSampler(
-        TO_API_FORM(PresentPassBinding::ForwardColorTex),
-        inputImage_->view(),
-        inputImage_->sampler()
-    );
+    for (auto& set : descriptorSets_)
+    {
+        set.writeCombinedImageSampler(
+            TO_API_FORM(PresentPassBinding::ForwardColorTex),
+            inputImage_->view(),
+            inputImage_->sampler()
+        );
+    } // end for
 } // end of refreshInput()
 
 void PresentPassVk::createDescriptorSets()
@@ -152,7 +153,6 @@ void PresentPassVk::createPipeline()
     desc.setLayouts = { descriptorSets_[0].getLayout()};
 
     desc.colorFormat = vk_.getSwapChainImageFormat();
-    desc.depthFormat = vk::Format::eUndefined;
 
     desc.cullMode = vk::CullModeFlagBits::eNone;
     desc.frontFace = vk::FrontFace::eClockwise;

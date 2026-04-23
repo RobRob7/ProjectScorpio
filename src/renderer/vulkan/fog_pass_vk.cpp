@@ -35,9 +35,6 @@ FogPassVk::~FogPassVk() = default;
 
 void FogPassVk::init()
 {
-	width_ = static_cast<int>(vk_.getSwapChainExtent().width);
-	height_ = static_cast<int>(vk_.getSwapChainExtent().height);
-
 	shader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
 		"fogpass/fog.vert.spv",
@@ -54,24 +51,10 @@ void FogPassVk::init()
 	createPipeline();
 } // end of init()
 
-void FogPassVk::resize(int w, int h)
+void FogPassVk::resize()
 {
-	if (w == 0 || h == 0) return;
-	if (w == width_ && h == height_) return;
-
-	vk_.waitIdle();
-
-	width_ = w;
-	height_ = h;
-
 	createAttachment();
 } // end of resize()
-
-void FogPassVk::setInput(ImageVk& inputColor, ImageVk& inputDepth)
-{
-	inputColorImage_ = &inputColor;
-	inputDepthImage_ = &inputDepth;
-} // end of setInput()
 
 void FogPassVk::render(
 	FrameContext& frame,
@@ -80,15 +63,16 @@ void FogPassVk::render(
 	float ambStr
 )
 {
-	refreshInput(frame);
-
 	if (!inputColorImage_ || !inputDepthImage_ ||
-		!uboBuffers_[frame.frameIndex].valid() || !descriptorSets_[frame.frameIndex].valid() || !pipeline_.valid())
+		!uboBuffers_[frame.frameIndex].valid() || 
+		!descriptorSets_[frame.frameIndex].valid() 
+		|| !pipeline_.valid())
 	{
 		return;
 	}
 
 	vk::CommandBuffer cmd = frame.cmd;
+	vk::Extent2D extent = frame.extent;
 
 	// update UBO
 	ubo_.u_near = nearPlane;
@@ -125,10 +109,7 @@ void FogPassVk::render(
 
 	vk::RenderingInfo renderingInfo{};
 	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = vk::Extent2D{
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_)
-	};
+	renderingInfo.renderArea.extent = extent;
 	renderingInfo.layerCount = 1;
 	renderingInfo.colorAttachmentCount = 1;
 	renderingInfo.pColorAttachments = &colorAttach;
@@ -139,18 +120,15 @@ void FogPassVk::render(
 		vk::Viewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(width_);
-		viewport.height = static_cast<float>(height_);
+		viewport.width = static_cast<float>(extent.width);
+		viewport.height = static_cast<float>(extent.height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		cmd.setViewport(0, 1, &viewport);
 
 		vk::Rect2D scissor{};
 		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = vk::Extent2D{
-			static_cast<uint32_t>(width_),
-			static_cast<uint32_t>(height_)
-		};
+		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
 
 		vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
@@ -181,40 +159,45 @@ void FogPassVk::render(
 
 
 //--- PRIVATE ---//
-void FogPassVk::refreshInput(FrameContext& frame)
+void FogPassVk::refreshInput()
 {
 	if (!inputColorImage_ || !inputDepthImage_)
 		return;
 
-	descriptorSets_[frame.frameIndex].writeCombinedImageSampler(
-		TO_API_FORM(FogPassBinding::ForwardColorTex),
-		inputColorImage_->view(),
-		inputColorImage_->sampler()
-	);
+	for (auto& set : descriptorSets_)
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(FogPassBinding::ForwardColorTex),
+			inputColorImage_->view(),
+			inputColorImage_->sampler()
+		);
 
-	descriptorSets_[frame.frameIndex].writeCombinedImageSampler(
-		TO_API_FORM(FogPassBinding::ForwardDepthTex),
-		inputDepthImage_->view(),
-		inputDepthImage_->sampler()
-	);
+		set.writeCombinedImageSampler(
+			TO_API_FORM(FogPassBinding::ForwardDepthTex),
+			inputDepthImage_->view(),
+			inputDepthImage_->sampler()
+		);
+	} // end for
 } // end of refreshInput()
 
 void FogPassVk::createAttachment()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+
 	outputImage_.createImage(
-		width_,
-		height_,
+		extent.width,
+		extent.height,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
-		vk::Format::eR32G32B32A32Sfloat,
+		outputFormat_,
 		vk::ImageTiling::eOptimal,
 		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
 		vk::MemoryPropertyFlagBits::eDeviceLocal
 	);
 
 	outputImage_.createImageView(
-		vk::Format::eR32G32B32A32Sfloat,
+		outputFormat_,
 		vk::ImageAspectFlagBits::eColor,
 		vk::ImageViewType::e2D,
 		1
@@ -299,8 +282,7 @@ void FogPassVk::createPipeline()
 
 	desc.setLayouts = { descriptorSets_[0].getLayout()};
 
-	desc.colorFormat = vk::Format::eR32G32B32A32Sfloat;
-	desc.depthFormat = vk::Format::eUndefined;
+	desc.colorFormat = outputFormat_;
 
 	desc.cullMode = vk::CullModeFlagBits::eNone;
 	desc.frontFace = vk::FrontFace::eClockwise;

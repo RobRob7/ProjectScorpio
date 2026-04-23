@@ -9,6 +9,24 @@ constexpr uint32_t TO_API_FORM(E e)
     return static_cast<uint32_t>(e);
 }
 
+enum class RTChunkRayGenBinding : uint32_t
+{
+    OutputImage = 0,
+    TLAS = 1,
+    UBO = 2,
+};
+enum class RTChunkMissBinding : uint32_t
+{
+    
+};
+enum class RTChunkClosestHitBinding : uint32_t
+{
+    TLAS = 0,
+    ChunkInfo = 1,
+    UBO = 2,
+    AtlasTex = 3,
+};
+
 enum class ChunkBinding : uint32_t
 {
     UBO = 0,

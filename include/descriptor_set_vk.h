@@ -40,6 +40,13 @@ public:
 		vk::DeviceSize range
 	);
 
+	void writeStorageBuffer(
+		uint32_t binding,
+		vk::Buffer buffer,
+		vk::DeviceSize range,
+		vk::DeviceSize offset = 0
+	);
+
 	void writeCombinedImageSampler(
 		uint32_t binding,
 		vk::ImageView imageView,

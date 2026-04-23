@@ -1,5 +1,8 @@
 #include "renderer_vk.h"
 
+#include "chunk_draw_list.h"
+#include "chunk_mesh_gpu_vk.h"
+
 #include "frame_context_vk.h"
 
 #include "utils_vk.h"
@@ -7,6 +10,7 @@
 
 #include "render_settings.h"
 #include "render_inputs.h"
+#include "render_target_vk.h"
 
 #include "camera.h"
 #include "i_light.h"
@@ -15,7 +19,8 @@
 #include "chunk_manager.h"
 #include "ui.h"
 
-#include "ray_tracing_pass_vk.h"
+//#include "ray_tracing_chunk_pass_vk.h"
+
 #include "gbuffer_pass_vk.h"
 #include "shadow_map_pass_vk.h"
 #include "debug_pass_vk.h"
@@ -32,8 +37,7 @@
 RendererVk::RendererVk(VulkanMain& vk)
 	: vk_(vk),
 	sceneColor_(vk),
-	sceneDepth_(vk),
-	topLevelAS_(vk)
+	sceneDepth_(vk)
 {
 } // end of constructor
 
@@ -41,23 +45,76 @@ RendererVk::~RendererVk() = default;
 
 void RendererVk::init()
 {
-	if (!renderSettings_) renderSettings_ = std::make_unique<RenderSettings>();
+	if (!renderSettings_) 
+	{
+		renderSettings_ = std::make_unique<RenderSettings>();
+	}
 
-	if (!rayTracingPass_)	rayTracingPass_ = std::make_unique<RayTracingPassVk>(vk_);
+	//if (!rtChunkPass_)
+	//{
+	//	rtChunkPass_ = std::make_unique<RayTracingChunkPassVk>(vk_);
+	//}
 
-	if (!gbufferPass_)		gbufferPass_ = std::make_unique<GBufferPassVk>(vk_);
-	if (!shadowMapPass_)	shadowMapPass_ = std::make_unique<ShadowMapPassVk>(vk_);
-	if (!debugPass_)		debugPass_ = std::make_unique<DebugPassVk>(vk_, gbufferPass_->getNormalImage(), gbufferPass_->getDepthImage(), shadowMapPass_->getImage());
-	if (!ssaoPass_)			ssaoPass_ = std::make_unique<SSAOPassVk>(vk_, gbufferPass_->getNormalImage(), gbufferPass_->getDepthImage());
+	if (!gbufferPass_)
+	{
+		gbufferPass_ = std::make_unique<GBufferPassVk>(vk_);
+	}
+	if (!shadowMapPass_)
+	{
+		shadowMapPass_ = std::make_unique<ShadowMapPassVk>(vk_);
+	}
+	if (!debugPass_)
+	{
+		debugPass_ = std::make_unique<DebugPassVk>(
+			vk_,
+			gbufferPass_->getNormalImage(),
+			gbufferPass_->getDepthImage(),
+			shadowMapPass_->getDepthImage()
+		);
+	}
+	if (!ssaoPass_)
+	{
+		ssaoPass_ = std::make_unique<SSAOPassVk>(
+			vk_,
+			gbufferPass_->getNormalImage(),
+			gbufferPass_->getDepthImage()
+		);
+	}
 
-	if (!waterPass_)		waterPass_ = std::make_unique<WaterPassVk>(vk_, shadowMapPass_->getImage());
-	if (!chunkPass_)		chunkPass_ = std::make_unique<ChunkPassVk>(vk_, ssaoPass_->ssaoBlurImage(), shadowMapPass_->getImage());
+	if (!waterPass_)
+	{
+		waterPass_ = std::make_unique<WaterPassVk>(
+			vk_,
+			shadowMapPass_->getDepthImage()
+		);
+	}
+	if (!chunkPass_)
+	{
+		chunkPass_ = std::make_unique<ChunkPassVk>(
+			vk_,
+			*renderSettings_,
+			ssaoPass_->ssaoBlurImage(),
+			shadowMapPass_->getDepthImage()
+		);
+	}
 
-	if (!fxaaPass_)			fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
-	if (!fogPass_)			fogPass_ = std::make_unique<FogPassVk>(vk_, *renderSettings_);
-	if (!presentPass_)		presentPass_ = std::make_unique<PresentPassVk>(vk_);
+	if (!fxaaPass_)
+	{
+		fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
+	}
+	if (!fogPass_)
+	{
+		fogPass_ = std::make_unique<FogPassVk>(
+			vk_,
+			*renderSettings_
+		);
+	}
+	if (!presentPass_)
+	{
+		presentPass_ = std::make_unique<PresentPassVk>(vk_);
+	}
 
-	rayTracingPass_->init();
+	//rtChunkPass_->init();
 
 	gbufferPass_->init();
 	shadowMapPass_->init();
@@ -65,8 +122,11 @@ void RendererVk::init()
 	ssaoPass_->init();
 
 	waterPass_->init();
-	chunkPass_->init();
-	chunkPass_->refreshTexBinding();
+	chunkPass_->init(
+		{sceneColorFormat_, sceneDepthFormat_},
+		{gbufferPass_->getNormalImage().format(), gbufferPass_->getDepthImage().format()},
+		{vk::Format::eUndefined, shadowMapPass_->getDepthImage().format()}
+	);
 
 	fxaaPass_->init();
 	fogPass_->init();
@@ -81,17 +141,19 @@ void RendererVk::resize(int w, int h)
 	width_ = w;
 	height_ = h;
 
-	if (rayTracingPass_) rayTracingPass_->resize();
+	//if (rtChunkPass_) rtChunkPass_->resize();
 
-	if (gbufferPass_)	gbufferPass_->resize(width_, height_);
-	if (debugPass_)		debugPass_->resize(width_, height_);
-	if (ssaoPass_)		ssaoPass_->resize(width_, height_);
+	if (gbufferPass_)	gbufferPass_->resize();
+	if (debugPass_)		debugPass_->resize();
+	if (ssaoPass_)		ssaoPass_->resize();
 
-	if (waterPass_)		waterPass_->resize(width_, height_);
-	if (chunkPass_)		chunkPass_->refreshTexBinding();
+	if (waterPass_)		waterPass_->resize();
+	if (chunkPass_)		chunkPass_->resize();
 
-	if (fxaaPass_)		fxaaPass_->resize(width_, height_);
-	if (fogPass_)		fogPass_->resize(width_, height_);
+	if (fxaaPass_)		fxaaPass_->resize();
+	if (fogPass_)		fogPass_->resize();
+
+	if (presentPass_)	presentPass_->resize();
 
 	createSceneAttachments();
 } // end of resize()
@@ -109,99 +171,165 @@ void RendererVk::renderFrame(
 		resize(frame.extent.width, frame.extent.height);
 	}
 
-	// update light direction
-	in.light->updateLightDirection(in.time);
-
-	in.world->update(in.camera->getCameraPosition());
-
 	const glm::mat4 view = in.camera->getViewMatrix();
 	const float aspect = (height_ > 0)
 		? (static_cast<float>(width_) / static_cast<float>(height_))
 		: 1.0f;
-	glm::mat4 proj = in.camera->getProjectionMatrix(aspect);
+	glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
 	proj[1][1] *= -1.0f;
 
 	vk::CommandBuffer cmd = frame.cmd;
 
-	// update world TLAS
-	std::vector<vk::AccelerationStructureInstanceKHR> instances;
-	in.world->buildTLASInstances(instances);
-	if (topLevelAS_.valid())
-	{
-		vk_.retireAccelerationStructure(
-			vk_.currentFrameIndex(),
-			std::move(topLevelAS_)
-		);
-		topLevelAS_ = AccelerationStructureVk(vk_);
-	}
+	// update light direction
+	in.light->updateLightDirection(in.time);
 
-	topLevelAS_.buildTLAS(instances);
-	rayTracingPass_->setTopLevelAS(frame.frameIndex, topLevelAS_.handle());
+	// update world state
+	in.world->updateDynamic(in.camera->getCameraPosition());
 
-	// RT test
-	if (rayTracingPass_)
-	{
-		VkUtils::TransitionImageLayout(
-			cmd,
-			rayTracingPass_->getOutputImageVk().image(),
-			vk::ImageAspectFlagBits::eColor,
-			rayTracingPass_->getOutputLayout(),
-			vk::ImageLayout::eGeneral,
-			1,
-			1
-		);
+	//rtChunkPass_->upload(
+	//	cmd,
+	//	in.world->getChunkDrawList(),
+	//	view,
+	//	proj,
+	//	frame.frameIndex
+	//);
 
-		rayTracingPass_->render(
-			in, 
-			frame,
-			view,
-			proj
-		);
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	rtChunkPass_->getOutputImageVk().image(),
+	//	vk::ImageAspectFlagBits::eColor,
+	//	rtChunkPass_->getOutputLayout(),
+	//	vk::ImageLayout::eGeneral,
+	//	1,
+	//	1
+	//);
 
-		VkUtils::TransitionImageLayout(
-			cmd,
-			rayTracingPass_->getOutputImageVk().image(),
-			vk::ImageAspectFlagBits::eColor,
-			rayTracingPass_->getOutputLayout(),
-			vk::ImageLayout::eShaderReadOnlyOptimal,
-			1,
-			1
-		);
-	}
+	//rtChunkPass_->render(
+	//	in,
+	//	frame,
+	//	view,
+	//	proj
+	//);
 
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	rtChunkPass_->getOutputImageVk().image(),
+	//	vk::ImageAspectFlagBits::eColor,
+	//	rtChunkPass_->getOutputLayout(),
+	//	vk::ImageLayout::eShaderReadOnlyOptimal,
+	//	1,
+	//	1
+	//);
 
-	VkUtils::TransitionImageLayout(
-		cmd,
-		frame.colorImage,
-		vk::ImageAspectFlagBits::eColor,
-		frame.colorLayout,
-		vk::ImageLayout::eColorAttachmentOptimal,
-		1,
-		1
-	);
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	frame.colorImage,
+	//	vk::ImageAspectFlagBits::eColor,
+	//	frame.colorLayout,
+	//	vk::ImageLayout::eColorAttachmentOptimal,
+	//	1,
+	//	1
+	//);
 
-	if (presentPass_)
-	{
-		presentPass_->setInput(rayTracingPass_->getOutputImageVk());
-		presentPass_->render(frame);
-	}
+	//if (presentPass_)
+	//{
+	//	presentPass_->setInput(rtChunkPass_->getOutputImageVk());
+	//	presentPass_->render(frame);
+	//}
 
-	if (ui)
-	{
-		ui->renderVk(frame);
-	}
+	//if (ui)
+	//{
+	//	ui->renderVk(frame);
+	//}
 
-	VkUtils::TransitionImageLayout(
-		cmd,
-		frame.colorImage,
-		vk::ImageAspectFlagBits::eColor,
-		frame.colorLayout,
-		vk::ImageLayout::ePresentSrcKHR,
-		1,
-		1
-	);
-	vk_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
-	return;
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	frame.colorImage,
+	//	vk::ImageAspectFlagBits::eColor,
+	//	frame.colorLayout,
+	//	vk::ImageLayout::ePresentSrcKHR,
+	//	1,
+	//	1
+	//);
+	//vk_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
+	//return;
+
+	//rtChunkPass_->upload(
+	//	cmd,
+	//	in.world->getChunkDrawList(),
+	//	view,
+	//	proj,
+	//	frame.frameIndex
+	//);
+
+	//// 2) Render RT opaque world into RT output image
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	rtChunkPass_->getOutputImageVk().image(),
+	//	vk::ImageAspectFlagBits::eColor,
+	//	rtChunkPass_->getOutputLayout(),
+	//	vk::ImageLayout::eGeneral,
+	//	1,
+	//	1
+	//);
+
+	//rtChunkPass_->render(
+	//	in,
+	//	frame,
+	//	view,
+	//	proj
+	//);
+
+	//// 3) Prepare RT output for transfer src
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	rtChunkPass_->getOutputImageVk().image(),
+	//	vk::ImageAspectFlagBits::eColor,
+	//	rtChunkPass_->getOutputLayout(),
+	//	vk::ImageLayout::eTransferSrcOptimal,
+	//	1,
+	//	1
+	//);
+
+	//// 4) Prepare sceneColor for transfer dst
+	//VkUtils::TransitionImageLayout(
+	//	cmd,
+	//	sceneColor_.image(),
+	//	vk::ImageAspectFlagBits::eColor,
+	//	sceneColorLayout_,
+	//	vk::ImageLayout::eTransferDstOptimal,
+	//	1,
+	//	1
+	//);
+
+	//// 5) Copy RT output -> sceneColor
+	//vk::ImageBlit blit{};
+	//blit.srcSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+	//blit.srcSubresource.layerCount = 1;
+	//blit.srcOffsets[0] = vk::Offset3D{ 0,0,0 };
+	//blit.srcOffsets[1] = vk::Offset3D{
+	//	int32_t(frame.extent.width / rtChunkPass_->getFactor()),
+	//	int32_t(frame.extent.height / rtChunkPass_->getFactor()),
+	//	1
+	//};
+	//blit.dstSubresource.aspectMask = vk::ImageAspectFlagBits::eColor;
+	//blit.dstSubresource.layerCount = 1;
+	//blit.dstOffsets[0] = vk::Offset3D{ 0,0,0 };
+	//blit.dstOffsets[1] = vk::Offset3D{
+	//	int32_t(frame.extent.width),
+	//	int32_t(frame.extent.height),
+	//	1
+	//};
+
+	//cmd.blitImage(
+	//	rtChunkPass_->getOutputImageVk().image(),
+	//	rtChunkPass_->getOutputLayout(),
+	//	sceneColor_.image(),
+	//	sceneColorLayout_,
+	//	1,
+	//	&blit,
+	//	vk::Filter::eLinear
+	//);
 
 
 
@@ -221,7 +349,7 @@ void RendererVk::renderFrame(
 	// shadow map pass
 	if (shadowMapPass_)
 	{
-		shadowMapPass_->renderOffscreen(
+		shadowMapPass_->render(
 			*chunkPass_,
 			in,
 			frame
@@ -231,11 +359,8 @@ void RendererVk::renderFrame(
 	// debug pass
 	if (renderSettings_->debugMode != DebugMode::None)
 	{
-		vk::ImageLayout old = vk_.getSwapChainLayout(frame.imageIndex);
-
 		debugPass_->render(
 			frame,
-			old,
 			in.camera->getNearPlane(),
 			in.camera->getFarPlane(),
 			static_cast<int>(renderSettings_->debugMode)
@@ -303,7 +428,7 @@ void RendererVk::renderFrame(
 	vk::RenderingAttachmentInfo colorAttach{};
 	colorAttach.imageView = sceneColor_.view();
 	colorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-	colorAttach.loadOp = vk::AttachmentLoadOp::eClear;
+	colorAttach.loadOp = vk::AttachmentLoadOp::eLoad;
 	colorAttach.storeOp = vk::AttachmentStoreOp::eStore;
 	colorAttach.clearValue = clear;
 
@@ -340,27 +465,15 @@ void RendererVk::renderFrame(
 
 		if (chunkPass_)
 		{
-			Chunk_Constants::ChunkOpaqueUBO ubo{};
 			chunkPass_->renderOpaque(
-				in, 
-				*renderSettings_, 
+				RenderTargetVk::Default,
+				in,
 				frame, 
 				view, 
 				proj, 
-				shadowMapPass_->getLightSpaceMatrix(),
-				width_, 
-				height_, 
-				ubo
+				shadowMapPass_->getLightSpaceMatrix()
 			);
 		}
-
-		if (in.skybox) in.skybox->render(
-			&frame, 
-			view,
-			proj,
-			in.light->getDirection(),
-			in.time
-		);
 
 		if (waterPass_)
 		{
@@ -375,6 +488,14 @@ void RendererVk::renderFrame(
 				height_
 			);
 		}
+
+		if (in.skybox) in.skybox->render(
+			&frame, 
+			view,
+			proj,
+			in.light->getDirection(),
+			in.time
+		);
 	}
 	cmd.endRendering();
 
@@ -404,14 +525,6 @@ void RendererVk::renderFrame(
 	// ----------------- POST-PROCESSING ----------------- //
 	ImageVk* postColor = &sceneColor_;
 	ImageVk* postDepth = &sceneDepth_;
-	// FXAA
-	if (renderSettings_->useFXAA)
-	{
-		fxaaPass_->setInput(*postColor);
-		fxaaPass_->render(frame);
-		postColor = &fxaaPass_->getOutputImage();
-	}
-
 	// FOG
 	if (renderSettings_->useFog)
 	{
@@ -423,6 +536,14 @@ void RendererVk::renderFrame(
 			in.world->getAmbientStrength()
 		);
 		postColor = &fogPass_->getOutputImage();
+	}
+
+	// FXAA
+	if (renderSettings_->useFXAA)
+	{
+		fxaaPass_->setInput(*postColor);
+		fxaaPass_->render(frame);
+		postColor = &fxaaPass_->getOutputImage();
 	}
 	// --------------- END POST-PROCESSING --------------- //
 
@@ -489,7 +610,9 @@ void RendererVk::createSceneAttachments()
 		vk::SampleCountFlagBits::e1,
 		sceneColorFormat_,
 		vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+		vk::ImageUsageFlagBits::eColorAttachment |
+		vk::ImageUsageFlagBits::eSampled |
+		vk::ImageUsageFlagBits::eTransferDst,
 		vk::MemoryPropertyFlagBits::eDeviceLocal
 	);
 

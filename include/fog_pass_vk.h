@@ -25,9 +25,7 @@ public:
 	~FogPassVk();
 
 	void init();
-	void resize(int w, int h);
-
-	void setInput(ImageVk& inputColor, ImageVk& inputDepth);
+	void resize();
 
 	void render(
 		FrameContext& frame,
@@ -36,25 +34,33 @@ public:
 		float ambStr
 	);
 
+	void setInput(ImageVk& inputColor, ImageVk& inputDepth)
+	{
+		inputColorImage_ = &inputColor;
+		inputDepthImage_ = &inputDepth;
+
+		refreshInput();
+	} // end of setInput()
+
 	ImageVk& getOutputImage() { return outputImage_; }
 
 private:
-	void refreshInput(FrameContext& frame);
+	void refreshInput();
 	void createAttachment();
 	void createResources();
 	void createDescriptorSet();
 	void createPipeline();
 private:
-	int width_{};
-	int height_{};
-
 	VulkanMain& vk_;
+
 	RenderSettings& rs_;
 
 	ImageVk* inputColorImage_{ nullptr };
 	ImageVk* inputDepthImage_{ nullptr };
 
 	ImageVk outputImage_;
+	vk::Format outputFormat_{ vk::Format::eR16G16B16A16Sfloat };
+	vk::ImageLayout outputLayout_{ vk::ImageLayout::eUndefined };
 
 	Fog_Constants::FogPassUBO ubo_;
 
@@ -63,8 +69,6 @@ private:
 	std::vector<BufferVk> uboBuffers_;
 	std::vector<DescriptorSetVk> descriptorSets_;
 	GraphicsPipelineVk pipeline_;
-
-	vk::ImageLayout outputLayout_{ vk::ImageLayout::eUndefined };
 };
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef CHUNK_MESH_GPU_VK_H
 #define CHUNK_MESH_GPU_VK_H
 
+#include "constants.h"
+
 #include "i_chunk_mesh_gpu.h"
 
 #include "acceleration_structure_vk.h"
@@ -24,6 +26,9 @@ public:
 	void drawOpaque(vk::CommandBuffer cmd) override;
 	void drawWater(vk::CommandBuffer cmd) override;
 
+	const std::vector<World::RTVertex>& getOpaqueRTVerticesCPU() const { return opaqueRTVerticesCPU_; }
+	const std::vector<uint32_t>& getOpaqueRTIndicesCPU() const { return opaqueRTIndicesCPU_; }
+
 	vk::Buffer getOpaqueRTVertexBuffer() const { return opaqueRTVB_.getBuffer(); }
 	vk::Buffer getOpaqueRTIndexBuffer() const { return opaqueRTIB_.getBuffer(); }
 
@@ -40,6 +45,7 @@ public:
 
 private:
 	void retireCurrentBuffers(uint32_t frameIndex);
+	void retireCurrentBLAS(uint32_t frameIndex);
 private:
 	VulkanMain* vk_{};
 
@@ -50,6 +56,9 @@ private:
 	BufferVk opaqueRTIB_;
 	uint32_t opaqueRTIndexCount_{ 0 };
 	uint32_t opaqueRTVertexCount_{ 0 };
+
+	std::vector<World::RTVertex> opaqueRTVerticesCPU_;
+	std::vector<uint32_t> opaqueRTIndicesCPU_;
 
 	// opaque
 	BufferVk opaqueVB_;

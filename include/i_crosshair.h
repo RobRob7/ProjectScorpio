@@ -1,6 +1,7 @@
 #ifndef I_CROSSHAIR_H
 #define I_CROSSHAIR_H
 
+class ImageVk;
 struct FrameContext;
 
 class ICrosshair

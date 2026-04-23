@@ -5,7 +5,6 @@ import sys
 GLSLC = "glslc"
 GLSLANG = "glslangValidator"
 
-# valid Vulkan shader extensions
 VALID_EXTENSIONS = {
     ".vert",
     ".frag",
@@ -30,7 +29,6 @@ RAY_TRACING_EXTENSIONS = {
     ".rcall",
 }
 
-# only non-raytracing stages for glslc
 GLSLC_STAGE_MAP = {
     ".vert": "vert",
     ".frag": "frag",
@@ -53,13 +51,14 @@ def build_command(filepath: str) -> list[str]:
     if ext in RAY_TRACING_EXTENSIONS:
         return [
             GLSLANG,
+            "-g",
             "-V",
             "--target-env", "vulkan1.2",
             filepath,
             "-o", output_path,
         ]
 
-    cmd = [GLSLC, filepath, "-o", output_path]
+    cmd = [GLSLC, filepath, "-g", "-o", output_path]
 
     if ext in GLSLC_STAGE_MAP:
         cmd.insert(1, f"-fshader-stage={GLSLC_STAGE_MAP[ext]}")
@@ -67,7 +66,7 @@ def build_command(filepath: str) -> list[str]:
     return cmd
 
 
-def compile_shader(filepath: str, is_debug: bool):
+def compile_shader(filepath: str, is_debug: bool) -> bool:
     output_path = filepath + ".spv"
     cmd = build_command(filepath)
 
@@ -82,15 +81,15 @@ def compile_shader(filepath: str, is_debug: bool):
     )
 
     if result.returncode != 0:
-        print(f"Failed to compile {filepath}")
+        print(f"\nFAILED TO COMPILE: {filepath}")
         if result.stdout:
             print(result.stdout)
         if result.stderr:
             print(result.stderr)
-    else:
+        return False
+    if is_debug:
         print(f"Generated {output_path}")
-        if is_debug:
-            print()
+    return True
 
 
 def main(root_dir: str, is_debug: bool):
@@ -98,15 +97,16 @@ def main(root_dir: str, is_debug: bool):
         for file in files:
             if is_vk_shader(file):
                 full_path = os.path.join(root, file)
-                compile_shader(full_path, is_debug)
+
+                success = compile_shader(full_path, is_debug)
+
+                if not success:
+                    print("\nBuild stopped due to shader errors.")
+                    sys.exit(1)
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        directory = sys.argv[1]
-    else:
-        directory = "."
-
+    directory = sys.argv[1] if len(sys.argv) > 1 else "."
     debug_on = len(sys.argv) > 2 and sys.argv[2].lower() == "debug"
 
     main(directory, debug_on)

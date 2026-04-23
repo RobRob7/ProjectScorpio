@@ -156,6 +156,34 @@ void DescriptorSetVk::writeDynamicUniformBuffer(
 	vk_.getDevice().updateDescriptorSets(1, &write, 0, nullptr);
 } // end of writeDynamicUniformBuffer()
 
+void DescriptorSetVk::writeStorageBuffer(
+	uint32_t binding,
+	vk::Buffer buffer,
+	vk::DeviceSize range,
+	vk::DeviceSize offset
+)
+{
+	if (!descSet_)
+	{
+		throw std::runtime_error("DescriptorSetVk::writeStorageBuffer - descriptor set not allocated");
+	}
+
+	vk::DescriptorBufferInfo dbi{};
+	dbi.buffer = buffer;
+	dbi.offset = offset;
+	dbi.range = range;
+
+	vk::WriteDescriptorSet write{};
+	write.dstSet = descSet_;
+	write.dstBinding = binding;
+	write.dstArrayElement = 0;
+	write.descriptorType = vk::DescriptorType::eStorageBuffer;
+	write.descriptorCount = 1;
+	write.pBufferInfo = &dbi;
+
+	vk_.getDevice().updateDescriptorSets(1, &write, 0, nullptr);
+} // end of writeStorageBuffer()
+
 void DescriptorSetVk::writeCombinedImageSampler(
 	uint32_t binding,
 	vk::ImageView imageView,

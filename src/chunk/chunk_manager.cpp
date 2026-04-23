@@ -1,16 +1,13 @@
 #include "chunk_manager.h"
 
-#include "vulkan_main.h"
-
-#include "chunk_draw_list.h"
 #include "chunk_mesh.h"
 #include "chunk_entry.h"
 
-#include <algorithm>
 #include <limits>
 #include <cmath>
 #include <utility>
 #include <cfloat>
+#include <iostream>
 
 //--- HELPER ---//
 struct Plane
@@ -106,43 +103,150 @@ ChunkManager::~ChunkManager() = default;
 void ChunkManager::init(VulkanMain* vk)
 {
 	vk_ = vk;
+
+	streamRecenterThreshold_ = std::max(1, viewRadius_ - 7);
 } // end of init()
 
-void ChunkManager::update(const glm::vec3& cameraPos)
+void ChunkManager::updateDynamic(const glm::vec3& cameraPos)
 {
+	glm::vec3 prevCameraPos = lastCameraPos_;
 	lastCameraPos_ = cameraPos;
 
-	// find current chunk camera is in
+	glm::vec2 moveXZ(
+		cameraPos.x - prevCameraPos.x,
+		cameraPos.z - prevCameraPos.z
+	);
+
+	bool hasMovement = glm::dot(moveXZ, moveXZ) > 0.0001f;
+	if (hasMovement)
+	{
+		moveXZ = glm::normalize(moveXZ);
+	}
+
 	int cameraChunkX = static_cast<int>(std::floor(cameraPos.x / CHUNK_SIZE));
 	int cameraChunkZ = static_cast<int>(std::floor(cameraPos.z / CHUNK_SIZE));
 
+	if (!streamCenterInitialized_)
+	{
+		streamCenterX_ = cameraChunkX;
+		streamCenterZ_ = cameraChunkZ;
+		streamCenterInitialized_ = true;
+	}
+
+	bool recentered = false;
+
+	// move stream center gradually
+	if (cameraChunkX > streamCenterX_ + streamRecenterThreshold_)
+	{
+		++streamCenterX_;
+		recentered = true;
+	}
+	else if (cameraChunkX < streamCenterX_ - streamRecenterThreshold_)
+	{
+		--streamCenterX_;
+		recentered = true;
+	}
+
+	if (cameraChunkZ > streamCenterZ_ + streamRecenterThreshold_)
+	{
+		++streamCenterZ_;
+		recentered = true;
+	}
+	else if (cameraChunkZ < streamCenterZ_ - streamRecenterThreshold_)
+	{
+		--streamCenterZ_;
+		recentered = true;
+	}
+
+	// if the center moved, rebuild pending work so old FIFO requests
+	// do not keep higher priority front chunks waiting
+	if (recentered)
+	{
+		std::queue<ChunkCoord> emptyQueue;
+		std::swap(pendingChunks_, emptyQueue);
+		queuedChunks_.clear();
+	}
+
+	std::vector<ChunkCoord> newCoords;
+	newCoords.reserve((viewRadius_ * 2 + 1) * (viewRadius_ * 2 + 1));
 	for (int dz = -viewRadius_; dz <= viewRadius_; ++dz)
 	{
 		for (int dx = -viewRadius_; dx <= viewRadius_; ++dx)
 		{
-			// check chunk coordinate (current)
-			ChunkCoord coord{ cameraChunkX + dx, cameraChunkZ + dz };
+			ChunkCoord coord{ streamCenterX_ + dx, streamCenterZ_ + dz };
 
-			// check if we are in "new" chunk
-			if (chunks_.find(coord) == chunks_.end())
+			if (chunks_.find(coord) == chunks_.end() &&
+				queuedChunks_.find(coord) == queuedChunks_.end())
 			{
-				if (queuedChunks_.insert(coord).second)
-				{
-					// add to pending chunks
-					pendingChunks_.push(coord);
-				}
+				newCoords.push_back(coord);
 			}
 		} // end for
 	} // end for
 
-	// identify chunks out of range
-	for (auto it = chunks_.begin(); it != chunks_.end();)
+	// prioritize chunks in front of movement, then nearer chunks
+	std::sort(newCoords.begin(), newCoords.end(),
+		[&](const ChunkCoord& a, const ChunkCoord& b)
+		{
+			glm::vec2 camXZ(cameraPos.x, cameraPos.z);
+
+			glm::vec2 aCenter(
+				a.x * CHUNK_SIZE + CHUNK_SIZE * 0.5f,
+				a.z * CHUNK_SIZE + CHUNK_SIZE * 0.5f
+			);
+
+			glm::vec2 bCenter(
+				b.x * CHUNK_SIZE + CHUNK_SIZE * 0.5f,
+				b.z * CHUNK_SIZE + CHUNK_SIZE * 0.5f
+			);
+
+			glm::vec2 toA = aCenter - camXZ;
+			glm::vec2 toB = bCenter - camXZ;
+
+			float distA = glm::dot(toA, toA);
+			float distB = glm::dot(toB, toB);
+
+			float frontA = 0.0f;
+			float frontB = 0.0f;
+
+			if (hasMovement)
+			{
+				glm::vec2 dirA =
+					(glm::dot(toA, toA) > 0.0001f) ? glm::normalize(toA) : glm::vec2(0.0f);
+				glm::vec2 dirB =
+					(glm::dot(toB, toB) > 0.0001f) ? glm::normalize(toB) : glm::vec2(0.0f);
+
+				frontA = glm::dot(moveXZ, dirA);
+				frontB = glm::dot(moveXZ, dirB);
+			}
+
+			// prefer chunks more in front of movement
+			if (frontA != frontB)
+				return frontA > frontB;
+
+			// prefer nearer chunks
+			return distA < distB;
+		});
+
+	// push to pending chunks queue
+	for (const ChunkCoord& coord : newCoords)
 	{
-		int dx = it->first.x - cameraChunkX;
-		int dz = it->first.z - cameraChunkZ;
+		if (queuedChunks_.insert(coord).second)
+		{
+			pendingChunks_.push(coord);
+		}
+	} // end for
+
+	// unload chunks per frame
+	const int maxUnloadChunksPerFrame = 2;
+	int unloaded = 0;
+	for (auto it = chunks_.begin(); it != chunks_.end() &&
+		unloaded < maxUnloadChunksPerFrame;)
+	{
+		int dx = it->first.x - streamCenterX_;
+		int dz = it->first.z - streamCenterZ_;
+
 		if (std::abs(dx) > viewRadius_ || std::abs(dz) > viewRadius_)
 		{
-			// save to file if chunk is dirty
 			if (it->second->cpu->getChunk().m_dirty)
 			{
 				saveWorld_.saveChunkToFile(it->second->cpu->getChunk(), "HelloWorld");
@@ -150,6 +254,7 @@ void ChunkManager::update(const glm::vec3& cameraPos)
 			}
 
 			it = chunks_.erase(it);
+			++unloaded;
 		}
 		else
 		{
@@ -157,36 +262,31 @@ void ChunkManager::update(const glm::vec3& cameraPos)
 		}
 	} // end for
 
+	// load chunks per frame
 	const int maxNewChunksPerFrame = 2;
 	int built = 0;
-	// load up to maxNewChunksPerFrame
 	while (!pendingChunks_.empty() && built < maxNewChunksPerFrame)
 	{
 		ChunkCoord coord = pendingChunks_.front();
 		pendingChunks_.pop();
 		queuedChunks_.erase(coord);
 
-		// chunk already loaded
 		if (chunks_.find(coord) != chunks_.end())
 		{
 			continue;
 		}
 
-		// create chunk and upload
-		std::unique_ptr<ChunkEntry> entry = std::make_unique<ChunkEntry>(coord.x, coord.z, vk_);
+		std::unique_ptr<ChunkEntry> entry =
+			std::make_unique<ChunkEntry>(coord.x, coord.z, vk_);
 
 		auto& chunk = entry->cpu->getChunk();
-		bool loaded = saveWorld_.loadChunkFromFile(chunk, coord.x, coord.z, "HelloWorld");
-		if (loaded)
-		{
-		}
+		saveWorld_.loadChunkFromFile(chunk, coord.x, coord.z, "HelloWorld");
 
 		entry->rebuildAndUpload();
 		chunks_.emplace(coord, std::move(entry));
 		++built;
 	} // end while
-
-} // end of update()
+} // end of updateDynamic()
 
 bool ChunkManager::buildVisibleChunkBounds(
 	glm::vec3& outMin,
@@ -321,13 +421,75 @@ void ChunkManager::buildOpaqueDrawList(
 
 		ChunkDrawItem item;
 		item.chunkOrigin = glm::vec3(chunkX * CHUNK_SIZE, 0.0f, chunkZ * CHUNK_SIZE);
-		item.gpu = entry->gpu.get();
+		item.gpu = entry->gpu;
 		item.opaqueIndexCount = static_cast<uint32_t>(cpu->opaqueIndexCount());
 		item.waterIndexCount = static_cast<uint32_t>(std::max(0, cpu->waterIndexCount()));
 		item.renderedBlockCount = cpu->getRenderedBlockCount();
 
 		out.items.push_back(item);
 	} // end for
+} // end of buildOpaqueDrawList()
+
+void ChunkManager::buildOpaqueDrawList(
+	const glm::mat4& view,
+	const glm::mat4& proj
+)
+{
+	chunkDrawList_.clear();
+
+	int camChunkX = static_cast<int>(std::floor(lastCameraPos_.x / CHUNK_SIZE));
+	int camChunkZ = static_cast<int>(std::floor(lastCameraPos_.z / CHUNK_SIZE));
+	int maxDist2 = viewRadius_ * viewRadius_;
+
+	frameBlocksRendered_ = 0;
+	frameChunksRendered_ = 0;
+
+	// get frustum planes
+	Frustum fr = ExtractFrustumPlanes(proj * view);
+	for (auto& [coord, entry] : chunks_)
+	{
+		ChunkMesh* cpu = entry->cpu.get();
+
+		// skip empty meshes
+		if (cpu->opaqueIndexCount() <= 0) continue;
+
+		// chunkX, chunkZ
+		int chunkX = cpu->getChunk().m_chunkX;
+		int chunkZ = cpu->getChunk().m_chunkZ;
+
+		// distance culling
+		int dx = chunkX - camChunkX;
+		int dz = chunkZ - camChunkZ;
+		int dist2 = dx * dx + dz * dz;
+		if (enableDistanceCulling_ && dist2 > maxDist2)
+		{
+			continue;
+		}
+
+		// set AABB
+		AABB box = ChunkWorldAABB(chunkX, chunkZ);
+		if (enableFrustumCulling_ && !IntersectsFrustum(box, fr))
+		{
+			continue;
+		}
+
+		// chunk/block count
+		frameChunksRendered_++;
+		frameBlocksRendered_ += cpu->getRenderedBlockCount();
+
+		ChunkDrawItem item;
+		item.chunkOrigin = glm::vec3(chunkX * CHUNK_SIZE, 0.0f, chunkZ * CHUNK_SIZE);
+		item.gpu = entry->gpu;
+		item.opaqueIndexCount = static_cast<uint32_t>(cpu->opaqueIndexCount());
+		item.waterIndexCount = static_cast<uint32_t>(std::max(0, cpu->waterIndexCount()));
+		item.renderedBlockCount = cpu->getRenderedBlockCount();
+		item.geometryVersion = entry->geometryVersion;
+
+		chunkDrawList_.items.push_back(item);
+	} // end for
+
+	chunkDrawList_.frameChunksRendered = frameChunksRendered_;
+	chunkDrawList_.frameBlocksRendered = frameBlocksRendered_;
 } // end of buildOpaqueDrawList()
 
 void ChunkManager::buildWaterDrawList(
@@ -373,61 +535,12 @@ void ChunkManager::buildWaterDrawList(
 
 		ChunkDrawItem item;
 		item.chunkOrigin = glm::vec3(chunkX * CHUNK_SIZE, 0.0f, chunkZ * CHUNK_SIZE);
-		item.gpu = entry->gpu.get();
+		item.gpu = entry->gpu;
 		item.waterIndexCount = static_cast<uint32_t>(std::max(0, cpu->waterIndexCount()));
 
 		out.items.push_back(item);
 	} // end for
 } // end of buildWaterDrawList()
-
-void ChunkManager::buildTLASInstances(std::vector<vk::AccelerationStructureInstanceKHR>& out)
-{
-	out.clear();
-
-	for (auto& [coord, entry] : chunks_)
-	{
-		if (!entry || !entry->gpu)
-		{
-			continue;
-		}
-
-		auto* gpuVk = dynamic_cast<ChunkMeshGPUVk*>(entry->gpu.get());
-
-		if (!gpuVk->hasOpaqueBLAS())
-		{
-			continue;
-		}
-
-		const float tx = static_cast<float>(coord.x * CHUNK_SIZE);
-		const float ty = 0.0f;
-		const float tz = static_cast<float>(coord.z * CHUNK_SIZE);
-
-		vk::AccelerationStructureInstanceKHR inst{};
-
-		inst.transform.matrix[0][0] = 1.0f;
-		inst.transform.matrix[0][1] = 0.0f;
-		inst.transform.matrix[0][2] = 0.0f;
-		inst.transform.matrix[0][3] = tx;
-
-		inst.transform.matrix[1][0] = 0.0f;
-		inst.transform.matrix[1][1] = 1.0f;
-		inst.transform.matrix[1][2] = 0.0f;
-		inst.transform.matrix[1][3] = ty;
-
-		inst.transform.matrix[2][0] = 0.0f;
-		inst.transform.matrix[2][1] = 0.0f;
-		inst.transform.matrix[2][2] = 1.0f;
-		inst.transform.matrix[2][3] = tz;
-
-		inst.instanceCustomIndex = 0;
-		inst.mask = 0xFF;
-		inst.instanceShaderBindingTableRecordOffset = 0;
-		inst.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-		inst.accelerationStructureReference = gpuVk->getOpaqueBLASAddress();
-
-		out.push_back(inst);
-	} // end for
-} // end of buildTLASInstances()
 
 BlockID ChunkManager::getBlock(int wx, int wy, int wz) const
 {
@@ -484,36 +597,6 @@ void ChunkManager::setBlock(int wx, int wy, int wz, BlockID id)
 	it->second->cpu->getChunk().m_dirty = true;
 } // end of setBlock()
 
-void ChunkManager::setLastBlockUsed(BlockID block)
-{
-	lastBlockUsed_ = block;
-} // end of setLastBlockUsed()
-
-int ChunkManager::getViewRadius() const
-{
-	return viewRadius_;
-} // end of getViewRadius()
-
-void ChunkManager::setViewRadius(int r)
-{
-	viewRadius_ = std::clamp(r, MIN_RADIUS, MAX_RADIUS);
-} // end of setViewRadius()
-
-const glm::vec3& ChunkManager::getLastCameraPos() const
-{
-	return lastCameraPos_;
-} // end of getLastCameraPos()
-
-float ChunkManager::getAmbientStrength() const
-{
-	return ambientStrength_;
-} // end of getAmbientStrength()
-
-void ChunkManager::setAmbientStrength(float strength)
-{
-	ambientStrength_ = std::clamp(strength, MIN_AMBSTR, MAX_AMBSTR);
-} // end of setAmbientStrength()
-
 void ChunkManager::placeOrRemoveBlock(bool shouldPlace, const glm::vec3& origin, const glm::vec3& dir)
 {
 	BlockHit hit = raycastBlocks(origin, dir);
@@ -530,6 +613,9 @@ void ChunkManager::placeOrRemoveBlock(bool shouldPlace, const glm::vec3& origin,
 			setBlock(placePos.x, placePos.y, placePos.z, lastBlockUsed_);
 			// add block to counter
 			++frameBlocksRendered_;
+
+			// save
+			saveWorld();
 		}
 	}
 	// destroy op
@@ -549,6 +635,9 @@ void ChunkManager::placeOrRemoveBlock(bool shouldPlace, const glm::vec3& origin,
 			setBlock(hit.block.x, hit.block.y, hit.block.z, BlockID::Air);
 			// remove block from counter
 			--frameBlocksRendered_;
+
+			// save
+			saveWorld();
 		}
 	}
 } // end of placeOrRemoveBlock()
@@ -569,36 +658,6 @@ void ChunkManager::saveWorld()
 
 	} // end for
 } // end of saveWorld()
-
-uint32_t ChunkManager::getFrameChunksRendered() const
-{
-	return frameChunksRendered_;
-} // end of getFrameChunksRendered()
-
-uint32_t ChunkManager::getFrameBlocksRendered() const
-{
-	return frameBlocksRendered_;
-} // end of getFrameBlocksRendered()
-
-bool ChunkManager::statusFrustumCulling() const
-{
-	return enableFrustumCulling_;
-} // end of statusFrustumCulling()
-
-void ChunkManager::enableFrustumCulling(bool enable)
-{
-	enableFrustumCulling_ = enable;
-} // end of enableFrustumCulling()
-
-bool ChunkManager::statusDistanceCulling() const
-{
-	return enableDistanceCulling_;
-} // end of statusDistanceCulling()
-
-void ChunkManager::enableDistanceCulling(bool enable)
-{
-	enableDistanceCulling_ = enable;
-} // end of enableDistanceCulling()
 
 
 //--- PRIVATE ---//

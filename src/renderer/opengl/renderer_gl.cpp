@@ -93,7 +93,7 @@ void RendererGL::renderFrame(
 
     glEnable(GL_FRAMEBUFFER_SRGB);
 
-    in.world->update(in.camera->getCameraPosition());
+    in.world->updateDynamic(in.camera->getCameraPosition());
 
     // update light direction
     in.light->updateLightDirection(in.time);
@@ -196,25 +196,25 @@ void RendererGL::renderFrame(
 
 
     // ----------------- POST-PROCESSING ----------------- //
-    // FXAA
-    uint32_t finalColorTex = forwardColorTex_;
-    if (renderSettings_->useFXAA)
-    {
-        fxaaPass_->render(forwardColorTex_);
-        finalColorTex = fxaaPass_->getOutputTex();
-    }
-
     // FOG
+    uint32_t finalColorTex = forwardColorTex_;
     if (renderSettings_->useFog)
     {
         fogPass_->render(
-            finalColorTex, 
+            finalColorTex,
             forwardDepthTex_,
-            in.camera->getNearPlane(), 
-            in.camera->getFarPlane(), 
+            in.camera->getNearPlane(),
+            in.camera->getFarPlane(),
             in.world->getAmbientStrength()
         );
         finalColorTex = fogPass_->getOutputTex();
+    }
+
+    // FXAA
+    if (renderSettings_->useFXAA)
+    {
+        fxaaPass_->render(finalColorTex);
+        finalColorTex = fxaaPass_->getOutputTex();
     }
     // --------------- END POST-PROCESSING --------------- //
 

@@ -2,6 +2,7 @@
 #define CHUNK_PASS_VK_H
 
 #include "constants.h"
+#include "render_target_vk.h"
 
 #include "shader_vk.h"
 #include "texture_2d_vk.h"
@@ -12,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <cstdlib>
 
 class VulkanMain;
 class ImageVk;
@@ -24,92 +26,72 @@ class ChunkPassVk
 {
 public:
 	explicit ChunkPassVk(
-		VulkanMain& vk, 
-		ImageVk& ssaoBlurImage, 
-		ImageVk& shadowMapImage
+		VulkanMain& vk,
+		RenderSettings& rs,
+		const ImageVk& ssaoBlurImage, 
+		const ImageVk& shadowMapImage
 	);
 	~ChunkPassVk();
 
-	void init();
-
-	void refreshTexBinding();
+	void init(
+		RenderTargetFormatsVk defaultFormats,
+		RenderTargetFormatsVk gbufferFormats,
+		RenderTargetFormatsVk shadowFormats
+	);
+	void resize();
 
 	void renderOpaque(
-		const RenderInputs& in, 
-		const RenderSettings& rs,
-		const FrameContext& frame, 
-		const glm::mat4& view, 
-		const glm::mat4& proj,
-		const glm::mat4& lightSpaceMatrix,
-		int width, int height,
-		Chunk_Constants::ChunkOpaqueUBO& ubo
-	);
-	void renderOpaqueOffscreen(
+		RenderTargetVk renderTarget,
 		const RenderInputs& in,
 		const FrameContext& frame,
 		const glm::mat4& view,
 		const glm::mat4& proj,
-		int width, int height,
-		Chunk_Constants::ChunkOpaqueUBO& ubo,
-		DescriptorSetVk& descriptorSet,
-		BufferVk& uboBuffer
+		const glm::mat4& lightSpaceMatrix = {},
+		const uint32_t waterPassWidth = {},
+		const uint32_t waterPassHeight = {}
 	);
-	void renderOpaqueGBuffer(
-		const RenderInputs& in,
-		const FrameContext& frame,
-		const glm::mat4& view,
-		const glm::mat4& proj,
-		int width, int height
-	);
-	void renderOpaqueShadowMap(
-		const RenderInputs& in,
-		const FrameContext& frame,
-		const vk::PipelineLayout& layout,
-		const glm::mat4& view,
-		const glm::mat4& proj
-	);
-
-	BufferVk& getOpaqueOffscreenUBOBufferReflection() { return opaqueOffscreenUBOBufferReflection_; }
-	BufferVk& getOpaqueOffscreenUBOBufferRefraction() { return opaqueOffscreenUBOBufferRefraction_; }
-
-	DescriptorSetVk& getOpaqueOffscreenDescriptorSetReflection() { return opaqueOffscreenDescriptorSetReflection_; }
-	DescriptorSetVk& getOpaqueOffscreenDescriptorSetRefraction() { return opaqueOffscreenDescriptorSetRefraction_; }
 
 private:
-	void createOpaqueResources();
-	void createOpaqueOffscreenResources();
-	void createOpaqueGBufferResources();
-
-	void createOpaqueDescriptorSet();
-	void createOpaqueOffscreenDescriptorSet();
-	void createOpaqueGBufferDescriptorSet();
-
-	void createOpaquePipeline();
-	void createOpaqueGBufferPipeline();
+	void refreshTexBinding();
+	void createResources();
+	void createDescriptorSets();
+	void createPipelines(
+		RenderTargetFormatsVk defaultFormats,
+		RenderTargetFormatsVk gbufferFormats,
+		RenderTargetFormatsVk shadowFormats
+	);
 private:
 	VulkanMain& vk_;
 
-	ImageVk& ssaoBlurImage_;
-	ImageVk& shadowMapImage_;
+	RenderSettings& rs_;
+
+	const ImageVk& ssaoBlurImage_;
+	const ImageVk& shadowMapImage_;
 
 	std::unique_ptr<ShaderModuleVk> opaqueShader_;
 	std::unique_ptr<ShaderModuleVk> opaqueGBufferShader_;
+	std::unique_ptr<ShaderModuleVk> opaqueShadowShader_;
 
 	Texture2DVk atlas_;
 
 	BufferVk opaqueUBOBuffer_;
-	BufferVk opaqueOffscreenUBOBufferReflection_;
-	BufferVk opaqueOffscreenUBOBufferRefraction_;
+	BufferVk reflUBOBuffer_;
+	BufferVk refrUBOBuffer_;
+	Chunk_Constants::ChunkOpaqueUBO chunkUBOData_{};
 	BufferVk opaqueGBufferUBOBuffer_;
+	Gbuffer_Constants::GbufferUBO gbufferUBOData_{};
+	BufferVk opaqueShadowUBOBuffer_;
+	Shadow_Map_Constants::ShadowMapPassUBO shadowUBOData_{};
 
 	DescriptorSetVk opaqueDescriptorSet_;
-	DescriptorSetVk opaqueOffscreenDescriptorSetReflection_;
-	DescriptorSetVk opaqueOffscreenDescriptorSetRefraction_;
+	DescriptorSetVk reflectionDescriptorSet_;
+	DescriptorSetVk refractionDescriptorSet_;
 	DescriptorSetVk opaqueGBufferDescriptorSet_;
+	DescriptorSetVk opaqueShadowDescriptorSet_;
 
 	GraphicsPipelineVk opaquePipeline_;
-	GraphicsPipelineVk opaquePipelineOffscreen_;
 	GraphicsPipelineVk opaqueGBufferPipeline_;
+	GraphicsPipelineVk opaqueShadowPipeline_;
 };
 
 #endif

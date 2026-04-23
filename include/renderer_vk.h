@@ -1,12 +1,15 @@
 #ifndef RENDERER_VK_H
 #define RENDERER_VK_H
 
+#include "constants.h"
+
 #include "i_renderer.h"
 
 #include "image_vk.h"
 #include "acceleration_structure_vk.h"
 
 #include <memory>
+#include <vector>
 
 class VulkanMain;
 class Camera;
@@ -15,8 +18,10 @@ class ICubemap;
 struct RenderInputs;
 struct RenderSettings;
 struct FrameContext;
+struct ChunkDrawList;
 
-class RayTracingPassVk;
+class ChunkMeshGPUVk;
+class RayTracingChunkPassVk;
 
 class GBufferPassVk;
 class ShadowMapPassVk;
@@ -51,7 +56,6 @@ public:
 
 private:
 	void createSceneAttachments();
-
 private:
 	int width_{};
 	int height_{};
@@ -64,13 +68,10 @@ private:
 	vk::ImageLayout sceneColorLayout_{ vk::ImageLayout::eUndefined };
 	vk::ImageLayout sceneDepthLayout_{ vk::ImageLayout::eUndefined };
 
-	vk::Format sceneColorFormat_{ vk::Format::eR32G32B32A32Sfloat };
+	vk::Format sceneColorFormat_{ vk::Format::eR16G16B16A16Sfloat };
 	vk::Format sceneDepthFormat_{ vk::Format::eD32Sfloat };
 
 	std::unique_ptr<RenderSettings> renderSettings_;
-
-	AccelerationStructureVk topLevelAS_;
-	std::unique_ptr<RayTracingPassVk> rayTracingPass_;
 
 	std::unique_ptr<GBufferPassVk> gbufferPass_;
 	std::unique_ptr<ShadowMapPassVk> shadowMapPass_;
@@ -79,6 +80,7 @@ private:
 
 	std::unique_ptr<WaterPassVk> waterPass_;
 	std::unique_ptr<ChunkPassVk> chunkPass_;
+	//std::unique_ptr<RayTracingChunkPassVk> rtChunkPass_;
 
 	std::unique_ptr<FXAAPassVk> fxaaPass_;
 	std::unique_ptr<FogPassVk> fogPass_;

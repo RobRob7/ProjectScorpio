@@ -34,9 +34,6 @@ FXAAPassVk::~FXAAPassVk() = default;
 
 void FXAAPassVk::init()
 {
-	width_ = static_cast<int>(vk_.getSwapChainExtent().width);
-	height_ = static_cast<int>(vk_.getSwapChainExtent().height);
-
 	shader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
 		"fxaapass/fxaa.vert.spv",
@@ -49,16 +46,8 @@ void FXAAPassVk::init()
 	createPipeline();
 } // end of init()
 
-void FXAAPassVk::resize(int w, int h)
+void FXAAPassVk::resize()
 {
-	if (w == 0 || h == 0) return;
-	if (w == width_ && h == height_) return;
-
-	vk_.waitIdle();
-
-	width_ = w;
-	height_ = h;
-
 	createAttachment();
 } // end of resize()
 
@@ -69,7 +58,7 @@ void FXAAPassVk::setInput(ImageVk& input)
 
 void FXAAPassVk::render(FrameContext& frame)
 {
-	refreshInput(frame);
+	refreshInput();
 
 	if (!inputImage_ || 
 		!uboBuffers_[frame.frameIndex].valid() || !descriptorSets_[frame.frameIndex].valid() || !pipeline_.valid())
@@ -78,14 +67,18 @@ void FXAAPassVk::render(FrameContext& frame)
 	}
 
 	vk::CommandBuffer cmd = frame.cmd;
+	vk::Extent2D extent = frame.extent;
 
 	// update UBO
-	ubo_.u_inverseScreenSize = glm::vec2(1.0f / static_cast<float>(width_), 1.0f / static_cast<float>(height_));
-	ubo_.u_edgeSharpnessQuality = EDGE_SHARP_QUALITY;
-	ubo_.u_edgeThresholdMax = EDGE_THRESH_MAX;
-	ubo_.u_edgeThresholdMin = EDGE_THRESH_MIN;
+	uboData_ = {};
+	uboData_.u_inverseScreenSize = 
+		glm::vec2(1.0f / static_cast<float>(extent.width), 
+			1.0f / static_cast<float>(extent.height));
+	uboData_.u_edgeSharpnessQuality = EDGE_SHARP_QUALITY;
+	uboData_.u_edgeThresholdMax = EDGE_THRESH_MAX;
+	uboData_.u_edgeThresholdMin = EDGE_THRESH_MIN;
 
-	uboBuffers_[frame.frameIndex].upload(&ubo_, sizeof(ubo_));
+	uboBuffers_[frame.frameIndex].upload(&uboData_, sizeof(uboData_));
 
 	VkUtils::TransitionImageLayout(
 		cmd,
@@ -112,10 +105,7 @@ void FXAAPassVk::render(FrameContext& frame)
 
 	vk::RenderingInfo renderingInfo{};
 	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = vk::Extent2D{
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_)
-	};
+	renderingInfo.renderArea.extent = extent;
 	renderingInfo.layerCount = 1;
 	renderingInfo.colorAttachmentCount = 1;
 	renderingInfo.pColorAttachments = &colorAttach;
@@ -126,18 +116,15 @@ void FXAAPassVk::render(FrameContext& frame)
 		vk::Viewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(width_);
-		viewport.height = static_cast<float>(height_);
+		viewport.width = static_cast<float>(frame.extent.width);
+		viewport.height = static_cast<float>(frame.extent.height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		cmd.setViewport(0, 1, &viewport);
 
 		vk::Rect2D scissor{};
 		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = vk::Extent2D{
-			static_cast<uint32_t>(width_),
-			static_cast<uint32_t>(height_)
-		};
+		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
 
 		vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
@@ -168,34 +155,39 @@ void FXAAPassVk::render(FrameContext& frame)
 
 
 //--- PRIVATE ---//
-void FXAAPassVk::refreshInput(FrameContext& frame)
+void FXAAPassVk::refreshInput()
 {
 	if (!inputImage_)
 		return;
 
-	descriptorSets_[frame.frameIndex].writeCombinedImageSampler(
-		TO_API_FORM(FXAAPassBinding::ForwardColorTex),
-		inputImage_->view(),
-		inputImage_->sampler()
-	);
+	for (auto& set : descriptorSets_)
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(FXAAPassBinding::ForwardColorTex),
+			inputImage_->view(),
+			inputImage_->sampler()
+		);
+	} // end for
 } // end of refreshInput()
 
 void FXAAPassVk::createAttachment()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+
 	outputImage_.createImage(
-		width_,
-		height_,
+		extent.width,
+		extent.height,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
-		vk::Format::eR32G32B32A32Sfloat,
+		outputFormat_,
 		vk::ImageTiling::eOptimal,
 		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
 		vk::MemoryPropertyFlagBits::eDeviceLocal
 	);
 
 	outputImage_.createImageView(
-		vk::Format::eR32G32B32A32Sfloat,
+		outputFormat_,
 		vk::ImageAspectFlagBits::eColor,
 		vk::ImageViewType::e2D,
 		1
@@ -270,8 +262,7 @@ void FXAAPassVk::createPipeline()
 
 	desc.setLayouts = { descriptorSets_[0].getLayout()};
 
-	desc.colorFormat = vk::Format::eR32G32B32A32Sfloat;
-	desc.depthFormat = vk::Format::eUndefined;
+	desc.colorFormat = outputFormat_;
 
 	desc.cullMode = vk::CullModeFlagBits::eNone;
 	desc.frontFace = vk::FrontFace::eClockwise;

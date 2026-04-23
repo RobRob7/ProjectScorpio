@@ -4,6 +4,7 @@
 #include "vulkan_main.h"
 #include "frame_context_vk.h"
 
+#include "image_vk.h"
 #include "buffer_vk.h"
 #include "graphics_pipeline_vk.h"
 #include "shader_vk.h"
@@ -26,6 +27,7 @@ CrosshairVk::~CrosshairVk() = default;
 
 void CrosshairVk::init()
 {
+
 	shader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
 		"crosshair/crosshair.vert.spv", 
@@ -143,7 +145,6 @@ void CrosshairVk::createPipeline()
 	desc.topology = vk::PrimitiveTopology::eLineList;
 
 	desc.colorFormat = vk_.getSwapChainImageFormat();
-	desc.depthFormat = vk::Format::eUndefined;
 
 	desc.cullMode = vk::CullModeFlagBits::eNone;
 	desc.depthTestEnable = false;

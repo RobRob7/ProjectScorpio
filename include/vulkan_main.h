@@ -1,6 +1,7 @@
 #ifndef VULKAN_MAIN_H
 #define VULKAN_MAIN_H
 
+#include "image_vk.h"
 #include "buffer_vk.h"
 #include "acceleration_structure_vk.h"
 
@@ -32,16 +33,6 @@ struct SwapChainSupportDetails
     std::vector<vk::PresentModeKHR> presentModes;
 };
 
-struct RetiredChunkBuffers
-{
-    BufferVk opaqueRTVB;
-    BufferVk opaqueRTIB;
-    BufferVk opaqueVB;
-    BufferVk opaqueIB;
-    BufferVk waterVB;
-    BufferVk waterIB;
-};
-
 struct PendingUpload
 {
     vk::CommandBuffer cmd{};
@@ -49,6 +40,12 @@ struct PendingUpload
     std::vector<BufferVk> stagingBuffers;
 };
 
+struct RetiredFrameResources
+{
+    std::vector<BufferVk> buffers;
+    std::vector<ImageVk> images;
+    std::vector<AccelerationStructureVk> accelStructures;
+};
 
 class VulkanMain
 {
@@ -128,37 +125,27 @@ public:
 
     uint32_t currentFrameIndex() const { return currentFrame_; }
 
-    void retireAccelerationStructure(
-        uint32_t frameIndex,
-        AccelerationStructureVk&& as
-    )
+    void retireBuffer(uint32_t frameIndex, BufferVk&& buffer)
+    {
+        if (buffer.valid())
+        {
+            retired_[frameIndex].buffers.push_back(std::move(buffer));
+        }
+    } // end of retireBuffer()
+    void retireImage(uint32_t frameIndex, ImageVk&& image)
+    {
+        if (image.valid())
+        {
+            retired_[frameIndex].images.push_back(std::move(image));
+        }
+    } // end of retireImage()
+    void retireAccelerationStructure(uint32_t frameIndex, AccelerationStructureVk&& as)
     {
         if (as.valid())
         {
-            retiredAS_[frameIndex].push_back(std::move(as));
+            retired_[frameIndex].accelStructures.push_back(std::move(as));
         }
     } // end of retireAccelerationStructure()
-
-    void retireChunkBuffers(
-        uint32_t frameIndex,
-        BufferVk&& opaqueRTVB,
-        BufferVk&& opaqueRTIB,
-        BufferVk&& opaqueVB,
-        BufferVk&& opaqueIB,
-        BufferVk&& waterVB,
-        BufferVk&& waterIB)
-    {
-        retiredChunkBuffers_[frameIndex].push_back(
-            RetiredChunkBuffers{
-                std::move(opaqueRTVB),
-                std::move(opaqueRTIB),
-                std::move(opaqueVB),
-                std::move(opaqueIB),
-                std::move(waterVB),
-                std::move(waterIB)
-            }
-        );
-    } // end of retireChunkBuffers()
 
     vk::PresentModeKHR getVsyncMode() const{ return vsyncMode_; }
     bool getVSync() const { return vsyncEnabled_; }
@@ -208,7 +195,8 @@ private:
 
     void createPerImageSync();
 
-    void flushRetiredResources();
+    void flushRetiredResources(uint32_t frameIndex);
+    void flushAllRetiredResources();
 
 private:
     const std::vector<const char*> validationLayers_ = { "VK_LAYER_KHRONOS_validation" };
@@ -218,18 +206,17 @@ private:
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
     };
 
     bool enableValidationLayers_{ false };
     bool initialized_{ false };
 
-    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 2;
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 1;
 
     std::vector<PendingUpload> pendingUploads_;
 
-    std::array<std::vector<RetiredChunkBuffers>, MAX_FRAMES_IN_FLIGHT> retiredChunkBuffers_;
-    std::array<std::vector<AccelerationStructureVk>, MAX_FRAMES_IN_FLIGHT> retiredAS_;
+    std::array<RetiredFrameResources, MAX_FRAMES_IN_FLIGHT> retired_;
 
     bool framebufferResized_{ false };
     uint32_t currentFrame_ = 0;

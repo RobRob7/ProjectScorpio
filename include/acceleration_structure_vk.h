@@ -24,7 +24,8 @@ public:
 
 	void destroy();
 
-	void buildBLAS(
+	void buildBLASOnCmd(
+		vk::CommandBuffer cmd,
 		vk::Buffer vertexBuffer,
 		vk::DeviceAddress vertexAddress,
 		uint32_t vertexCount,
@@ -35,7 +36,10 @@ public:
 		vk::IndexType indexType = vk::IndexType::eUint32
 	);
 
-	void buildTLAS(const std::vector<vk::AccelerationStructureInstanceKHR>& instances);
+	void buildTLASOnCmd(
+		vk::CommandBuffer cmd,
+		const std::vector<vk::AccelerationStructureInstanceKHR>& instances
+	);
 
 	bool valid() const { return static_cast<bool>(as_); }
 
@@ -45,9 +49,13 @@ public:
 private:
 	VulkanMain* vk_;
 
+	BufferVk instanceBuffer_;
+	BufferVk scratchBuffer_;
+
 	BufferVk buffer_;
 	vk::UniqueAccelerationStructureKHR as_{};
 	vk::DeviceAddress deviceAddress_{ 0 };
+
 };
 
 #endif

@@ -21,18 +21,22 @@ struct FrameContext;
 class SSAOPassVk
 {
 public:
-	SSAOPassVk(VulkanMain& vk, ImageVk& gNormalImage, ImageVk& gDepthImage);
+	SSAOPassVk(
+		VulkanMain& vk,
+		const ImageVk& gNormalImage,
+		const ImageVk& gDepthImage
+	);
 	~SSAOPassVk();
 
 	void init();
-	void resize(int w, int h);
+	void resize();
 
 	void renderOffscreen(
 		const FrameContext& frame,
 		const glm::mat4& proj
 	);
 
-	ImageVk& ssaoBlurImage() { return ssaoBlurImage_; }
+	const ImageVk& ssaoBlurImage() const { return ssaoBlurImage_; }
 
 private:
 	void createAttachments();
@@ -45,36 +49,32 @@ private:
 private:
 	VulkanMain& vk_;
 
-	int width_{};
-	int height_{};
-
-	SSAO_Constants::SSAORawUBO rawUBO_{};
-	SSAO_Constants::SSAOBlurUBO blurUBO_{};
+	const ImageVk& gNormalImage_;
+	const ImageVk& gDepthImage_;
 
 	std::unique_ptr<ShaderModuleVk> ssaoRawShader_;
 	std::unique_ptr<ShaderModuleVk> ssaoBlurShader_;
 
-	ImageVk& gNormalImage_;
-	ImageVk& gDepthImage_;
 	ImageVk ssaoNoiseImage_;
+	vk::Format noiseFormat_ = vk::Format::eR16G16B16A16Sfloat;
 
 	ImageVk ssaoRawImage_;
+	vk::ImageLayout singleChannelRawLayout_ = vk::ImageLayout::eUndefined;
+
 	ImageVk ssaoBlurImage_;
+	vk::Format singleChannelFormat_ = vk::Format::eR8Unorm;
+	vk::ImageLayout singleChannelBlurLayout_ = vk::ImageLayout::eUndefined;
 
 	std::vector<BufferVk> ssaoRawUBOBuffers_;
+	SSAO_Constants::SSAORawUBO rawUBO_{};
 	std::vector<BufferVk> ssaoBlurUBOBuffers_;
+	SSAO_Constants::SSAOBlurUBO blurUBO_{};
 
 	std::vector<DescriptorSetVk> ssaoRawDescriptorSets_;
 	std::vector<DescriptorSetVk> ssaoBlurDescriptorSets_;
 
 	GraphicsPipelineVk ssaoRawPipeline_;
 	GraphicsPipelineVk ssaoBlurPipeline_;
-
-	vk::Format noiseFormat_ = vk::Format::eR16G16B16A16Sfloat;
-	vk::Format singleChannelFormat_ = vk::Format::eR8Unorm;
-
-	vk::ImageLayout singleChannelRawLayout_ = vk::ImageLayout::eUndefined;
-	vk::ImageLayout singleChannelBlurLayout_ = vk::ImageLayout::eUndefined;
 
 	std::array<glm::vec4, SSAO_Constants::MAX_KERNEL_SIZE> samples_{};
 };

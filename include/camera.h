@@ -72,6 +72,7 @@ public:
 	bool isEnabled() const;
 
 	glm::mat4 getProjectionMatrix(float aspectRatio) const;
+	glm::mat4 getProjectionMatrixVk(float aspectRatio) const;
 
 	glm::vec3 getCameraPosition() const;
 	glm::vec3& getCameraPosition();

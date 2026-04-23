@@ -26,12 +26,12 @@ class WaterPassVk
 public:
 	WaterPassVk(
 		VulkanMain& vk,
-		ImageVk& shadowMapTex
+		const ImageVk& shadowMapTex
 	);
 	~WaterPassVk();
 
 	void init();
-	void resize(int w, int h);
+	void resize();
 
 	void renderOffscreen(
 		const RenderSettings& rs,
@@ -86,19 +86,17 @@ private:
 private:
 	VulkanMain& vk_;
 
-	ImageVk& shadowMapImage_;
+	const ImageVk& shadowMapImage_;
 
-	int factor_{};
+	uint32_t factor_{};
 
-	int width_{ 0 };
-	int height_{ 0 };
-	int fullW_{ 0 };
-	int fullH_{ 0 };
+	uint32_t width_{ 0 };
+	uint32_t height_{ 0 };
 
 	ImageVk reflColorImage_;
-	ImageVk reflDepthImage_;
-
 	vk::ImageLayout reflColorLayout_ = vk::ImageLayout::eUndefined;
+
+	ImageVk reflDepthImage_;
 	vk::ImageLayout reflDepthLayout_ = vk::ImageLayout::eUndefined;
 
 	ImageVk refrColorImage_;

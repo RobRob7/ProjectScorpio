@@ -69,9 +69,25 @@ void RayTracingPipelineVk::create(const RayTracingPipelineDescVk& desc)
 	groups[2].intersectionShader = vk::ShaderUnusedKHR;
 
 	// pipeline layout
+	std::vector<vk::DescriptorSetLayout> ordered;
+
+	// find max set index
+	uint32_t maxSet = 0;
+	for (const auto& s : desc.setLayouts)
+	{
+		maxSet = std::max(maxSet, s.setNumber);
+	} // end for
+
+	ordered.resize(maxSet + 1);
+
+	for (const auto& s : desc.setLayouts)
+	{
+		ordered[s.setNumber] = s.layout;
+	} // end for
+
 	vk::PipelineLayoutCreateInfo pli{};
-	pli.setLayoutCount = static_cast<uint32_t>(desc.setLayouts.size());
-	pli.pSetLayouts = desc.setLayouts.data();
+	pli.setLayoutCount = static_cast<uint32_t>(ordered.size());
+	pli.pSetLayouts = ordered.data();
 	pli.pushConstantRangeCount = static_cast<uint32_t>(desc.pushConstantRanges.size());
 	pli.pPushConstantRanges = desc.pushConstantRanges.empty() ? nullptr : desc.pushConstantRanges.data();
 	{

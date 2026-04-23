@@ -39,7 +39,30 @@ VulkanMain::VulkanMain(GLFWwindow* window)
 
 VulkanMain::~VulkanMain()
 {
-	flushRetiredResources();
+	if (device_)
+	{
+		waitIdle();
+
+		// clean pending async uploads
+		for (auto& upload : pendingUploads_)
+		{
+			if (upload.cmd)
+			{
+				device_->freeCommandBuffers(commandPool_.get(), 1, &upload.cmd);
+			}
+
+			if (upload.fence)
+			{
+				device_->destroyFence(upload.fence);
+			}
+
+			upload.stagingBuffers.clear();
+		} // end for
+
+		pendingUploads_.clear();
+
+		flushAllRetiredResources();
+	}
 } // end of destructor
 
 void VulkanMain::init()
@@ -91,6 +114,8 @@ bool VulkanMain::beginFrame(FrameContext& out)
 			throw std::runtime_error("waitForFences failed: " + vk::to_string(res));
 		}
 	}
+
+	flushRetiredResources(currentFrame_);
 
 	processPendingUploads();
 
@@ -144,9 +169,6 @@ bool VulkanMain::beginFrame(FrameContext& out)
 			throw std::runtime_error("resetFences failed: " + vk::to_string(res));
 		}
 	}
-
-	retiredAS_[currentFrame_].clear();
-	retiredChunkBuffers_[currentFrame_].clear();
 
 	// reset + begin command buffer
 	vk::CommandBuffer cmd = commandBuffers_[currentFrame_];
@@ -601,6 +623,7 @@ void VulkanMain::createLogicalDevice()
 	deviceFeatures2.features.samplerAnisotropy = VK_TRUE;
 	deviceFeatures2.features.sampleRateShading = VK_TRUE;
 	deviceFeatures2.features.shaderClipDistance = VK_TRUE;
+	deviceFeatures2.features.shaderInt64 = VK_TRUE;
 
 	vk::PhysicalDeviceDynamicRenderingFeatures dynamicRendering{};
 	dynamicRendering.dynamicRendering = VK_TRUE;
@@ -1072,6 +1095,7 @@ bool VulkanMain::isDeviceSuitable(vk::PhysicalDevice device)
 		&& feats2.features.samplerAnisotropy 
 		&& feats2.features.sampleRateShading 
 		&& feats2.features.shaderClipDistance
+		&& feats2.features.shaderInt64
 		&& dyn.dynamicRendering
 		&& bda.bufferDeviceAddress
 		&& accel.accelerationStructure
@@ -1288,37 +1312,19 @@ void VulkanMain::createPerImageSync()
 	} // end for
 } // end of createPerImageSync()
 
-void VulkanMain::flushRetiredResources()
+void VulkanMain::flushRetiredResources(uint32_t frameIndex)
 {
-	if (device_)
-	{
-		waitIdle();
-	}
-
-	// clean pending async uploads
-	for (auto& upload : pendingUploads_)
-	{
-		if (upload.cmd)
-		{
-			device_->freeCommandBuffers(commandPool_.get(), 1, &upload.cmd);
-		}
-
-		if (upload.fence)
-		{
-			device_->destroyFence(upload.fence);
-		}
-
-		upload.stagingBuffers.clear();
-	} // end for
-	pendingUploads_.clear();
-
-	for (auto& retired : retiredChunkBuffers_)
-	{
-		retired.clear();
-	} // end for
-
-	for (auto& retired : retiredAS_)
-	{
-		retired.clear();
-	} // end for
+	retired_[frameIndex].buffers.clear();
+	retired_[frameIndex].images.clear();
+	retired_[frameIndex].accelStructures.clear();
 } // end of flushRetiredResources()
+
+void VulkanMain::flushAllRetiredResources()
+{
+	for (auto& retired : retired_)
+	{
+		retired.buffers.clear();
+		retired.images.clear();
+		retired.accelStructures.clear();
+	} // end for
+} // end of flushAllRetiredResources()

@@ -19,15 +19,20 @@ public:
 	~PresentPassVk();
 
 	void init();
-
-	void setInput(ImageVk& input);
+	void resize();
 
 	void render(
 		FrameContext& frame
 	);
 
+	void setInput(ImageVk& input)
+	{
+		inputImage_ = &input;
+		refreshInput();
+	} // end of setInput()
+
 private:
-	void refreshInput(FrameContext& frame);
+	void refreshInput();
 	void createDescriptorSets();
 	void createPipeline();
 private:
