@@ -253,7 +253,7 @@ namespace RT_Chunk_Constants
 
 	struct MissUBO
 	{
-
+		glm::vec4 u_mix; // .x = mix constant
 	};
 
 	struct ClosestHitUBO

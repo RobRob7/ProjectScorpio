@@ -35,20 +35,20 @@ layout(buffer_reference, scalar) readonly buffer IndexBufferRef
     uint indices[];
 };
 
-layout(set = 1, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 2, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
-layout(set = 1, binding = 1, scalar) readonly buffer ChunkInfoBuffer
+layout(set = 2, binding = 1, scalar) readonly buffer ChunkInfoBuffer
 {
     RTChunkInfo chunkInfos[];
 };
 
-layout(set = 1, binding = 2) uniform UBO
+layout(set = 2, binding = 2) uniform UBO
 {
     vec4 u_lightDir;
     vec4 u_lightColor;
 } ubo;
 
-layout(set = 1, binding = 3) uniform sampler2D u_atlasTex;
+layout(set = 2, binding = 3) uniform sampler2D u_atlasTex;
 
 // ------------------------------------------------------------
 // Constants

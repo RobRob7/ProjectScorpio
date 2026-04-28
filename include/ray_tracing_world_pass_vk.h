@@ -8,6 +8,7 @@
 #include "buffer_vk.h"
 #include "image_vk.h"
 #include "texture_2d_vk.h"
+#include "texture_cubemap_vk.h"
 #include "shader_binding_table_vk.h"
 #include "descriptor_set_vk.h"
 #include "ray_tracing_pipeline_vk.h"
@@ -52,7 +53,14 @@ public:
 		const RenderInputs& in, 
 		const FrameContext& frame,
 		const glm::mat4& view,
-		const glm::mat4& proj
+		const glm::mat4& proj,
+		const glm::vec3& sunDir
+	);
+
+	void setSkybox(
+		uint32_t frameIndex,
+		const TextureCubemapVk& nightTex,
+		const TextureCubemapVk& dayTex
 	);
 
 	void updateDescriptorSet(uint32_t frameIndex);
@@ -133,6 +141,8 @@ private:
 	// UBOs
 	std::vector<BufferVk> rayGenUBOs_;
 	RT_Chunk_Constants::RayGenUBO rayGenData_{};
+	std::vector<BufferVk> missUBOs_;
+	RT_Chunk_Constants::MissUBO missData_{};
 	std::vector<BufferVk> closestHitUBOs_;
 	RT_Chunk_Constants::ClosestHitUBO closestHitData_{};
 

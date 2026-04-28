@@ -48,6 +48,9 @@ public:
 		const float time
 	);
 
+	const TextureCubemapVk& getNightTexture() const { return cubemapTextureNight_; }
+	const TextureCubemapVk& getDayTexture() const { return cubemapTextureDay_; }
+
 private:
 	void createVertexBuffer();
 	void createUBO();

@@ -7,10 +7,10 @@
 
 class VulkanMain;
 class Camera;
-class ICubemap;
+class CubemapVk;
 class CrosshairVk;
 class ChunkManager;
-class ILight;
+class LightVk;
 
 class UI;
 class IRenderer;
@@ -60,10 +60,10 @@ private:
 
 	// objects
 	std::unique_ptr<Camera> camera_;
-	std::unique_ptr<ICubemap> skybox_;
+	std::unique_ptr<CubemapVk> skybox_;
 	std::unique_ptr<CrosshairVk> crosshair_;
 	std::unique_ptr<ChunkManager> world_;
-	std::unique_ptr<ILight> light_;
+	std::unique_ptr<LightVk> light_;
 };
 
 #endif

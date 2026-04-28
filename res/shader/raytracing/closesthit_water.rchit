@@ -35,14 +35,14 @@ layout(buffer_reference, scalar) readonly buffer IndexBufferRef
     uint indices[];
 };
 
-layout(set = 2, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 3, binding = 0) uniform accelerationStructureEXT topLevelAS;
 
-layout(set = 2, binding = 1, scalar) readonly buffer ChunkInfoBuffer
+layout(set = 3, binding = 1, scalar) readonly buffer ChunkInfoBuffer
 {
     RTChunkInfo chunkInfos[];
 };
 
-layout(set = 2, binding = 2) uniform UBO
+layout(set = 3, binding = 2) uniform UBO
 {
     vec4 u_lightDir;
     vec4 u_lightColor;
@@ -50,8 +50,8 @@ layout(set = 2, binding = 2) uniform UBO
     float u_time;
 } ubo;
 
-layout(set = 2, binding = 3) uniform sampler2D u_dudvTex;
-layout(set = 2, binding = 4) uniform sampler2D u_normalTex;
+layout(set = 3, binding = 3) uniform sampler2D u_dudvTex;
+layout(set = 3, binding = 4) uniform sampler2D u_normalTex;
 
 void main()
 {
@@ -154,23 +154,47 @@ void main()
     // --------------------
     // Fresnel
     // --------------------
-    float ndv = clamp(dot(waterNormal, viewDir), 0.0, 1.0);
+    // Detect which side of the water surface the ray is coming from
+    bool underwaterView = dot(I, baseNormal) > 0.0;
+
+    // Use the correct normal and IOR depending on side
+    vec3 Nuse = waterNormal;
+    float eta = 1.0 / 1.333; // air -> water
+
+    if (underwaterView)
+    {
+        Nuse = -waterNormal;
+        eta = 1.333 / 1.0; // water -> air
+    }
+
+    // Fresnel
+    float ndv = clamp(abs(dot(Nuse, viewDir)), 0.0, 1.0);
     float fresnel = pow(1.0 - ndv, 5.0);
-    fresnel = mix(0.2, 0.98, fresnel);
+
+    if (underwaterView)
+    {
+        fresnel = mix(0.45, 1.0, fresnel);
+    }
+    else
+    {
+        fresnel = mix(0.2, 0.98, fresnel);
+    }
 
 
     // --------------------
     // Refraction ray
     // --------------------
-    float eta = 1.0 / 1.333;
-    vec3 refractDir = refract(I, N, eta);
+    vec3 refractDir = refract(I, Nuse, eta);
 
     if (length(refractDir) < 0.001)
     {
         refractDir = I;
     }
 
-    vec3 refractOrigin = worldHitPos - N * 0.05;
+    // opposite side of surface
+    vec3 refractOrigin = underwaterView
+        ? worldHitPos + Nuse * 0.05
+        : worldHitPos - Nuse * 0.05;
 
     payload.rayType = 2;
     payload.color = vec3(0.0, 0.18, 0.35);
@@ -194,8 +218,9 @@ void main()
     // --------------------
     // Reflection ray
     // --------------------
-    vec3 reflectDir = reflect(I, N);
-    vec3 reflectOrigin = worldHitPos + N * 0.05;
+    vec3 flatN = normalize(mix(Nuse, vec3(0.0, sign(Nuse.y), 0.0), 0.9));
+    vec3 reflectDir = reflect(I, flatN);
+    vec3 reflectOrigin = worldHitPos + Nuse * 0.05;
 
     payload.rayType = 3;
     payload.color = vec3(0.35, 0.55, 0.75); // sky fallback if miss shader does not set it
@@ -222,9 +247,9 @@ void main()
     ////////
 
     vec3 lightDir = normalize(-ubo.u_lightDir.xyz);
-    float ndotl = max(dot(waterNormal, lightDir), 0.0);
+    float ndotl = max(dot(Nuse, lightDir), 0.0);
 
-    vec3 shadowOrigin = worldHitPos + waterNormal * 0.03;
+    vec3 shadowOrigin = worldHitPos + Nuse * 0.03;
     ///////////
 
     payload.shadowed = 0;
@@ -254,7 +279,7 @@ void main()
 
 
     vec3 halfDir = normalize(lightDir + viewDir);
-    float spec = pow(max(dot(N, halfDir), 0.0), 96.0);
+    float spec = pow(max(dot(Nuse, halfDir), 0.0), 96.0);
 
     vec3 ambient = waterTint * 0.08;
     vec3 diffuse = waterTint * ubo.u_lightColor.rgb * ndotl * 0.18 * shadow;

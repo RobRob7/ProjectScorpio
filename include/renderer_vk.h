@@ -13,8 +13,6 @@
 
 class VulkanMain;
 class Camera;
-class ILight;
-class ICubemap;
 struct RenderInputs;
 struct RenderSettings;
 struct FrameContext;
@@ -57,11 +55,6 @@ public:
 	RenderSettings& settings() override { return *renderSettings_; }
 
 private:
-	void renderRT(
-		const RenderInputs& in,
-		FrameContext& frame,
-		UI* ui
-	);
 	void createSceneAttachments();
 private:
 	int width_{};

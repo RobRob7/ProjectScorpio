@@ -29,7 +29,7 @@ struct RenderSettings
 	bool enableVsync = true;
 
 	// graphics options
-	bool useRT = true;
+	bool useRT = false;
 
 	bool useShadowMap = true;
 	bool useSSAO = true;

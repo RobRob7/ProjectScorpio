@@ -142,10 +142,20 @@ void main()
     vec2 refrTexCoords = uv + distortion * refrDist;
     refrTexCoords = clamp(refrTexCoords, 0.0, 1.0);
 
-    float reflDist = 0.35;
+    /*float reflDist = 0.35;
     vec2 reflDistortion = vec2(distortion.x, -distortion.y);
     vec2 reflTexCoords = vec2(uv.x, 1.0 - uv.y) + reflDistortion * reflDist;
-    reflTexCoords = clamp(reflTexCoords, 0.0, 1.0);
+    reflTexCoords = clamp(reflTexCoords, 0.0, 1.0);*/
+
+    float reflDist = mix(1.4, 0.35, ndv);
+
+    vec2 normalDistortion = N.xz * ((u_distortStrength / u_screenSize) * waveBoost);
+
+    vec2 reflTexCoords =
+        vec2(uv.x, 1.0 - uv.y) +
+        vec2(normalDistortion.x, -normalDistortion.y) * reflDist;
+
+    reflTexCoords = clamp(reflTexCoords, 0.001, 0.999);
 
     // refr, refl
     vec3 refraction = texture(u_waterRefrColorTex, refrTexCoords).rgb;

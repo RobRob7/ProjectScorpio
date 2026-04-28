@@ -15,6 +15,7 @@
 #include "camera.h"
 #include "i_light.h"
 #include "i_cubemap.h"
+#include "cubemap_vk.h"
 #include "i_crosshair.h"
 #include "chunk_manager.h"
 #include "ui.h"
@@ -182,16 +183,6 @@ void RendererVk::renderFrame(
 		resize(frame.extent.width, frame.extent.height);
 	}
 
-	if (renderSettings_->useRT)
-	{
-		renderRT(
-			in,
-			frame,
-			ui
-		);
-		return;
-	}
-
 	const glm::mat4 view = in.camera->getViewMatrix();
 	const float aspect = (height_ > 0)
 		? (static_cast<float>(width_) / static_cast<float>(height_))
@@ -208,45 +199,21 @@ void RendererVk::renderFrame(
 	in.world->updateDynamic(in.camera->getCameraPosition());
 	in.world->buildRTDrawList(view, proj);
 
-	// upload RT chunk data
-	rtWorldPass_->upload(
-		cmd,
-		in.world->getOpaqueDrawList(),
-		view,
-		proj,
-		frame.frameIndex
-	);
-
-	//// 2) Render RT opaque world into RT output image
-	//VkUtils::TransitionImageLayout(
-	//	cmd,
-	//	rtChunkPass_->getOutColorImage().image(),
-	//	vk::ImageAspectFlagBits::eColor,
-	//	rtChunkPass_->getOutColorLayout(),
-	//	vk::ImageLayout::eGeneral,
-	//	1,
-	//	1
-	//);
-	//VkUtils::TransitionImageLayout(
-	//	cmd,
-	//	rtChunkPass_->getOutDepthImage().image(),
-	//	vk::ImageAspectFlagBits::eColor,
-	//	rtChunkPass_->getOutDepthLayout(),
-	//	vk::ImageLayout::eGeneral,
-	//	1,
-	//	1
-	//);
-
-	rtWorldPass_->render(
-		in,
-		frame,
-		view,
-		proj
-	);
-
 	// ----------------- PASSES ----------------- //
+	// RT upload
+	if (renderSettings_->useRT && rtWorldPass_)
+	{
+		rtWorldPass_->upload(
+			cmd,
+			in.world->getRTDrawList(),
+			view,
+			proj,
+			frame.frameIndex
+		);
+	}
+
 	// gbuffer pass
-	if (gbufferPass_)
+	if (!renderSettings_->useRT && gbufferPass_)
 	{
 		gbufferPass_->render(
 			*chunkPass_, 
@@ -258,7 +225,7 @@ void RendererVk::renderFrame(
 	}
 
 	// shadow map pass
-	if (shadowMapPass_)
+	if (!renderSettings_->useRT && shadowMapPass_)
 	{
 		shadowMapPass_->render(
 			*chunkPass_,
@@ -267,18 +234,27 @@ void RendererVk::renderFrame(
 		);
 	}
 
+	// ssao pass
+	if (!renderSettings_->useRT && renderSettings_->useSSAO)
+	{
+		ssaoPass_->renderOffscreen(frame, proj);
+	}
+
+	// water refl + refr pass
+	if (!renderSettings_->useRT && waterPass_)
+	{
+		waterPass_->renderOffscreen(
+			*renderSettings_,
+			frame,
+			*chunkPass_,
+			in,
+			shadowMapPass_->getLightSpaceMatrix()
+		);
+	}
+
 	// debug pass
 	if (renderSettings_->debugMode != DebugMode::None)
 	{
-		//VkUtils::TransitionImageLayout(
-		//	cmd,
-		//	rtChunkPass_->getOutDepthImage().image(),
-		//	vk::ImageAspectFlagBits::eColor,
-		//	rtChunkPass_->getOutDepthLayout(),
-		//	vk::ImageLayout::eShaderReadOnlyOptimal,
-		//	1,
-		//	1
-		//);
 		debugPass_->render(
 			frame,
 			in.camera->getNearPlane(),
@@ -294,24 +270,6 @@ void RendererVk::renderFrame(
 		// present
 		vk_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
 		return;
-	}
-
-	// ssao pass
-	if (renderSettings_->useSSAO)
-	{
-		ssaoPass_->renderOffscreen(frame, proj);
-	}
-
-	// water refl + refr pass
-	if (waterPass_)
-	{
-		waterPass_->renderOffscreen(
-			*renderSettings_,
-			frame,
-			*chunkPass_,
-			in,
-			shadowMapPass_->getLightSpaceMatrix()
-		);
 	}
 	// --------------- END PASSES --------------- //
 
@@ -348,7 +306,7 @@ void RendererVk::renderFrame(
 	vk::RenderingAttachmentInfo colorAttach{};
 	colorAttach.imageView = sceneColor_.view();
 	colorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-	colorAttach.loadOp = vk::AttachmentLoadOp::eLoad;
+	colorAttach.loadOp = vk::AttachmentLoadOp::eClear;
 	colorAttach.storeOp = vk::AttachmentStoreOp::eStore;
 	colorAttach.clearValue = clear;
 
@@ -383,19 +341,19 @@ void RendererVk::renderFrame(
 		scissor.extent = frame.extent;
 		cmd.setScissor(0, 1, &scissor);
 
-		//if (chunkPass_)
-		//{
-		//	chunkPass_->renderOpaque(
-		//		RenderTargetVk::Default,
-		//		in,
-		//		frame, 
-		//		view, 
-		//		proj, 
-		//		shadowMapPass_->getLightSpaceMatrix()
-		//	);
-		//}
+		if (chunkPass_ && !renderSettings_->useRT)
+		{
+			chunkPass_->renderOpaque(
+				RenderTargetVk::Default,
+				in,
+				frame,
+				view,
+				proj,
+				shadowMapPass_->getLightSpaceMatrix()
+			);
+		}
 
-		if (waterPass_)
+		if (waterPass_ && !renderSettings_->useRT)
 		{
 			waterPass_->renderWater(
 				*renderSettings_,
@@ -410,7 +368,7 @@ void RendererVk::renderFrame(
 		}
 
 		if (in.skybox) in.skybox->render(
-			&frame, 
+			&frame,
 			view,
 			proj,
 			in.light->getDirection(),
@@ -418,6 +376,24 @@ void RendererVk::renderFrame(
 		);
 	}
 	cmd.endRendering();
+
+	// RT render
+	if (renderSettings_->useRT)
+	{
+		CubemapVk* skybox = dynamic_cast<CubemapVk*>(in.skybox);
+		rtWorldPass_->setSkybox(
+			frame.frameIndex,
+			skybox->getNightTexture(),
+			skybox->getDayTexture()
+		);
+		rtWorldPass_->render(
+			in,
+			frame,
+			view,
+			proj,
+			in.light->getDirection()
+		);
+	}
 	// --------------- END FORWARD RENDER --------------- //
 
 	// scene color transition to shader read
@@ -441,42 +417,60 @@ void RendererVk::renderFrame(
 		1
 	);
 
-	// RT color transition to shader read
-	VkUtils::TransitionImageLayout(
-		cmd,
-		rtWorldPass_->getOutColorImage().image(),
-		vk::ImageAspectFlagBits::eColor,
-		rtWorldPass_->getOutColorLayout(),
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-	// RT depth transition to shader read
-	VkUtils::TransitionImageLayout(
-		cmd,
-		rtWorldPass_->getOutDepthImage().image(),
-		vk::ImageAspectFlagBits::eColor,
-		rtWorldPass_->getOutDepthLayout(),
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
+	if (renderSettings_->useRT)
+	{
+		// RT color transition to shader read
+		VkUtils::TransitionImageLayout(
+			cmd,
+			rtWorldPass_->getOutColorImage().image(),
+			vk::ImageAspectFlagBits::eColor,
+			rtWorldPass_->getOutColorLayout(),
+			vk::ImageLayout::eShaderReadOnlyOptimal,
+			1,
+			1
+		);
+		// RT depth transition to shader read
+		VkUtils::TransitionImageLayout(
+			cmd,
+			rtWorldPass_->getOutDepthImage().image(),
+			vk::ImageAspectFlagBits::eColor,
+			rtWorldPass_->getOutDepthLayout(),
+			vk::ImageLayout::eShaderReadOnlyOptimal,
+			1,
+			1
+		);
+	}
 
 	// ----------------- COMPOSITE PASS ----------------- //
-	compositePass_->setInput(
-		{ sceneColor_, sceneDepth_ },
-		{ rtWorldPass_->getOutColorImage(), rtWorldPass_->getOutDepthImage() }
-	);
-	compositePass_->render(
-		frame,
-		in.camera->getNearPlane(),
-		in.camera->getFarPlane()
-	);
+	if (renderSettings_->useRT)
+	{
+		compositePass_->setInput(
+			{ sceneColor_, sceneDepth_ },
+			{ rtWorldPass_->getOutColorImage(), rtWorldPass_->getOutDepthImage() }
+		);
+		compositePass_->render(
+			frame,
+			in.camera->getNearPlane(),
+			in.camera->getFarPlane()
+		);
+	}
 	// --------------- END COMPOSITE PASS --------------- //
 
+
 	// ----------------- POST-PROCESSING ----------------- //
-	ImageVk* postColor = &compositePass_->getOutColorImage();
-	ImageVk* postDepth = &sceneDepth_;
+	ImageVk* postColor = nullptr;
+	ImageVk* postDepth = nullptr;
+	if (renderSettings_->useRT)
+	{
+		postColor = &compositePass_->getOutColorImage();
+		postDepth = &sceneDepth_;
+	}
+	else
+	{
+		postColor = &sceneColor_;
+		postDepth = &sceneDepth_;
+	}
+
 	// FOG
 	if (renderSettings_->useFog)
 	{
@@ -551,273 +545,6 @@ void RendererVk::renderFrame(
 
 
 //--- PRIVATE ---//
-void RendererVk::renderRT(
-	const RenderInputs& in,
-	FrameContext& frame,
-	UI* ui
-)
-{
-	const glm::mat4 view = in.camera->getViewMatrix();
-	const float aspect = (height_ > 0)
-		? (static_cast<float>(width_) / static_cast<float>(height_))
-		: 1.0f;
-	glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
-	proj[1][1] *= -1.0f;
-
-	vk::CommandBuffer cmd = frame.cmd;
-
-	// update light direction
-	in.light->updateLightDirection(in.time);
-
-	// update world state
-	in.world->updateDynamic(in.camera->getCameraPosition());
-	in.world->buildRTDrawList(view, proj);
-
-	// upload RT chunk data
-	rtWorldPass_->upload(
-		cmd,
-		in.world->getRTDrawList(),
-		view,
-		proj,
-		frame.frameIndex
-	);
-
-	// render RT chunk data
-	rtWorldPass_->render(
-		in,
-		frame,
-		view,
-		proj
-	);
-
-
-	VkUtils::TransitionImageLayout(
-		cmd,
-		rtWorldPass_->getOutColorImage().image(),
-		vk::ImageAspectFlagBits::eColor,
-		rtWorldPass_->getOutColorLayout(),
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-
-	VkUtils::TransitionImageLayout(
-		cmd,
-		rtWorldPass_->getOutDepthImage().image(),
-		vk::ImageAspectFlagBits::eColor,
-		rtWorldPass_->getOutDepthLayout(),
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-
-	// ----------------- FORWARD RENDER ----------------- //
-// scene color transition to attachment
-	VkUtils::TransitionImageLayout(
-		cmd,
-		sceneColor_.image(),
-		vk::ImageAspectFlagBits::eColor,
-		sceneColorLayout_,
-		vk::ImageLayout::eColorAttachmentOptimal,
-		1,
-		1
-	);
-
-	// scene depth transition to attachment
-	VkUtils::TransitionImageLayout(
-		cmd,
-		sceneDepth_.image(),
-		vk::ImageAspectFlagBits::eDepth,
-		sceneDepthLayout_,
-		vk::ImageLayout::eDepthAttachmentOptimal,
-		1,
-		1
-	);
-
-	vk::ClearValue clear{};
-	clear.color.float32[0] = 0.0f;
-	clear.color.float32[1] = 0.0f;
-	clear.color.float32[2] = 0.0f;
-	clear.color.float32[3] = 1.0f;
-
-	vk::RenderingAttachmentInfo colorAttach{};
-	colorAttach.imageView = sceneColor_.view();
-	colorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-	colorAttach.loadOp = vk::AttachmentLoadOp::eLoad;
-	colorAttach.storeOp = vk::AttachmentStoreOp::eStore;
-	colorAttach.clearValue = clear;
-
-	vk::RenderingAttachmentInfo depthAttach{};
-	depthAttach.imageView = sceneDepth_.view();
-	depthAttach.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
-	depthAttach.loadOp = vk::AttachmentLoadOp::eClear;
-	depthAttach.storeOp = vk::AttachmentStoreOp::eStore;
-	depthAttach.clearValue.depthStencil = vk::ClearDepthStencilValue{ 1.0f, 0 };
-
-	vk::RenderingInfo renderingInfo{};
-	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = frame.extent;
-	renderingInfo.layerCount = 1;
-	renderingInfo.colorAttachmentCount = 1;
-	renderingInfo.pColorAttachments = &colorAttach;
-	renderingInfo.pDepthAttachment = &depthAttach;
-
-	cmd.beginRendering(renderingInfo);
-	{
-		vk::Viewport viewport{};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(frame.extent.width);
-		viewport.height = static_cast<float>(frame.extent.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-		cmd.setViewport(0, 1, &viewport);
-
-		vk::Rect2D scissor{};
-		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = frame.extent;
-		cmd.setScissor(0, 1, &scissor);
-
-		if (in.skybox) in.skybox->render(
-			&frame,
-			view,
-			proj,
-			in.light->getDirection(),
-			in.time
-		);
-	}
-	cmd.endRendering();
-	// --------------- END FORWARD RENDER --------------- //
-	
-	// scene color transition to shader read
-	VkUtils::TransitionImageLayout(
-		cmd,
-		sceneColor_.image(),
-		vk::ImageAspectFlagBits::eColor,
-		sceneColorLayout_,
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-	// scene depth transition to shader read
-	VkUtils::TransitionImageLayout(
-		cmd,
-		sceneDepth_.image(),
-		vk::ImageAspectFlagBits::eDepth,
-		sceneDepthLayout_,
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-
-	// RT color transition to shader read
-	VkUtils::TransitionImageLayout(
-		cmd,
-		rtWorldPass_->getOutColorImage().image(),
-		vk::ImageAspectFlagBits::eColor,
-		rtWorldPass_->getOutColorLayout(),
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-	// RT depth transition to shader read
-	VkUtils::TransitionImageLayout(
-		cmd,
-		rtWorldPass_->getOutDepthImage().image(),
-		vk::ImageAspectFlagBits::eColor,
-		rtWorldPass_->getOutDepthLayout(),
-		vk::ImageLayout::eShaderReadOnlyOptimal,
-		1,
-		1
-	);
-
-	// ----------------- COMPOSITE PASS ----------------- //
-	compositePass_->setInput(
-		{ sceneColor_, sceneDepth_ },
-		{ rtWorldPass_->getOutColorImage(), rtWorldPass_->getOutDepthImage() }
-	);
-	compositePass_->render(
-		frame,
-		in.camera->getNearPlane(),
-		in.camera->getFarPlane()
-	);
-	// --------------- END COMPOSITE PASS --------------- //
-
-	// ----------------- POST-PROCESSING ----------------- //
-	ImageVk* postColor = &compositePass_->getOutColorImage();
-	ImageVk* postDepth = &rtWorldPass_->getOutDepthImage();
-	// FOG
-	if (renderSettings_->useFog)
-	{
-		fogPass_->setInput(*postColor, *postDepth);
-		fogPass_->render(
-			frame,
-			in.camera->getNearPlane(),
-			in.camera->getFarPlane(),
-			in.world->getAmbientStrength()
-		);
-		postColor = &fogPass_->getOutputImage();
-	}
-
-	// FXAA
-	if (renderSettings_->useFXAA)
-	{
-		fxaaPass_->setInput(*postColor);
-		fxaaPass_->render(frame);
-		postColor = &fxaaPass_->getOutputImage();
-	}
-	// --------------- END POST-PROCESSING --------------- //
-
-
-	// swap swapchain color image to color attachment
-	VkUtils::TransitionImageLayout(
-		cmd,
-		frame.colorImage,
-		vk::ImageAspectFlagBits::eColor,
-		frame.colorLayout,
-		vk::ImageLayout::eColorAttachmentOptimal,
-		1,
-		1
-	);
-
-
-	// ----------------- PRESENT PASS ----------------- //
-	if (presentPass_)
-	{
-		presentPass_->setInput(*postColor);
-		presentPass_->render(frame);
-	}
-	// --------------- END PRESENT PASS --------------- //
-
-
-	// ----------------- UI ELEMENTS ----------------- //
-	// CROSSHAIR RENDER
-	if (in.crosshair)
-	{
-		in.crosshair->render(&frame);
-	}
-
-	// UI RENDER
-	if (ui)
-	{
-		ui->renderVk(frame);
-	}
-	// --------------- END UI ELEMENTS --------------- //
-
-
-	// PRESENT TO SCREEN
-	VkUtils::TransitionImageLayout(
-		cmd,
-		frame.colorImage,
-		vk::ImageAspectFlagBits::eColor,
-		frame.colorLayout,
-		vk::ImageLayout::ePresentSrcKHR,
-		1,
-		1
-	);
-	vk_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
-} // end of renderRT()
-
 void RendererVk::createSceneAttachments()
 {
 	// SCENE COLOR

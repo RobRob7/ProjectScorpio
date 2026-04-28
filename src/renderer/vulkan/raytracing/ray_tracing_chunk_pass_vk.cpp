@@ -37,6 +37,7 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 	packedRTWaterInfoBuffer_(vk)
 {
 	rayGenUBOs_.reserve(vk_.getMaxFramesInFlight());
+	missUBOs_.reserve(vk_.getMaxFramesInFlight());
 	closestHitUBOs_.reserve(vk_.getMaxFramesInFlight());
 
 	rayGenDescriptorSets_.reserve(vk_.getMaxFramesInFlight());
@@ -47,6 +48,7 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
 	{
 		rayGenUBOs_.emplace_back(vk_);
+		missUBOs_.emplace_back(vk_);
 		closestHitUBOs_.emplace_back(vk_);
 
 		rayGenDescriptorSets_.emplace_back(vk_);
@@ -219,7 +221,8 @@ void RayTracingWorldPassVk::render(
 	const RenderInputs& in,
 	const FrameContext& frame,
 	const glm::mat4& view,
-	const glm::mat4& proj
+	const glm::mat4& proj,
+	const glm::vec3& sunDir
 )
 {
 	if (!valid())
@@ -256,6 +259,7 @@ void RayTracingWorldPassVk::render(
 
 	std::vector<vk::DescriptorSet> sets = {
 		rayGenDescriptorSets_[frame.frameIndex].getSet(),
+		missDescriptorSets_[frame.frameIndex].getSet(),
 		closestHitOpaqueDescriptorSets_[frame.frameIndex].getSet(),
 		closestHitWaterDescriptorSets_[frame.frameIndex].getSet(),
 	};
@@ -283,6 +287,14 @@ void RayTracingWorldPassVk::render(
 	rayGenData_.u_proj = proj;
 	rayGenData_.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
 	rayGenUBOs_[frame.frameIndex].upload(&rayGenData_, sizeof(rayGenData_));
+
+	missData_.u_mix = glm::vec4(
+			glm::clamp((sunDir.y + 0.15f) / 0.30f, 0.0f, 1.0f),
+			0.0f,
+			0.0f,
+			0.0f
+		);
+	missUBOs_[frame.frameIndex].upload(&missData_, sizeof(missData_));
 
 	closestHitData_.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f);
 	closestHitData_.u_lightColor = glm::vec4(in.light->getColor(), 0.0f);
@@ -343,6 +355,25 @@ void RayTracingWorldPassVk::render(
 	outDepthLayout_ = vk::ImageLayout::eGeneral;
 } // end of render()
 
+void RayTracingWorldPassVk::setSkybox(
+	uint32_t frameIndex,
+	const TextureCubemapVk& nightTex,
+	const TextureCubemapVk& dayTex
+)
+{
+	missDescriptorSets_[frameIndex].writeCombinedImageSampler(
+		TO_API_FORM(RTChunkMissBinding::NightSkyboxTex),
+		nightTex.view(),
+		nightTex.sampler()
+	);
+
+	missDescriptorSets_[frameIndex].writeCombinedImageSampler(
+		TO_API_FORM(RTChunkMissBinding::DaySkyboxTex),
+		dayTex.view(),
+		dayTex.sampler()
+	);
+} // end of setSkybox()
+
 void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
 	// RAYGEN SET
@@ -385,11 +416,20 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 
 	// MISS SET
 	{
-		//DescriptorSetVk& set = missDescriptorSets_[frameIndex];
-		//if (!set.valid())
-		//{
-		//	return;
-		//}
+		DescriptorSetVk& set = missDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (missUBOs_[frameIndex].getBuffer())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(RTChunkMissBinding::UBO),
+				missUBOs_[frameIndex].getBuffer(),
+				sizeof(MissUBO)
+			);
+		}
 	}
 
 	// CLOSEST HIT SET (OPAQUE)
@@ -565,6 +605,13 @@ void RayTracingWorldPassVk::createResources()
 			vk::MemoryPropertyFlagBits::eHostCoherent
 		);
 
+		missUBOs_[i].create(
+			sizeof(MissUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible |
+			vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+	
 		closestHitUBOs_[i].create(
 			sizeof(ClosestHitUBO),
 			vk::BufferUsageFlagBits::eUniformBuffer,
@@ -638,10 +685,48 @@ void RayTracingWorldPassVk::createDescriptorSet()
 
 		// MISS DS + POOL
 		{
-			//missDescriptorSets_[i].createLayout({});
+			vk::DescriptorSetLayoutBinding uboBinding{};
+			uboBinding.binding = TO_API_FORM(RTChunkMissBinding::UBO);
+			uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+			uboBinding.descriptorCount = 1;
+			uboBinding.stageFlags = vk::ShaderStageFlagBits::eMissKHR;
 
-			//missDescriptorSets_[i].createPool({});
-			//missDescriptorSets_[i].allocate();
+			vk::DescriptorSetLayoutBinding nightTexBinding{};
+			nightTexBinding.binding = TO_API_FORM(RTChunkMissBinding::NightSkyboxTex);
+			nightTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+			nightTexBinding.descriptorCount = 1;
+			nightTexBinding.stageFlags = vk::ShaderStageFlagBits::eMissKHR;
+			
+			vk::DescriptorSetLayoutBinding dayTexBinding{};
+			dayTexBinding.binding = TO_API_FORM(RTChunkMissBinding::DaySkyboxTex);
+			dayTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+			dayTexBinding.descriptorCount = 1;
+			dayTexBinding.stageFlags = vk::ShaderStageFlagBits::eMissKHR;
+
+			missDescriptorSets_[i].createLayout({
+				uboBinding,
+				nightTexBinding,
+				dayTexBinding
+			});
+
+			vk::DescriptorPoolSize uboPool;
+			uboPool.type = vk::DescriptorType::eUniformBuffer;
+			uboPool.descriptorCount = 1;
+
+			vk::DescriptorPoolSize nightTexPool;
+			nightTexPool.type = vk::DescriptorType::eCombinedImageSampler;
+			nightTexPool.descriptorCount = 1;
+
+			vk::DescriptorPoolSize dayTexPool;
+			dayTexPool.type = vk::DescriptorType::eCombinedImageSampler;
+			dayTexPool.descriptorCount = 1;
+
+			missDescriptorSets_[i].createPool({
+				uboPool,
+				nightTexPool,
+				dayTexPool
+			});
+			missDescriptorSets_[i].allocate();
 		}
 
 		// CLOSEST HIT DS + POOL (OPAQUE)
@@ -787,8 +872,9 @@ void RayTracingWorldPassVk::createPipeline()
 	desc.setLayouts =
 	{
 		{0, rayGenDescriptorSets_[0].getLayout()},
-		{1, closestHitOpaqueDescriptorSets_[0].getLayout()},
-		{2, closestHitWaterDescriptorSets_[0].getLayout()}
+		{1, missDescriptorSets_[0].getLayout()},
+		{2, closestHitOpaqueDescriptorSets_[0].getLayout()},
+		{3, closestHitWaterDescriptorSets_[0].getLayout()}
 	};
 
 	desc.maxRecursionDepth = 3;

@@ -18,7 +18,9 @@ enum class RTChunkRayGenBinding : uint32_t
 };
 enum class RTChunkMissBinding : uint32_t
 {
-    
+    UBO = 0,
+    NightSkyboxTex = 1,
+    DaySkyboxTex = 2,
 };
 enum class RTOpaqueClosestHitBinding : uint32_t
 {
