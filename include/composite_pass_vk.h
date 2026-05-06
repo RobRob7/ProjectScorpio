@@ -42,6 +42,8 @@ public:
 
 	const ImageVk& getOutColorImage() const { return hybridColorImage_; }
 	ImageVk& getOutColorImage() { return hybridColorImage_; }
+	const ImageVk& getOutDepthImage() const { return hybridDepthImage_; }
+	ImageVk& getOutDepthImage() { return hybridDepthImage_; }
 
 private:
 	void refreshInput();
@@ -59,6 +61,9 @@ private:
 
 	ImageVk hybridColorImage_;
 	vk::Format hybridColorFormat_{ vk::Format::eR16G16B16A16Sfloat };
+
+	ImageVk hybridDepthImage_;
+	vk::Format hybridDepthFormat_{ vk::Format::eD32Sfloat };
 
 	std::unique_ptr<ShaderModuleVk> shader_;
 

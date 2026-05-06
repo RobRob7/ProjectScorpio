@@ -1,8 +1,8 @@
 #version 460 core
 
-layout (location = 0) in vec2 vUV;
+layout(location = 0) in vec2 vUV;
 
-layout (std140, set = 0, binding = 0) uniform UBO
+layout(std140, set = 0, binding = 0) uniform UBO
 {
     float u_near;
     float u_far;
@@ -17,8 +17,8 @@ layout (std140, set = 0, binding = 0) uniform UBO
     float _pad2;
 };
 
-layout (binding = 1) uniform sampler2D u_forwardColorTex;
-layout (binding = 2) uniform sampler2D u_forwardDepthTex;
+layout(binding = 1) uniform sampler2D u_forwardColorTex;
+layout(binding = 2) uniform sampler2D u_forwardDepthTex;
 
 layout (location = 0) out vec4 FragColor;
 

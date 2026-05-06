@@ -15,6 +15,7 @@
 CompositePassVk::CompositePassVk(VulkanMain& vk)
     : vk_(vk),
     hybridColorImage_(vk),
+    hybridDepthImage_(vk),
     pipeline_(vk)
 {
     descriptorSets_.reserve(vk.getMaxFramesInFlight());
@@ -42,6 +43,7 @@ void CompositePassVk::init()
 void CompositePassVk::resize()
 {
     hybridColorImage_.destroy();
+    hybridDepthImage_.destroy();
     createAttachment();
     refreshInput();
 } // end of resize()
@@ -60,19 +62,25 @@ void CompositePassVk::render(
     vk::CommandBuffer cmd = frame.cmd;
 
     hybridColorImage_.transitionToColorAttachment(cmd);
+    hybridDepthImage_.transitionToDepthAttachment(cmd);
 
-    vk::ClearValue clear{};
-    clear.color.float32[0] = 0.0f;
-    clear.color.float32[1] = 0.0f;
-    clear.color.float32[2] = 0.0f;
-    clear.color.float32[3] = 1.0f;
+    vk::ClearValue colorClear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
     vk::RenderingAttachmentInfo colorAttach{};
     colorAttach.imageView = hybridColorImage_.view();
     colorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-    colorAttach.loadOp = vk::AttachmentLoadOp::eDontCare;
+    colorAttach.loadOp = vk::AttachmentLoadOp::eClear;
     colorAttach.storeOp = vk::AttachmentStoreOp::eStore;
-    colorAttach.clearValue = clear;
+    colorAttach.clearValue = colorClear;
+
+    vk::ClearValue depthClear{ vk::ClearDepthStencilValue{ 1.0f, 0 } };
+
+    vk::RenderingAttachmentInfo depthAttach{};
+    depthAttach.imageView = hybridDepthImage_.view();
+    depthAttach.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+    depthAttach.loadOp = vk::AttachmentLoadOp::eClear;
+    depthAttach.storeOp = vk::AttachmentStoreOp::eStore;
+    depthAttach.clearValue = depthClear;
 
     vk::RenderingInfo renderingInfo{};
     renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
@@ -80,7 +88,7 @@ void CompositePassVk::render(
     renderingInfo.layerCount = 1;
     renderingInfo.colorAttachmentCount = 1;
     renderingInfo.pColorAttachments = &colorAttach;
-    renderingInfo.pDepthAttachment = nullptr;
+    renderingInfo.pDepthAttachment = &depthAttach;
 
     cmd.beginRendering(renderingInfo);
     {
@@ -114,6 +122,7 @@ void CompositePassVk::render(
     cmd.endRendering();
 
     hybridColorImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
+    hybridDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
 } // end of render()
 
 
@@ -153,6 +162,7 @@ void CompositePassVk::createAttachment()
 {
     vk::Extent2D extent = vk_.getSwapChainExtent();
 
+    // color
     hybridColorImage_.createImage(
         extent.width,
         extent.height,
@@ -176,6 +186,35 @@ void CompositePassVk::createAttachment()
     hybridColorImage_.createSampler(
         vk::Filter::eLinear,
         vk::Filter::eLinear,
+        vk::SamplerMipmapMode::eNearest,
+        vk::SamplerAddressMode::eClampToEdge,
+        false
+    );
+
+    // depth
+    hybridDepthImage_.createImage(
+        extent.width,
+        extent.height,
+        1,
+        false,
+        vk::SampleCountFlagBits::e1,
+        hybridDepthFormat_,
+        vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eDepthStencilAttachment |
+        vk::ImageUsageFlagBits::eSampled,
+        vk::MemoryPropertyFlagBits::eDeviceLocal
+    );
+
+    hybridDepthImage_.createImageView(
+        hybridDepthFormat_,
+        vk::ImageAspectFlagBits::eDepth,
+        vk::ImageViewType::e2D,
+        1
+    );
+
+    hybridDepthImage_.createSampler(
+        vk::Filter::eNearest,
+        vk::Filter::eNearest,
         vk::SamplerMipmapMode::eNearest,
         vk::SamplerAddressMode::eClampToEdge,
         false
@@ -252,11 +291,12 @@ void CompositePassVk::createPipeline()
     desc.setLayouts = { descriptorSets_[0].getLayout() };
 
     desc.colorFormat = hybridColorFormat_;
+    desc.depthFormat = hybridDepthFormat_;
 
     desc.cullMode = vk::CullModeFlagBits::eNone;
     desc.frontFace = vk::FrontFace::eClockwise;
-    desc.depthTestEnable = false;
-    desc.depthWriteEnable = false;
+    desc.depthTestEnable = true;
+    desc.depthWriteEnable = true;
 
     pipeline_.create(desc);
 } // end of createPipeline()

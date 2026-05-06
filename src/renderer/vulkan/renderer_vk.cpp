@@ -412,7 +412,7 @@ void RendererVk::renderFrame(
 	if (renderSettings_->useRT)
 	{
 		postColor = &compositePass_->getOutColorImage();
-		postDepth = &sceneDepth_;
+		postDepth = &compositePass_->getOutDepthImage();
 	}
 	else
 	{
