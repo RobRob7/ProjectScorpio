@@ -8,6 +8,79 @@
 #include <utility>
 #include <filesystem>
 #include <stdexcept>
+#include <unordered_set>
+#include <string>
+
+//--- HELPER ---//
+static std::string LoadShaderWithIncludes(
+	const std::filesystem::path& filePath,
+	std::unordered_set<std::string>& includeStack
+)
+{
+	std::filesystem::path absolutePath = std::filesystem::absolute(filePath).lexically_normal();
+	std::string pathKey = absolutePath.string();
+
+	if (includeStack.find(pathKey) != includeStack.end())
+	{
+		throw std::runtime_error("Circular shader include detected: " + pathKey);
+	}
+
+	includeStack.insert(pathKey);
+
+	std::ifstream file(absolutePath);
+	if (!file.is_open())
+	{
+		throw std::runtime_error("Failed to open shader file: " + pathKey);
+	}
+
+	std::stringstream stream;
+	stream << file.rdbuf();
+
+	std::string source = stream.str();
+	std::stringstream output;
+
+
+	std::stringstream sourceLines(source);
+	std::string line;
+
+	while (std::getline(sourceLines, line))
+	{
+		std::string trimmed = line;
+
+		// remove leading whitespace
+		trimmed.erase(0, trimmed.find_first_not_of(" \t"));
+
+		if (trimmed.rfind("#include", 0) == 0)
+		{
+			size_t firstQuote = trimmed.find('"');
+			size_t secondQuote = trimmed.find('"', firstQuote + 1);
+
+			if (firstQuote == std::string::npos ||
+				secondQuote == std::string::npos)
+			{
+				throw std::runtime_error(
+					"Invalid #include syntax in shader: " + pathKey
+				);
+			}
+
+			std::string includeFile =
+				trimmed.substr(firstQuote + 1,
+					secondQuote - firstQuote - 1);
+
+			std::filesystem::path includePath =
+				absolutePath.parent_path() / includeFile;
+
+			output << LoadShaderWithIncludes(includePath, includeStack);
+		}
+		else
+		{
+			output << line << "\n";
+		}
+	}
+
+	includeStack.erase(pathKey);
+	return output.str();
+} // end of LoadShaderWithIncludes()
 
 //--- PUBLIC ---//
 Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
@@ -29,52 +102,48 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geo
 
 	try
 	{
-		// preliminary path to shaders
-		std::filesystem::path pathToShaders = std::filesystem::path(RESOURCES_PATH) / "shader";
-		std::filesystem::path vertexFullPath = pathToShaders / vertexPath;
-		std::filesystem::path fragFullPath = pathToShaders / fragmentPath;
-		// open shader files
+		std::filesystem::path pathToShaders =
+			std::filesystem::path(RESOURCES_PATH) / "shader";
+
+		std::filesystem::path vertexFullPath =
+			pathToShaders / vertexPath;
+
+		std::filesystem::path fragFullPath =
+			pathToShaders / fragmentPath;
+
+		std::unordered_set<std::string> includeStack;
+
 		problemFile = "VERTEX";
-		vertexShaderFile.open(vertexFullPath);
+		vertexCode = LoadShaderWithIncludes(
+			vertexFullPath,
+			includeStack
+		);
+
 		problemFile = "FRAGMENT";
-		fragmentShaderFile.open(fragFullPath);
+		fragmentCode = LoadShaderWithIncludes(
+			fragFullPath,
+			includeStack
+		);
 
-		// will contain file info as stringstrean for each shader
-		std::stringstream vertexShaderStream;
-		std::stringstream fragmentShaderStream;
-
-		// read file's buffer contents into streams
-		vertexShaderStream << vertexShaderFile.rdbuf();
-		fragmentShaderStream << fragmentShaderFile.rdbuf();
-
-		// close file handlers
-		vertexShaderFile.close();
-		fragmentShaderFile.close();
-
-		// convert stringstream to string
-		vertexCode = vertexShaderStream.str();
-		fragmentCode = fragmentShaderStream.str();
-
-		//#ifdef _DEBUG
-		//std::cout << vertexCode << "\n\n" << fragmentCode << "\n";
-		//#endif
-
-		// check for geometry shader
 		if (geometryPath != nullptr)
 		{
-			std::filesystem::path geomFullPath = pathToShaders / geometryPath;
+			std::filesystem::path geomFullPath =
+				pathToShaders / geometryPath;
+
 			problemFile = "GEOMETRY";
-			geometryShaderFile.open(geomFullPath);
-			std::stringstream geometryShaderStream;
-			geometryShaderStream << geometryShaderFile.rdbuf();
-			geometryShaderFile.close();
-			geometryCode = geometryShaderStream.str();
+
+			geometryCode = LoadShaderWithIncludes(
+				geomFullPath,
+				includeStack
+			);
 		}
 	}
-	catch (std::ifstream::failure& e)
+	catch (const std::exception& e)
 	{
 		throw std::runtime_error(
-			"ERROR::" + problemFile + "_SHADER::FILE_NOT_SUCCESSFULLY_READ: " + std::string(e.what())
+			"ERROR::" + problemFile +
+			"_SHADER::FILE_NOT_SUCCESSFULLY_READ: " +
+			std::string(e.what())
 		);
 	}
 
@@ -258,7 +327,7 @@ void Shader::checkCompileErrors(uint32_t shader, std::string_view type, std::str
 		if (!success)
 		{
 			glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "-" << path << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+			throw std::runtime_error("ERROR::SHADER_COMPILATION_ERROR of type: " + std::string(type) + "-" + std::string(path) + "\n" + infoLog + "\n -- --------------------------------------------------- -- ");
 		}
 	}
 	else
@@ -267,7 +336,7 @@ void Shader::checkCompileErrors(uint32_t shader, std::string_view type, std::str
 		if (!success)
 		{
 			glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-			std::cout << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+			throw std::runtime_error("ERROR::PROGRAM_LINKING_ERROR of type: " + std::string(type) + "\n" + infoLog + "\n -- --------------------------------------------------- -- ");
 		}
 	}
 } // end of checkCompileErrors(...)
