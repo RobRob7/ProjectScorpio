@@ -207,12 +207,13 @@ private:
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
     };
 
     bool enableValidationLayers_{ false };
     bool initialized_{ false };
 
-    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 1;
+    static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 3;
 
     std::vector<PendingUpload> pendingUploads_;
 

@@ -1,15 +1,11 @@
 #ifndef RENDERER_VK_H
 #define RENDERER_VK_H
 
-#include "constants.h"
-
 #include "i_renderer.h"
 
 #include "image_vk.h"
-#include "acceleration_structure_vk.h"
 
 #include <memory>
-#include <vector>
 
 class VulkanMain;
 class Camera;

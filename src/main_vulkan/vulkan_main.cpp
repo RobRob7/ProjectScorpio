@@ -637,10 +637,14 @@ void VulkanMain::createLogicalDevice()
 	vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
 	rt.rayTracingPipeline = VK_TRUE;
 
+	vk::PhysicalDeviceSynchronization2FeaturesKHR s2f{};
+	s2f.synchronization2 = VK_TRUE;
+
 	deviceFeatures2.pNext = &dynamicRendering;
 	dynamicRendering.pNext = &bda;
 	bda.pNext = &accel;
 	accel.pNext = &rt;
+	rt.pNext = &s2f;
 
 	vk::DeviceCreateInfo createInfo{};
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -1081,25 +1085,28 @@ bool VulkanMain::isDeviceSuitable(vk::PhysicalDevice device)
 	vk::PhysicalDeviceBufferDeviceAddressFeatures bda{};
 	vk::PhysicalDeviceAccelerationStructureFeaturesKHR accel{};
 	vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
+	vk::PhysicalDeviceSynchronization2Features s2f{};
 
 	feats2.pNext = &dyn;
 	dyn.pNext = &bda;
 	bda.pNext = &accel;
 	accel.pNext = &rt;
+	rt.pNext = &s2f;
 
 	device.getFeatures2(&feats2);
 
-	return indices.isComplete() 
+	return indices.isComplete()
 		&& extensionsSupported
-		&& swapChainAdequate 
-		&& feats2.features.samplerAnisotropy 
-		&& feats2.features.sampleRateShading 
+		&& swapChainAdequate
+		&& feats2.features.samplerAnisotropy
+		&& feats2.features.sampleRateShading
 		&& feats2.features.shaderClipDistance
 		&& feats2.features.shaderInt64
 		&& dyn.dynamicRendering
 		&& bda.bufferDeviceAddress
 		&& accel.accelerationStructure
-		&& rt.rayTracingPipeline;
+		&& rt.rayTracingPipeline
+		&& s2f.synchronization2;
 } // end of isDeviceSuitable()
 
 QueueFamilyIndices VulkanMain::findQueueFamilies(vk::PhysicalDevice device) 

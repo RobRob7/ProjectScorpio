@@ -2,12 +2,15 @@
 #define FRAME_CONTEXT_H
 
 #include "utils_vk.h"
+#include "timestamp_gpu_vk.h"
 
 #include <vulkan/vulkan.hpp>
 
 struct FrameContext
 {
     vk::CommandBuffer cmd{};
+
+    TimestampGPUVk gpuTimestamps;
 
     vk::Extent2D extent{};
 
