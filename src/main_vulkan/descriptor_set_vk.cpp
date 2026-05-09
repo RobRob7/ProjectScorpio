@@ -17,6 +17,7 @@ DescriptorSetVk::~DescriptorSetVk() = default;
 
 void DescriptorSetVk::setDebugName(const std::string& name)
 {
+#ifdef _DEBUG
 	debugName_ = name;
 
 	if (!descSet_) return;
@@ -28,7 +29,16 @@ void DescriptorSetVk::setDebugName(const std::string& name)
 		);
 	info.pObjectName = debugName_.c_str();
 
-	vk_.getDevice().setDebugUtilsObjectNameEXT(info);
+	{
+		vk::Result result = vk_.getDevice().setDebugUtilsObjectNameEXT(info);
+		if (result != vk::Result::eSuccess)
+		{
+			throw std::runtime_error(
+				"DescriptorSetVk::setDebugUtilsObjectNameEXT failed to set debug name!"
+			);
+		}
+	}
+#endif
 } // end of setDebugName()
 
 void DescriptorSetVk::createLayout(const std::vector<vk::DescriptorSetLayoutBinding>& bindings)
