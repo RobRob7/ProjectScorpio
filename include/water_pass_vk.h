@@ -13,6 +13,7 @@
 #include <glm/glm.hpp>
 
 #include <memory>
+#include <vector>
 
 class VulkanMain;
 class ShaderModuleVk;
@@ -42,9 +43,9 @@ public:
 	);
 
 	void renderWater(
+		const FrameContext& frame,
 		const RenderSettings& rs,
 		const RenderInputs& in,
-		vk::CommandBuffer cmd,
 		const glm::mat4& view,
 		const glm::mat4& proj,
 		const glm::mat4& lightSpaceMatrix,
@@ -107,8 +108,8 @@ private:
 	Texture2DVk dudvTex_;
 	Texture2DVk normalTex_;
 
-	BufferVk uboBuffer_;
-	DescriptorSetVk descriptorSet_;
+	std::vector<BufferVk> uboBuffers_;
+	std::vector<DescriptorSetVk> descriptorSets_;
 	GraphicsPipelineVk pipeline_;
 };
 

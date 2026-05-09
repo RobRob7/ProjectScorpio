@@ -11,6 +11,7 @@
 #include <memory>
 #include <algorithm>
 #include <cstdint>
+#include <vector>
 
 class VulkanMain;
 class ShaderModuleVk;
@@ -77,8 +78,8 @@ public:
 
 private:
 	void createVertexBuffer();
-	void createUBO();
-	void createDescriptorSet();
+	void createUBOs();
+	void createDescriptorSets();
 	void createPipeline();
 private:
 	VulkanMain& vk_;
@@ -86,13 +87,14 @@ private:
 	std::unique_ptr<ShaderModuleVk> shader_;
 
 	BufferVk vertexBuffer_;
-	BufferVk uboBuffer_;
-	BufferVk uboBufferOffscreen_;
+
+	std::vector<BufferVk> uboBuffers_;
+	std::vector<BufferVk> uboBuffersOffscreen_;
 
 	uint32_t vertexCount_{};
 
-	DescriptorSetVk descriptorSet_;
-	DescriptorSetVk descriptorSetOffscreen_;
+	std::vector<DescriptorSetVk> descriptorSets_;
+	std::vector<DescriptorSetVk> descriptorSetsOffscreen_;
 
 	GraphicsPipelineVk pipeline_;
 	GraphicsPipelineVk pipelineOffscreen_;

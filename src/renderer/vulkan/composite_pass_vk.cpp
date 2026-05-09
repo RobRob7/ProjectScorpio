@@ -54,10 +54,38 @@ void CompositePassVk::render(
     float farPlane
 )
 {
-    if (!descriptorSets_[frame.frameIndex].valid() || !pipeline_.valid())
+    if (!rasterColor_ || !rasterDepth_ ||
+        !rtColor_ || !rtDepth_ ||
+        !pipeline_.valid())
     {
         return;
     }
+
+    DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
+    if (!desc.valid()) return;
+
+    desc.writeCombinedImageSampler(
+        TO_API_FORM(CompositePassBinding::RastColorTex),
+        rasterColor_->view(),
+        rasterColor_->sampler()
+    );
+    desc.writeCombinedImageSampler(
+        TO_API_FORM(CompositePassBinding::RastDepthTex),
+        rasterDepth_->view(),
+        rasterDepth_->sampler()
+    );
+    desc.writeCombinedImageSampler(
+        TO_API_FORM(CompositePassBinding::RTColorTex),
+        rtColor_->view(),
+        rtColor_->sampler()
+    );
+    desc.writeCombinedImageSampler(
+        TO_API_FORM(CompositePassBinding::RTDepthTex),
+        rtDepth_->view(),
+        rtDepth_->sampler()
+    );
+
+    vk::DescriptorSet set = desc.getSet();
 
     vk::CommandBuffer cmd = frame.cmd;
 
@@ -105,8 +133,6 @@ void CompositePassVk::render(
         scissor.offset = vk::Offset2D{ 0, 0 };
         scissor.extent = frame.extent;
         cmd.setScissor(0, 1, &scissor);
-
-        vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
         cmd.bindDescriptorSets(
@@ -279,6 +305,10 @@ void CompositePassVk::createDescriptorSet()
             rtDepthPool
             });
         descriptorSets_[i].allocate();
+
+        descriptorSets_[i].setDebugName(
+            "CompositePassVk::descriptorSets_ frame " + std::to_string(i)
+        );
     } // end for
 } // end of createDescriptorSet()
 

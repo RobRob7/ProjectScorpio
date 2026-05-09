@@ -335,9 +335,9 @@ void RendererVk::renderFrame(
 		if (waterPass_ && !renderSettings_->useRT)
 		{
 			waterPass_->renderWater(
+				frame,
 				*renderSettings_,
 				in,
-				cmd,
 				view,
 				proj,
 				shadowMapPass_->getLightSpaceMatrix(),

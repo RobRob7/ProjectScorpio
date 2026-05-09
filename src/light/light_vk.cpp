@@ -27,16 +27,27 @@ LightVk::LightVk(
 )
 	: vk_(vk),
 	vertexBuffer_(vk),
-	uboBuffer_(vk),
-	uboBufferOffscreen_(vk),
-	descriptorSet_(vk),
-	descriptorSetOffscreen_(vk),
 	pipeline_(vk),
 	pipelineOffscreen_(vk),
 	position_(pos)
 {
 	setDirection(dir);
 	setColor(color);
+
+	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
+	uboBuffersOffscreen_.reserve(vk_.getMaxFramesInFlight());
+
+	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
+	descriptorSetsOffscreen_.reserve(vk_.getMaxFramesInFlight());
+
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_.emplace_back(vk_);
+		uboBuffersOffscreen_.emplace_back(vk_);
+
+		descriptorSets_.emplace_back(vk_);
+		descriptorSetsOffscreen_.emplace_back(vk_);
+	} // end for
 } // end of constructor
 
 LightVk::~LightVk() = default;
@@ -46,8 +57,8 @@ void LightVk::init()
 	shader_ = std::make_unique<ShaderModuleVk>(vk_.getDevice(), "light/light.vert.spv", "light/light.frag.spv");
 
 	createVertexBuffer();
-	createUBO();
-	createDescriptorSet();
+	createUBOs();
+	createDescriptorSets();
 	createPipeline();
 } // end of init()
 
@@ -59,7 +70,10 @@ void LightVk::render(
 {
 	assert(frame->cmd && "Must be valid Vulkan frame context!");
 
-	if (!descriptorSet_.valid() || !uboBuffer_.valid() || !vertexBuffer_.valid() || !pipeline_.valid()) return;
+	if (!descriptorSets_[frame->frameIndex].valid() ||
+		!uboBuffers_[frame->frameIndex].valid() ||
+		!vertexBuffer_.valid() || 
+		!pipeline_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
 
@@ -77,9 +91,9 @@ void LightVk::render(
 	ubo.proj = proj;
 	ubo.color = glm::vec4(color_, 1.0f);
 
-	uboBuffer_.upload(&ubo, sizeof(LightUBO));
+	uboBuffers_[frame->frameIndex].upload(&ubo, sizeof(LightUBO));
 
-	vk::DescriptorSet descSet = descriptorSet_.getSet();
+	vk::DescriptorSet descSet = descriptorSets_[frame->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipeline_.getLayout(),
@@ -102,7 +116,10 @@ void LightVk::renderOffscreen(
 {
 	assert(frame->cmd && "Must be valid Vulkan frame context!");
 
-	if (!descriptorSetOffscreen_.valid() || !uboBufferOffscreen_.valid() || !vertexBuffer_.valid() || !pipelineOffscreen_.valid()) return;
+	if (!descriptorSetsOffscreen_[frame->frameIndex].valid() ||
+		!uboBuffersOffscreen_[frame->frameIndex].valid() ||
+		!vertexBuffer_.valid() || 
+		!pipelineOffscreen_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
 
@@ -135,9 +152,9 @@ void LightVk::renderOffscreen(
 	ubo.proj = proj;
 	ubo.color = glm::vec4(color_, 1.0f);
 
-	uboBufferOffscreen_.upload(&ubo, sizeof(LightUBO));
+	uboBuffersOffscreen_[frame->frameIndex].upload(&ubo, sizeof(LightUBO));
 
-	vk::DescriptorSet descSet = descriptorSetOffscreen_.getSet();
+	vk::DescriptorSet descSet = descriptorSetsOffscreen_[frame->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipelineOffscreen_.getLayout(),
@@ -187,37 +204,57 @@ void LightVk::createVertexBuffer()
 	vertexBuffer_.upload(CUBE_VERTICES.data(), bufferSize);
 } // end of createVertexBuffer()
 
-void LightVk::createUBO()
+void LightVk::createUBOs()
 {
-	uboBuffer_.create(
-		sizeof(LightUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_[i].create(
+			sizeof(LightUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
 
-	uboBufferOffscreen_.create(
-		sizeof(LightUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
-} // end of createUBO()
+		uboBuffersOffscreen_[i].create(
+			sizeof(LightUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+	} // end for
+} // end of createUBOs()
 
-void LightVk::createDescriptorSet()
+void LightVk::createDescriptorSets()
 {
-	descriptorSet_.createSingleUniformBuffer(
-		TO_API_FORM(LightBinding::UBO),
-		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-		uboBuffer_.getBuffer(),
-		sizeof(LightUBO)
-	);
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(LightBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
-	descriptorSetOffscreen_.createSingleUniformBuffer(
-		TO_API_FORM(LightBinding::UBO),
-		vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
-		uboBufferOffscreen_.getBuffer(),
-		sizeof(LightUBO)
-	);
-} // end of createDescriptorSet()
+		descriptorSets_[i].createSingleUniformBuffer(
+			TO_API_FORM(LightBinding::UBO),
+			vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+			uboBuffers_[i].getBuffer(),
+			sizeof(LightUBO)
+		);
+
+		descriptorSets_[i].setDebugName(
+			"LightVk::descriptorSets_ frame " + std::to_string(i)
+		);
+
+		descriptorSetsOffscreen_[i].createSingleUniformBuffer(
+			TO_API_FORM(LightBinding::UBO),
+			vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment,
+			uboBuffersOffscreen_[i].getBuffer(),
+			sizeof(LightUBO)
+		);
+
+		descriptorSetsOffscreen_[i].setDebugName(
+			"LightVk::descriptorSetsOffscreen_ frame " + std::to_string(i)
+		);
+	} // end for
+} // end of createDescriptorSets()
 
 void LightVk::createPipeline()
 {
@@ -237,7 +274,7 @@ void LightVk::createPipeline()
 	desc.vertShader = shader_->vertShader();
 	desc.fragShader = shader_->fragShader();
 
-	desc.setLayouts = { descriptorSet_.getLayout() };
+	desc.setLayouts = { descriptorSets_[0].getLayout()};
 
 	desc.vertexBinding = binding;
 	desc.vertexAttributes = { attr };

@@ -20,15 +20,15 @@ struct FrameContext;
 class FXAAPassVk
 {
 public:
-	FXAAPassVk(VulkanMain& vk);
+	explicit FXAAPassVk(VulkanMain& vk);
 	~FXAAPassVk();
 
 	void init();
 	void resize();
 
-	void setInput(ImageVk& input);
-
 	void render(FrameContext& frame);
+
+	void setInput(ImageVk& input) { inputImage_ = &input; }
 
 	ImageVk& getOutputImage() { return outputImage_; }
 

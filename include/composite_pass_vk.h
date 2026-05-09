@@ -16,7 +16,7 @@ struct FrameContext;
 class CompositePassVk
 {
 public:
-	CompositePassVk(VulkanMain& vk);
+	explicit CompositePassVk(VulkanMain& vk);
 	~CompositePassVk();
 
 	void init();
@@ -37,7 +37,6 @@ public:
 		rasterDepth_ = &rasterColorDepth.second;
 		rtColor_ = &rtColorDepth.first;
 		rtDepth_ = &rtColorDepth.second;
-		refreshInput();
 	} // end of setInput()
 
 	const ImageVk& getOutColorImage() const { return hybridColorImage_; }

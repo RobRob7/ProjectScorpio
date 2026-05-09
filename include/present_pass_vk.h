@@ -15,7 +15,7 @@ class ImageVk;
 class PresentPassVk
 {
 public:
-	PresentPassVk(VulkanMain& vk);
+	explicit PresentPassVk(VulkanMain& vk);
 	~PresentPassVk();
 
 	void init();
@@ -26,7 +26,6 @@ public:
 	void setInput(ImageVk& input)
 	{
 		inputImage_ = &input;
-		refreshInput();
 	} // end of setInput()
 
 private:

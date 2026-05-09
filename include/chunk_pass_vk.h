@@ -14,6 +14,7 @@
 
 #include <memory>
 #include <cstdlib>
+#include <vector>
 
 class VulkanMain;
 class ImageVk;
@@ -74,20 +75,20 @@ private:
 
 	Texture2DVk atlas_;
 
-	BufferVk opaqueUBOBuffer_;
-	BufferVk reflUBOBuffer_;
-	BufferVk refrUBOBuffer_;
+	std::vector<BufferVk> opaqueUBOBuffers_;
+	std::vector<BufferVk> reflUBOBuffers_;
+	std::vector<BufferVk> refrUBOBuffers_;
 	Chunk_Constants::ChunkOpaqueUBO chunkUBOData_{};
-	BufferVk opaqueGBufferUBOBuffer_;
+	std::vector<BufferVk> opaqueGBufferUBOBuffers_;
 	Gbuffer_Constants::GbufferUBO gbufferUBOData_{};
-	BufferVk opaqueShadowUBOBuffer_;
+	std::vector<BufferVk> opaqueShadowUBOBuffers_;
 	Shadow_Map_Constants::ShadowMapPassUBO shadowUBOData_{};
 
-	DescriptorSetVk opaqueDescriptorSet_;
-	DescriptorSetVk reflectionDescriptorSet_;
-	DescriptorSetVk refractionDescriptorSet_;
-	DescriptorSetVk opaqueGBufferDescriptorSet_;
-	DescriptorSetVk opaqueShadowDescriptorSet_;
+	std::vector<DescriptorSetVk> opaqueDescriptorSets_;
+	std::vector<DescriptorSetVk> reflectionDescriptorSets_;
+	std::vector<DescriptorSetVk> refractionDescriptorSets_;
+	std::vector<DescriptorSetVk> opaqueGBufferDescriptorSets_;
+	std::vector<DescriptorSetVk> opaqueShadowDescriptorSets_;
 
 	GraphicsPipelineVk opaquePipeline_;
 	GraphicsPipelineVk opaqueGBufferPipeline_;

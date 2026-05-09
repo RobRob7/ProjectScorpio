@@ -15,6 +15,22 @@ DescriptorSetVk::DescriptorSetVk(VulkanMain& vk)
 
 DescriptorSetVk::~DescriptorSetVk() = default;
 
+void DescriptorSetVk::setDebugName(const std::string& name)
+{
+	debugName_ = name;
+
+	if (!descSet_) return;
+
+	vk::DebugUtilsObjectNameInfoEXT info{};
+	info.objectType = vk::ObjectType::eDescriptorSet;
+	info.objectHandle = reinterpret_cast<uint64_t>(
+		static_cast<VkDescriptorSet>(descSet_)
+		);
+	info.pObjectName = debugName_.c_str();
+
+	vk_.getDevice().setDebugUtilsObjectNameEXT(info);
+} // end of setDebugName()
+
 void DescriptorSetVk::createLayout(const std::vector<vk::DescriptorSetLayoutBinding>& bindings)
 {
 	if (bindings.empty())

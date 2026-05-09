@@ -54,13 +54,36 @@ void FogPassVk::render(
 	Fog_Constants::FogPassUBO& fogUBO
 )
 {
-	if (!inputColorImage_ || !inputDepthImage_ ||
-		!uboBuffers_[frame.frameIndex].valid() || 
-		!descriptorSets_[frame.frameIndex].valid() ||
+	if (!inputShadowMapImage_ ||
+		!inputColorImage_ || 
+		!inputDepthImage_ ||
 		!pipeline_.valid())
 	{
 		return;
 	}
+
+	DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
+	if (!desc.valid()) return;
+
+	desc.writeCombinedImageSampler(
+		TO_API_FORM(FogPassBinding::ForwardColorTex),
+		inputColorImage_->view(),
+		inputColorImage_->sampler()
+	);
+
+	desc.writeCombinedImageSampler(
+		TO_API_FORM(FogPassBinding::ForwardDepthTex),
+		inputDepthImage_->view(),
+		inputDepthImage_->sampler()
+	);
+
+	desc.writeCombinedImageSampler(
+		TO_API_FORM(FogPassBinding::ShadowMapTex),
+		inputShadowMapImage_->view(),
+		inputShadowMapImage_->sampler()
+	);
+
+	vk::DescriptorSet set = desc.getSet();
 
 	vk::CommandBuffer cmd = frame.cmd;
 	vk::Extent2D extent = frame.extent;
@@ -69,11 +92,7 @@ void FogPassVk::render(
 
 	uboBuffers_[frame.frameIndex].upload(&fogUBO, sizeof(fogUBO));
 
-	vk::ClearValue clear{};
-	clear.color.float32[0] = 0.0f;
-	clear.color.float32[1] = 0.0f;
-	clear.color.float32[2] = 0.0f;
-	clear.color.float32[3] = 1.0f;
+	vk::ClearValue clear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
 	vk::RenderingAttachmentInfo colorAttach{};
 	colorAttach.imageView = outputImage_.view();
@@ -105,8 +124,6 @@ void FogPassVk::render(
 		scissor.offset = vk::Offset2D{ 0, 0 };
 		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
-
-		vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 		cmd.bindDescriptorSets(
@@ -255,6 +272,10 @@ void FogPassVk::createDescriptorSet()
 			inputShadowPool
 			});
 		descriptorSets_[i].allocate();
+
+		descriptorSets_[i].setDebugName(
+			"FogPassVk::descriptorSets_ frame " + std::to_string(i)
+		);
 
 		descriptorSets_[i].writeUniformBuffer(
 			TO_API_FORM(FogPassBinding::UBO),

@@ -44,18 +44,25 @@ void PresentPassVk::resize()
 
 void PresentPassVk::render(FrameContext& frame)
 {
-    if (!inputImage_ || !descriptorSets_[frame.frameIndex].valid() || !pipeline_.valid())
+    if (!inputImage_ || !pipeline_.valid())
     {
         return;
     }
 
+    DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
+    if (!desc.valid()) return;
+
+    desc.writeCombinedImageSampler(
+        TO_API_FORM(PresentPassBinding::ForwardColorTex),
+        inputImage_->view(),
+        inputImage_->sampler()
+    );
+
+    vk::DescriptorSet set = desc.getSet();
+
     vk::CommandBuffer cmd = frame.cmd;
 
-    vk::ClearValue clear{};
-    clear.color.float32[0] = 0.0f;
-    clear.color.float32[1] = 0.0f;
-    clear.color.float32[2] = 0.0f;
-    clear.color.float32[3] = 1.0f;
+    vk::ClearValue clear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
     vk::RenderingAttachmentInfo colorAttach{};
     colorAttach.imageView = frame.colorImageView;
@@ -87,8 +94,6 @@ void PresentPassVk::render(FrameContext& frame)
         scissor.offset = vk::Offset2D{ 0, 0 };
         scissor.extent = frame.extent;
         cmd.setScissor(0, 1, &scissor);
-
-        vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
         cmd.bindDescriptorSets(
@@ -123,7 +128,7 @@ void PresentPassVk::refreshInput()
 
 void PresentPassVk::createDescriptorSets()
 {
-    for (auto& set : descriptorSets_)
+    for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
     {
         vk::DescriptorSetLayoutBinding inputBinding{};
         inputBinding.binding = TO_API_FORM(PresentPassBinding::ForwardColorTex);
@@ -131,14 +136,22 @@ void PresentPassVk::createDescriptorSets()
         inputBinding.descriptorCount = 1;
         inputBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-        set.createLayout({inputBinding});
+        descriptorSets_[i].createLayout({
+            inputBinding
+            });
 
         vk::DescriptorPoolSize inputPool{};
         inputPool.type = vk::DescriptorType::eCombinedImageSampler;
         inputPool.descriptorCount = 1;
 
-        set.createPool({ inputPool }, 1);
-        set.allocate();
+        descriptorSets_[i].createPool({ 
+            inputPool 
+            });
+        descriptorSets_[i].allocate();
+
+        descriptorSets_[i].setDebugName(
+            "PresentPassVk::descriptorSets_ frame " + std::to_string(i)
+        );
     } // end for
 } // end of createDescriptorSet()
 

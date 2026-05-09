@@ -21,7 +21,7 @@ struct RenderSettings;
 class FogPassVk
 {
 public:
-	FogPassVk(VulkanMain& vk);
+	explicit FogPassVk(VulkanMain& vk);
 	~FogPassVk();
 
 	void init();
@@ -35,16 +35,12 @@ public:
 	void setInputShadowMap(ImageVk& inputShadowMap)
 	{
 		inputShadowMapImage_ = &inputShadowMap;
-
-		refreshInput();
 	} // end of setInputShadowMap()
 
 	void setInput(ImageVk& inputColor, ImageVk& inputDepth)
 	{
 		inputColorImage_ = &inputColor;
 		inputDepthImage_ = &inputDepth;
-
-		refreshInput();
 	} // end of setInput()
 
 	ImageVk& getOutputImage() { return outputImage_; }

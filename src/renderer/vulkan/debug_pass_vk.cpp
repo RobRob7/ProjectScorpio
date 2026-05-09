@@ -33,10 +33,16 @@ DebugPassVk::DebugPassVk(
 	depthImage_(depthImage),
 	shadowMapImage_(shadowMapImage),
 	rtDepthImage_(rtDepthImage),
-	uboBuffer_(vk),
-	descriptorSet_(vk),
 	pipeline_(vk)
 {
+	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
+	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
+
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_.emplace_back(vk_);
+		descriptorSets_.emplace_back(vk_);
+	} // end for
 } // end of constructor
 
 DebugPassVk::~DebugPassVk() = default;
@@ -50,7 +56,7 @@ void DebugPassVk::init()
 	);
 
 	createResources();
-	createDescriptorSet();
+	createDescriptorSets();
 	createPipeline();
 	refreshInputs();
 } // end of init()
@@ -74,7 +80,7 @@ void DebugPassVk::render(
 	ubo.u_far = farPlane;
 	ubo.u_mode = mode;
 
-	uboBuffer_.upload(&ubo, sizeof(DebugPassUBO));
+	uboBuffers_[frame.frameIndex].upload(&ubo, sizeof(DebugPassUBO));
 
 	frame.transitionColorImageToAttachment(cmd);
 
@@ -114,7 +120,7 @@ void DebugPassVk::render(
 		scissor.extent = frame.extent;
 		cmd.setScissor(0, 1, &scissor);
 
-		vk::DescriptorSet set = descriptorSet_.getSet();
+		vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 		cmd.bindDescriptorSets(
@@ -136,139 +142,152 @@ void DebugPassVk::render(
 //--- PRIVATE ---//
 void DebugPassVk::refreshInputs()
 {
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::GNormalTex),
-		normalImage_.view(),
-		normalImage_.sampler()
-	);
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::GNormalTex),
+			normalImage_.view(),
+			normalImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::GDepthTex),
-		depthImage_.view(),
-		depthImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::GDepthTex),
+			depthImage_.view(),
+			depthImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::ShadowMapTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::ShadowMapTex),
+			shadowMapImage_.view(),
+			shadowMapImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::RTDepthTex),
-		rtDepthImage_.view(),
-		rtDepthImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::RTDepthTex),
+			rtDepthImage_.view(),
+			rtDepthImage_.sampler()
+		);
+	} // end for
 } // end of refreshInputs()
 
 void DebugPassVk::createResources()
 {
-	uboBuffer_.create(
-		sizeof(DebugPassUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_[i].create(
+			sizeof(DebugPassUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+	} // end for
 } // end of createResources()
 
-void DebugPassVk::createDescriptorSet()
+void DebugPassVk::createDescriptorSets()
 {
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(DebugBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(DebugBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding normalBinding{};
-	normalBinding.binding = TO_API_FORM(DebugBinding::GNormalTex);
-	normalBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	normalBinding.descriptorCount = 1;
-	normalBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding normalBinding{};
+		normalBinding.binding = TO_API_FORM(DebugBinding::GNormalTex);
+		normalBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		normalBinding.descriptorCount = 1;
+		normalBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding depthBinding{};
-	depthBinding.binding = TO_API_FORM(DebugBinding::GDepthTex);
-	depthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	depthBinding.descriptorCount = 1;
-	depthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding depthBinding{};
+		depthBinding.binding = TO_API_FORM(DebugBinding::GDepthTex);
+		depthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		depthBinding.descriptorCount = 1;
+		depthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding shadowMapBinding{};
-	shadowMapBinding.binding = TO_API_FORM(DebugBinding::ShadowMapTex);
-	shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapBinding.descriptorCount = 1;
-	shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding shadowMapBinding{};
+		shadowMapBinding.binding = TO_API_FORM(DebugBinding::ShadowMapTex);
+		shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapBinding.descriptorCount = 1;
+		shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding rtDepthBinding{};
-	rtDepthBinding.binding = TO_API_FORM(DebugBinding::RTDepthTex);
-	rtDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	rtDepthBinding.descriptorCount = 1;
-	rtDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding rtDepthBinding{};
+		rtDepthBinding.binding = TO_API_FORM(DebugBinding::RTDepthTex);
+		rtDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		rtDepthBinding.descriptorCount = 1;
+		rtDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	descriptorSet_.createLayout({ 
-		uboBinding, 
-		normalBinding, 
-		depthBinding, 
-		shadowMapBinding,
-		rtDepthBinding
-		});
+		descriptorSets_[i].createLayout({
+			uboBinding,
+			normalBinding,
+			depthBinding,
+			shadowMapBinding,
+			rtDepthBinding
+			});
 
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize normalPool{};
-	normalPool.type = vk::DescriptorType::eCombinedImageSampler;
-	normalPool.descriptorCount = 1;
+		vk::DescriptorPoolSize normalPool{};
+		normalPool.type = vk::DescriptorType::eCombinedImageSampler;
+		normalPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize depthPool{};
-	depthPool.type = vk::DescriptorType::eCombinedImageSampler;
-	depthPool.descriptorCount = 1;
+		vk::DescriptorPoolSize depthPool{};
+		depthPool.type = vk::DescriptorType::eCombinedImageSampler;
+		depthPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize shadowMapPool{};
-	shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapPool.descriptorCount = 1;
+		vk::DescriptorPoolSize shadowMapPool{};
+		shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize rtDepthPool{};
-	rtDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
-	rtDepthPool.descriptorCount = 1;
+		vk::DescriptorPoolSize rtDepthPool{};
+		rtDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
+		rtDepthPool.descriptorCount = 1;
 
-	descriptorSet_.createPool({ 
-		uboPool, 
-		normalPool, 
-		depthPool, 
-		shadowMapPool,
-		rtDepthPool
-		});
-	descriptorSet_.allocate();
+		descriptorSets_[i].createPool({
+			uboPool,
+			normalPool,
+			depthPool,
+			shadowMapPool,
+			rtDepthPool
+			});
+		descriptorSets_[i].allocate();
 
-	descriptorSet_.writeUniformBuffer(
-		TO_API_FORM(DebugBinding::UBO),
-		uboBuffer_.getBuffer(),
-		sizeof(DebugPassUBO)
-	);
+		descriptorSets_[i].setDebugName(
+			"DebugPassVk::descriptorSets_ frame " + std::to_string(i)
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::GNormalTex),
-		normalImage_.view(),
-		normalImage_.sampler()
-	);
+		descriptorSets_[i].writeUniformBuffer(
+			TO_API_FORM(DebugBinding::UBO),
+			uboBuffers_[i].getBuffer(),
+			sizeof(DebugPassUBO)
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::GDepthTex),
-		depthImage_.view(),
-		depthImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::GNormalTex),
+			normalImage_.view(),
+			normalImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::ShadowMapTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::GDepthTex),
+			depthImage_.view(),
+			depthImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(DebugBinding::RTDepthTex),
-		rtDepthImage_.view(),
-		rtDepthImage_.sampler()
-	);
-} // end of createDescriptorSet()
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::ShadowMapTex),
+			shadowMapImage_.view(),
+			shadowMapImage_.sampler()
+		);
+
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(DebugBinding::RTDepthTex),
+			rtDepthImage_.view(),
+			rtDepthImage_.sampler()
+		);
+	} 
+} // end of createDescriptorSets()
 
 void DebugPassVk::createPipeline()
 {
@@ -276,7 +295,7 @@ void DebugPassVk::createPipeline()
 	desc.vertShader = shader_->vertShader();
 	desc.fragShader = shader_->fragShader();
 
-	desc.setLayouts = { descriptorSet_.getLayout() };
+	desc.setLayouts = { descriptorSets_[0].getLayout()};
 
 	desc.colorFormat = vk_.getSwapChainImageFormat();
 

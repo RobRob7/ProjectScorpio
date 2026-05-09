@@ -6,6 +6,7 @@
 #include "graphics_pipeline_vk.h"
 
 #include <memory>
+#include <vector>
 
 class VulkanMain;
 class GBufferPassVk;
@@ -38,7 +39,7 @@ public:
 private:
 	void refreshInputs();
 	void createResources();
-	void createDescriptorSet();
+	void createDescriptorSets();
 	void createPipeline();
 private:
 	VulkanMain& vk_;
@@ -50,8 +51,8 @@ private:
 	
 	std::unique_ptr<ShaderModuleVk> shader_;
 
-	BufferVk uboBuffer_;
-	DescriptorSetVk descriptorSet_;
+	std::vector<BufferVk> uboBuffers_;
+	std::vector<DescriptorSetVk> descriptorSets_;
 	GraphicsPipelineVk pipeline_;
 };
 

@@ -38,10 +38,16 @@ WaterPassVk::WaterPassVk(
 	reflColorImage_(vk), reflDepthImage_(vk),
 	refrColorImage_(vk), refrDepthImage_(vk),
 	dudvTex_(vk), normalTex_(vk),
-	uboBuffer_(vk),
-	descriptorSet_(vk),
 	pipeline_(vk)
 {
+	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
+	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
+
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_.emplace_back(vk_);
+		descriptorSets_.emplace_back(vk_);
+	} // end for
 } // end of constructor
 
 WaterPassVk::~WaterPassVk() = default;
@@ -92,9 +98,9 @@ void WaterPassVk::renderOffscreen(
 } // end of renderOffscreen()
 
 void WaterPassVk::renderWater(
+	const FrameContext& frame,
 	const RenderSettings& rs,
 	const RenderInputs& in,
-	vk::CommandBuffer cmd,
 	const glm::mat4& view,
 	const glm::mat4& proj,
 	const glm::mat4& lightSpaceMatrix,
@@ -104,9 +110,11 @@ void WaterPassVk::renderWater(
 	ChunkDrawList list;
 	in.world->buildWaterDrawList(view, proj, list);
 
+	vk::CommandBuffer cmd = frame.cmd;
+
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 
-	vk::DescriptorSet set = descriptorSet_.getSet();
+	vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
 	ChunkWaterUBO ubo{};
 	ubo.u_useShadowMap = rs.useShadowMap ? 1 : 0;
@@ -124,7 +132,7 @@ void WaterPassVk::renderWater(
 	ubo.u_lightDir = in.light->getDirection();
 	ubo.u_lightColor = in.light->getColor();
 
-	uboBuffer_.upload(&ubo, sizeof(ubo), 0);
+	uboBuffers_[frame.frameIndex].upload(&ubo, sizeof(ubo), 0);
 
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
@@ -270,139 +278,157 @@ void WaterPassVk::createAttachments()
 
 void WaterPassVk::createResources()
 {
-	uboBuffer_.create(
-		sizeof(ChunkWaterUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_[i].create(
+			sizeof(ChunkWaterUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+	} // end for
 } // end of createResources()
 
 void WaterPassVk::createDescriptorSet()
 {
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(WaterBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(WaterBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding reflColorBinding{};
-	reflColorBinding.binding = TO_API_FORM(WaterBinding::ReflColorTex);
-	reflColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	reflColorBinding.descriptorCount = 1;
-	reflColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding reflColorBinding{};
+		reflColorBinding.binding = TO_API_FORM(WaterBinding::ReflColorTex);
+		reflColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		reflColorBinding.descriptorCount = 1;
+		reflColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding refrColorBinding{};
-	refrColorBinding.binding = TO_API_FORM(WaterBinding::RefrColorTex);
-	refrColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	refrColorBinding.descriptorCount = 1;
-	refrColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding refrColorBinding{};
+		refrColorBinding.binding = TO_API_FORM(WaterBinding::RefrColorTex);
+		refrColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		refrColorBinding.descriptorCount = 1;
+		refrColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding refrDepthBinding{};
-	refrDepthBinding.binding = TO_API_FORM(WaterBinding::RefrDepthTex);
-	refrDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	refrDepthBinding.descriptorCount = 1;
-	refrDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding refrDepthBinding{};
+		refrDepthBinding.binding = TO_API_FORM(WaterBinding::RefrDepthTex);
+		refrDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		refrDepthBinding.descriptorCount = 1;
+		refrDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding dudvBinding{};
-	dudvBinding.binding = TO_API_FORM(WaterBinding::DudvTex);
-	dudvBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	dudvBinding.descriptorCount = 1;
-	dudvBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding dudvBinding{};
+		dudvBinding.binding = TO_API_FORM(WaterBinding::DudvTex);
+		dudvBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		dudvBinding.descriptorCount = 1;
+		dudvBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding normalBinding{};
-	normalBinding.binding = TO_API_FORM(WaterBinding::NormalTex);
-	normalBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	normalBinding.descriptorCount = 1;
-	normalBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding normalBinding{};
+		normalBinding.binding = TO_API_FORM(WaterBinding::NormalTex);
+		normalBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		normalBinding.descriptorCount = 1;
+		normalBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding shadowMapBinding{};
-	shadowMapBinding.binding = TO_API_FORM(WaterBinding::ShadowTex);
-	shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapBinding.descriptorCount = 1;
-	shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding shadowMapBinding{};
+		shadowMapBinding.binding = TO_API_FORM(WaterBinding::ShadowTex);
+		shadowMapBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapBinding.descriptorCount = 1;
+		shadowMapBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	descriptorSet_.createLayout({ 
-		uboBinding,
-		reflColorBinding, refrColorBinding, refrDepthBinding,
-		dudvBinding, normalBinding, shadowMapBinding
-		});
+		descriptorSets_[i].createLayout({
+			uboBinding,
+			reflColorBinding, 
+			refrColorBinding, 
+			refrDepthBinding,
+			dudvBinding, 
+			normalBinding, 
+			shadowMapBinding
+			});
 
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize reflColorPool{};
-	reflColorPool.type = vk::DescriptorType::eCombinedImageSampler;
-	reflColorPool.descriptorCount = 1;
+		vk::DescriptorPoolSize reflColorPool{};
+		reflColorPool.type = vk::DescriptorType::eCombinedImageSampler;
+		reflColorPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize refrColorPool{};
-	refrColorPool.type = vk::DescriptorType::eCombinedImageSampler;
-	refrColorPool.descriptorCount = 1;
+		vk::DescriptorPoolSize refrColorPool{};
+		refrColorPool.type = vk::DescriptorType::eCombinedImageSampler;
+		refrColorPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize refrDepthPool{};
-	refrDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
-	refrDepthPool.descriptorCount = 1;
+		vk::DescriptorPoolSize refrDepthPool{};
+		refrDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
+		refrDepthPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize dudvPool{};
-	dudvPool.type = vk::DescriptorType::eCombinedImageSampler;
-	dudvPool.descriptorCount = 1;
+		vk::DescriptorPoolSize dudvPool{};
+		dudvPool.type = vk::DescriptorType::eCombinedImageSampler;
+		dudvPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize normalPool{};
-	normalPool.type = vk::DescriptorType::eCombinedImageSampler;
-	normalPool.descriptorCount = 1;
+		vk::DescriptorPoolSize normalPool{};
+		normalPool.type = vk::DescriptorType::eCombinedImageSampler;
+		normalPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize shadowMapPool{};
-	shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
-	shadowMapPool.descriptorCount = 1;
+		vk::DescriptorPoolSize shadowMapPool{};
+		shadowMapPool.type = vk::DescriptorType::eCombinedImageSampler;
+		shadowMapPool.descriptorCount = 1;
 
-	descriptorSet_.createPool({ 
-		uboPool, 
-		reflColorPool, refrColorPool, refrDepthPool,
-		dudvPool, normalPool, shadowMapPool
-		});
-	descriptorSet_.allocate();
+		descriptorSets_[i].createPool({
+			uboPool,
+			reflColorPool, 
+			refrColorPool, 
+			refrDepthPool,
+			dudvPool, 
+			normalPool, 
+			shadowMapPool
+			});
+		descriptorSets_[i].allocate();
 
-	descriptorSet_.writeUniformBuffer(
-		TO_API_FORM(WaterBinding::UBO),
-		uboBuffer_.getBuffer(),
-		sizeof(ChunkWaterUBO)
-	);
+		descriptorSets_[i].setDebugName(
+			"WaterPassVK::descriptorSets frame " + std::to_string(i)
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(WaterBinding::ReflColorTex),
-		reflColorImage_.view(),
-		reflColorImage_.sampler()
-	);
+		descriptorSets_[i].writeUniformBuffer(
+			TO_API_FORM(WaterBinding::UBO),
+			uboBuffers_[i].getBuffer(),
+			sizeof(ChunkWaterUBO)
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(WaterBinding::RefrColorTex),
-		refrColorImage_.view(),
-		refrColorImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::ReflColorTex),
+			reflColorImage_.view(),
+			reflColorImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(WaterBinding::RefrDepthTex),
-		refrDepthImage_.view(),
-		refrDepthImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::RefrColorTex),
+			refrColorImage_.view(),
+			refrColorImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(WaterBinding::DudvTex),
-		dudvTex_.view(),
-		dudvTex_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::RefrDepthTex),
+			refrDepthImage_.view(),
+			refrDepthImage_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(WaterBinding::NormalTex),
-		normalTex_.view(),
-		normalTex_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::DudvTex),
+			dudvTex_.view(),
+			dudvTex_.sampler()
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(WaterBinding::ShadowTex),
-		shadowMapImage_.view(),
-		shadowMapImage_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::NormalTex),
+			normalTex_.view(),
+			normalTex_.sampler()
+		);
+
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::ShadowTex),
+			shadowMapImage_.view(),
+			shadowMapImage_.sampler()
+		);
+	} // end for
 } // end of createDescriptorSet()
 
 void WaterPassVk::createPipeline()
@@ -417,7 +443,7 @@ void WaterPassVk::createPipeline()
 	pushRange.size = sizeof(ChunkWaterPushConstants);
 	desc.pushConstantRanges = { pushRange };
 
-	desc.setLayouts = { descriptorSet_.getLayout() };
+	desc.setLayouts = { descriptorSets_[0].getLayout()};
 
 	desc.colorFormat = colorFormat_;
 	desc.depthFormat = depthFormat_;

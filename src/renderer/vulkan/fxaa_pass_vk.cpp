@@ -50,20 +50,24 @@ void FXAAPassVk::resize()
 	createAttachment();
 } // end of resize()
 
-void FXAAPassVk::setInput(ImageVk& input)
-{
-	inputImage_ = &input;
-} // end of setInput()
-
 void FXAAPassVk::render(FrameContext& frame)
 {
-	refreshInput();
-
 	if (!inputImage_ || 
-		!uboBuffers_[frame.frameIndex].valid() || !descriptorSets_[frame.frameIndex].valid() || !pipeline_.valid())
+		!pipeline_.valid())
 	{
 		return;
 	}
+
+	DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
+	if (!desc.valid()) return;
+
+	desc.writeCombinedImageSampler(
+		TO_API_FORM(FXAAPassBinding::ForwardColorTex),
+		inputImage_->view(),
+		inputImage_->sampler()
+	);
+
+	vk::DescriptorSet set = desc.getSet();
 
 	vk::CommandBuffer cmd = frame.cmd;
 	vk::Extent2D extent = frame.extent;
@@ -80,11 +84,7 @@ void FXAAPassVk::render(FrameContext& frame)
 
 	uboBuffers_[frame.frameIndex].upload(&uboData_, sizeof(uboData_));
 
-	vk::ClearValue clear{};
-	clear.color.float32[0] = 0.0f;
-	clear.color.float32[1] = 0.0f;
-	clear.color.float32[2] = 0.0f;
-	clear.color.float32[3] = 1.0f;
+	vk::ClearValue clear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
 	vk::RenderingAttachmentInfo colorAttach{};
 	colorAttach.imageView = outputImage_.view();
@@ -116,8 +116,6 @@ void FXAAPassVk::render(FrameContext& frame)
 		scissor.offset = vk::Offset2D{ 0, 0 };
 		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
-
-		vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 		cmd.bindDescriptorSets(
@@ -212,7 +210,10 @@ void FXAAPassVk::createDescriptorSets()
 		inputImgBinding.descriptorCount = 1;
 		inputImgBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-		descriptorSets_[i].createLayout({uboBinding, inputImgBinding});
+		descriptorSets_[i].createLayout({
+			uboBinding, 
+			inputImgBinding
+			});
 
 		vk::DescriptorPoolSize uboPool;
 		uboPool.type = vk::DescriptorType::eUniformBuffer;
@@ -222,8 +223,15 @@ void FXAAPassVk::createDescriptorSets()
 		inputImgPool.type = vk::DescriptorType::eCombinedImageSampler;
 		inputImgPool.descriptorCount = 1;
 
-		descriptorSets_[i].createPool({ uboPool, inputImgPool });
+		descriptorSets_[i].createPool({ 
+			uboPool, 
+			inputImgPool 
+			});
 		descriptorSets_[i].allocate();
+
+		descriptorSets_[i].setDebugName(
+			"FXAAPass::descriptorSets_ frame " + std::to_string(i)
+		);
 
 		descriptorSets_[i].writeUniformBuffer(
 			TO_API_FORM(FXAAPassBinding::UBO),

@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <cstdint>
+#include <string>
 
 class VulkanMain;
 
@@ -18,6 +19,8 @@ public:
 
 	DescriptorSetVk(DescriptorSetVk&&) noexcept = default;
 	DescriptorSetVk& operator=(DescriptorSetVk&&) noexcept = default;
+
+	void setDebugName(const std::string& name);
 
 	void createLayout(const std::vector<vk::DescriptorSetLayoutBinding>& bindings);
 
@@ -84,6 +87,8 @@ public:
 
 private:
 	VulkanMain& vk_;
+
+	std::string debugName_;
 
 	vk::UniqueDescriptorSetLayout setLayout_{};
 	vk::UniqueDescriptorPool descPool_{};

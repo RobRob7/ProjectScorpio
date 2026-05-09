@@ -363,7 +363,12 @@ void SSAOPassVk::createDescriptorSets()
 			noiseBinding.descriptorCount = 1;
 			noiseBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-			ssaoRawDescriptorSets_[i].createLayout({uboBinding, gNormalBinding, gDepthBinding, noiseBinding});
+			ssaoRawDescriptorSets_[i].createLayout({
+				uboBinding, 
+				gNormalBinding, 
+				gDepthBinding, 
+				noiseBinding
+				});
 
 			vk::DescriptorPoolSize uboPool{};
 			uboPool.type = vk::DescriptorType::eUniformBuffer;
@@ -381,8 +386,17 @@ void SSAOPassVk::createDescriptorSets()
 			noisePool.type = vk::DescriptorType::eCombinedImageSampler;
 			noisePool.descriptorCount = 1;
 
-			ssaoRawDescriptorSets_[i].createPool({uboPool, gNormalPool, gDepthPool, noisePool}, 1);
+			ssaoRawDescriptorSets_[i].createPool({
+				uboPool, 
+				gNormalPool, 
+				gDepthPool, 
+				noisePool
+				});
 			ssaoRawDescriptorSets_[i].allocate();
+
+			ssaoRawDescriptorSets_[i].setDebugName(
+				"SSAOPassVk::ssaoRawDescriptorSets_ frame " + std::to_string(i)
+			);
 
 			ssaoRawDescriptorSets_[i].writeUniformBuffer(
 				TO_API_FORM(SSAORawBinding::UBO),
@@ -424,7 +438,10 @@ void SSAOPassVk::createDescriptorSets()
 			ssaoRawBinding.descriptorCount = 1;
 			ssaoRawBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-			ssaoBlurDescriptorSets_[i].createLayout({uboBinding, ssaoRawBinding});
+			ssaoBlurDescriptorSets_[i].createLayout({
+				uboBinding, 
+				ssaoRawBinding
+				});
 
 			vk::DescriptorPoolSize uboPool{};
 			uboPool.type = vk::DescriptorType::eUniformBuffer;
@@ -434,8 +451,15 @@ void SSAOPassVk::createDescriptorSets()
 			ssaoRawPool.type = vk::DescriptorType::eCombinedImageSampler;
 			ssaoRawPool.descriptorCount = 1;
 
-			ssaoBlurDescriptorSets_[i].createPool({uboPool, ssaoRawPool}, 1);
+			ssaoBlurDescriptorSets_[i].createPool({
+				uboPool, 
+				ssaoRawPool
+				});
 			ssaoBlurDescriptorSets_[i].allocate();
+
+			ssaoBlurDescriptorSets_[i].setDebugName(
+				"SSAOPassVk::ssaoBlurDescriptorSets_ frame " + std::to_string(i)
+			);
 
 			ssaoBlurDescriptorSets_[i].writeUniformBuffer(
 				TO_API_FORM(SSAOBlurBinding::UBO),

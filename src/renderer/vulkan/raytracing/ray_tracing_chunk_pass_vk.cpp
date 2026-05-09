@@ -657,6 +657,10 @@ void RayTracingWorldPassVk::createDescriptorSet()
 				uboPool
 			});
 			rayGenDescriptorSets_[i].allocate();
+
+			rayGenDescriptorSets_[i].setDebugName(
+				"RTChunkPassVk::rayGenDescriptorSets_ frame " + std::to_string(i)
+			);
 		}
 
 		// MISS DS + POOL
@@ -703,6 +707,10 @@ void RayTracingWorldPassVk::createDescriptorSet()
 				dayTexPool
 			});
 			missDescriptorSets_[i].allocate();
+
+			missDescriptorSets_[i].setDebugName(
+				"RTChunkPassVk::missDescriptorSets_ frame " + std::to_string(i)
+			);
 		}
 
 		// CLOSEST HIT DS + POOL (OPAQUE)
@@ -761,6 +769,10 @@ void RayTracingWorldPassVk::createDescriptorSet()
 				atlasPool
 			});
 			closestHitOpaqueDescriptorSets_[i].allocate();
+
+			closestHitOpaqueDescriptorSets_[i].setDebugName(
+				"RTChunkPassVk::closestHitOpaqueDescriptorSets_ frame " + std::to_string(i)
+			);
 		}
 
 		// CLOSEST HIT DS + POOL (WATER)
@@ -831,6 +843,10 @@ void RayTracingWorldPassVk::createDescriptorSet()
 				normalPool
 			});
 			closestHitWaterDescriptorSets_[i].allocate();
+
+			closestHitWaterDescriptorSets_[i].setDebugName(
+				"RTChunkPassVk::closestHitWaterDescriptorSets_ frame " + std::to_string(i)
+			);
 		}
 	} // end for
 } // end of createDescriptorSet()

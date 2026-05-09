@@ -26,16 +26,26 @@ CubemapVk::CubemapVk(
 )
 	: vk_(vk),
 	vertexBuffer_(vk),
-	uboBuffer_(vk),
-	uboBufferOffscreen_(vk),
-	descriptorSet_(vk),
-	descriptorSetOffscreen_(vk),
 	pipeline_(vk),
 	pipelineOffscreen_(vk),
 	faces_(textures),
 	cubemapTextureNight_(vk),
 	cubemapTextureDay_(vk)
 {
+	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
+	uboBuffersOffscreen_.reserve(vk_.getMaxFramesInFlight());
+
+	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
+	descriptorSetsOffscreen_.reserve(vk_.getMaxFramesInFlight());
+
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_.emplace_back(vk_);
+		uboBuffersOffscreen_.emplace_back(vk_);
+
+		descriptorSets_.emplace_back(vk_);
+		descriptorSetsOffscreen_.emplace_back(vk_);
+	} // end for
 } // end of constructor
 CubemapVk::~CubemapVk() = default;
 
@@ -48,12 +58,12 @@ void CubemapVk::init()
 	);
 
 	createVertexBuffer();
-	createUBO();
+	createUBOs();
 
 	cubemapTextureNight_.loadFromFiles(faces_);
 	cubemapTextureDay_.loadFromFiles(DAY_FACES);
 
-	createDescriptorSet();
+	createDescriptorSets();
 
 	createPipeline();
 } // end of init()
@@ -68,7 +78,10 @@ void CubemapVk::render(
 {
 	assert(frame->cmd && "Must be valid Vulkan frame context!");
 
-	if (!descriptorSet_.valid() || !uboBuffer_.valid() || !vertexBuffer_.valid() || !pipeline_.valid()) return;
+	if (!descriptorSets_[frame->frameIndex].valid() || 
+		!uboBuffers_[frame->frameIndex].valid() || 
+		!vertexBuffer_.valid() || 
+		!pipeline_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
 
@@ -95,9 +108,9 @@ void CubemapVk::render(
 	ubo.u_view = viewStrippedTranslation;
 	ubo.u_proj = projection;
 
-	uboBuffer_.upload(&ubo, sizeof(CubemapUBO));
+	uboBuffers_[frame->frameIndex].upload(&ubo, sizeof(CubemapUBO));
 
-	vk::DescriptorSet descSet = descriptorSet_.getSet();
+	vk::DescriptorSet descSet = descriptorSets_[frame->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipeline_.getLayout(),
@@ -121,7 +134,10 @@ void CubemapVk::renderOffscreen(
 {
 	assert(frame->cmd && "Must be valid Vulkan frame context!");
 
-	if (!descriptorSetOffscreen_.valid() || !uboBufferOffscreen_.valid() || !vertexBuffer_.valid() || !pipelineOffscreen_.valid()) return;
+	if (!descriptorSetsOffscreen_[frame->frameIndex].valid() ||
+		!uboBuffersOffscreen_[frame->frameIndex].valid() ||
+		!vertexBuffer_.valid() || 
+		!pipelineOffscreen_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
 
@@ -163,9 +179,9 @@ void CubemapVk::renderOffscreen(
 	ubo.u_view = viewStrippedTranslation;
 	ubo.u_proj = projection;
 
-	uboBufferOffscreen_.upload(&ubo, sizeof(CubemapUBO));
+	uboBuffersOffscreen_[frame->frameIndex].upload(&ubo, sizeof(CubemapUBO));
 
-	vk::DescriptorSet descSet = descriptorSetOffscreen_.getSet();
+	vk::DescriptorSet descSet = descriptorSetsOffscreen_[frame->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipelineOffscreen_.getLayout(),
@@ -193,101 +209,131 @@ void CubemapVk::createVertexBuffer()
 	vertexBuffer_.upload(SKYBOX_VERTICES.data(), bufferSize);
 } // end of createVertexBuffer()
 
-void CubemapVk::createUBO()
+void CubemapVk::createUBOs()
 {
-	uboBuffer_.create(
-		sizeof(CubemapUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		uboBuffers_[i].create(
+			sizeof(CubemapUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
 
-	uboBufferOffscreen_.create(
-		sizeof(CubemapUBO),
-		vk::BufferUsageFlagBits::eUniformBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
-} // end of createUBO()
+		uboBuffersOffscreen_[i].create(
+			sizeof(CubemapUBO),
+			vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
+		);
+	} // end for
+} // end of createUBOs()
 
-void CubemapVk::createDescriptorSet()
+void CubemapVk::createDescriptorSets()
 {
-	// normal descriptor set
-	vk::DescriptorSetLayoutBinding uboBinding{};
-	uboBinding.binding = TO_API_FORM(CubemapBinding::UBO);
-	uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
-	uboBinding.descriptorCount = 1;
-	uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	{
+		// normal descriptor set
+		vk::DescriptorSetLayoutBinding uboBinding{};
+		uboBinding.binding = TO_API_FORM(CubemapBinding::UBO);
+		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
+		uboBinding.descriptorCount = 1;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding nightTexBinding{};
-	nightTexBinding.binding = TO_API_FORM(CubemapBinding::NightSkyboxTex);
-	nightTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	nightTexBinding.descriptorCount = 1;
-	nightTexBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding nightTexBinding{};
+		nightTexBinding.binding = TO_API_FORM(CubemapBinding::NightSkyboxTex);
+		nightTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		nightTexBinding.descriptorCount = 1;
+		nightTexBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	vk::DescriptorSetLayoutBinding dayTexBinding{};
-	dayTexBinding.binding = TO_API_FORM(CubemapBinding::DaySkyboxTex);
-	dayTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-	dayTexBinding.descriptorCount = 1;
-	dayTexBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		vk::DescriptorSetLayoutBinding dayTexBinding{};
+		dayTexBinding.binding = TO_API_FORM(CubemapBinding::DaySkyboxTex);
+		dayTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		dayTexBinding.descriptorCount = 1;
+		dayTexBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-	descriptorSet_.createLayout({ uboBinding, nightTexBinding, dayTexBinding });
+		descriptorSets_[i].createLayout({
+			uboBinding, 
+			nightTexBinding, 
+			dayTexBinding
+			});
 
-	vk::DescriptorPoolSize uboPool{};
-	uboPool.type = vk::DescriptorType::eUniformBuffer;
-	uboPool.descriptorCount = 1;
+		vk::DescriptorPoolSize uboPool{};
+		uboPool.type = vk::DescriptorType::eUniformBuffer;
+		uboPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize nightTexPool{};
-	nightTexPool.type = vk::DescriptorType::eCombinedImageSampler;
-	nightTexPool.descriptorCount = 1;
+		vk::DescriptorPoolSize nightTexPool{};
+		nightTexPool.type = vk::DescriptorType::eCombinedImageSampler;
+		nightTexPool.descriptorCount = 1;
 
-	vk::DescriptorPoolSize dayTexPool{};
-	dayTexPool.type = vk::DescriptorType::eCombinedImageSampler;
-	dayTexPool.descriptorCount = 1;
+		vk::DescriptorPoolSize dayTexPool{};
+		dayTexPool.type = vk::DescriptorType::eCombinedImageSampler;
+		dayTexPool.descriptorCount = 1;
 
-	descriptorSet_.createPool({ uboPool, nightTexPool, dayTexPool }, 1);
-	descriptorSet_.allocate();
+		descriptorSets_[i].createPool({
+			uboPool, 
+			nightTexPool, 
+			dayTexPool
+			});
+		descriptorSets_[i].allocate();
 
-	descriptorSet_.writeUniformBuffer(
-		TO_API_FORM(CubemapBinding::UBO),
-		uboBuffer_.getBuffer(),
-		sizeof(CubemapUBO)
-	);
+		descriptorSets_[i].setDebugName(
+			"CubemapVk::descriptorSets_ frame " + std::to_string(i)
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(CubemapBinding::NightSkyboxTex),
-		cubemapTextureNight_.view(),
-		cubemapTextureNight_.sampler()
-	);
+		descriptorSets_[i].writeUniformBuffer(
+			TO_API_FORM(CubemapBinding::UBO),
+			uboBuffers_[i].getBuffer(),
+			sizeof(CubemapUBO)
+		);
 
-	descriptorSet_.writeCombinedImageSampler(
-		TO_API_FORM(CubemapBinding::DaySkyboxTex),
-		cubemapTextureDay_.view(),
-		cubemapTextureDay_.sampler()
-	);
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(CubemapBinding::NightSkyboxTex),
+			cubemapTextureNight_.view(),
+			cubemapTextureNight_.sampler()
+		);
 
-	// offscreen descriptor set
-	descriptorSetOffscreen_.createLayout({ uboBinding, nightTexBinding, dayTexBinding, });
+		descriptorSets_[i].writeCombinedImageSampler(
+			TO_API_FORM(CubemapBinding::DaySkyboxTex),
+			cubemapTextureDay_.view(),
+			cubemapTextureDay_.sampler()
+		);
 
-	descriptorSetOffscreen_.createPool({ uboPool, nightTexPool, dayTexPool }, 1);
-	descriptorSetOffscreen_.allocate();
+		// offscreen descriptor set
+		descriptorSetsOffscreen_[i].createLayout({
+			uboBinding, 
+			nightTexBinding, 
+			dayTexBinding
+			});
 
-	descriptorSetOffscreen_.writeUniformBuffer(
-		TO_API_FORM(CubemapBinding::UBO),
-		uboBufferOffscreen_.getBuffer(),
-		sizeof(CubemapUBO)
-	);
+		descriptorSetsOffscreen_[i].createPool({
+			uboPool, 
+			nightTexPool, 
+			dayTexPool
+			});
+		descriptorSetsOffscreen_[i].allocate();
 
-	descriptorSetOffscreen_.writeCombinedImageSampler(
-		TO_API_FORM(CubemapBinding::NightSkyboxTex),
-		cubemapTextureNight_.view(),
-		cubemapTextureNight_.sampler()
-	);
+		descriptorSetsOffscreen_[i].setDebugName(
+			"CubemapVk::descriptorSetsOffscreen_ frame " + std::to_string(i)
+		);
 
-	descriptorSetOffscreen_.writeCombinedImageSampler(
-		TO_API_FORM(CubemapBinding::DaySkyboxTex),
-		cubemapTextureDay_.view(),
-		cubemapTextureDay_.sampler()
-	);
-} // end of createDescriptorSet()
+		descriptorSetsOffscreen_[i].writeUniformBuffer(
+			TO_API_FORM(CubemapBinding::UBO),
+			uboBuffersOffscreen_[i].getBuffer(),
+			sizeof(CubemapUBO)
+		);
+
+		descriptorSetsOffscreen_[i].writeCombinedImageSampler(
+			TO_API_FORM(CubemapBinding::NightSkyboxTex),
+			cubemapTextureNight_.view(),
+			cubemapTextureNight_.sampler()
+		);
+
+		descriptorSetsOffscreen_[i].writeCombinedImageSampler(
+			TO_API_FORM(CubemapBinding::DaySkyboxTex),
+			cubemapTextureDay_.view(),
+			cubemapTextureDay_.sampler()
+		);
+	} // end for
+} // end of createDescriptorSets()
 
 void CubemapVk::createPipeline()
 {
@@ -307,7 +353,7 @@ void CubemapVk::createPipeline()
 	desc.vertShader = shader_->vertShader();
 	desc.fragShader = shader_->fragShader();
 
-	desc.setLayouts = { descriptorSet_.getLayout() };
+	desc.setLayouts = { descriptorSets_[0].getLayout()};
 
 	desc.vertexBinding = binding;
 	desc.vertexAttributes = { attr };
