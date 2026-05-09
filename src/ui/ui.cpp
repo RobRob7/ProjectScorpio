@@ -407,8 +407,11 @@ void UI::drawMenuBar(IScene& scene)
 		bool enabledRT = renderSettings_.useRT;
 		if (ImGui::BeginMenu("Graphics"))
 		{
-			if (ImGui::Checkbox("RT Mode##graphics", &renderSettings_.useRT))
+			if (vk_->supportsRayTracing())
 			{
+				if (ImGui::Checkbox("RT Mode##graphics", &renderSettings_.useRT))
+				{
+				}
 			}
 			ImGui::BeginDisabled(enabledRT);
 			if (ImGui::Checkbox("Shadows##graphics", &renderSettings_.useShadowMap))

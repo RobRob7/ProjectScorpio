@@ -158,6 +158,8 @@ public:
         framebufferResized_ = true;
     } // end of setVSync
 
+    bool supportsRayTracing() const { return supportsRayTracing_; }
+
 private:
     void createInstance();
     void setupDebugMessenger();
@@ -200,14 +202,17 @@ private:
 
 private:
     const std::vector<const char*> validationLayers_ = { "VK_LAYER_KHRONOS_validation" };
-    const std::vector<const char*> deviceExtensions_ = 
+    const std::vector<const char*> requiredDeviceExtensions_ = 
     {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
+        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME
+    };
+    const std::vector<const char*> rayTracingDeviceExtensions_ = 
+    {
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
     };
 
     bool enableValidationLayers_{ false };
@@ -228,6 +233,8 @@ private:
     vk::SampleCountFlagBits msaaSamples_{ vk::SampleCountFlagBits::e1 };
 
     GLFWwindow* window_{};
+
+    bool supportsRayTracing_{ false };
 
     vk::UniqueInstance instance_{};
     vk::UniqueDebugUtilsMessengerEXT debugMessenger_{};

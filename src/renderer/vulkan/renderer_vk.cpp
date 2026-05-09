@@ -198,7 +198,7 @@ void RendererVk::renderFrame(
 
 	// ----------------- PASSES ----------------- //
 	// RT upload
-	if (renderSettings_->useRT && rtWorldPass_)
+	if (vk_.supportsRayTracing() && renderSettings_->useRT && rtWorldPass_)
 	{
 		rtWorldPass_->upload(
 			cmd,
@@ -276,11 +276,7 @@ void RendererVk::renderFrame(
 	sceneColor_.transitionToColorAttachment(cmd);
 	sceneDepth_.transitionToDepthAttachment(cmd);
 
-	vk::ClearValue clear{};
-	clear.color.float32[0] = 0.0f;
-	clear.color.float32[1] = 0.0f;
-	clear.color.float32[2] = 0.0f;
-	clear.color.float32[3] = 1.0f;
+	vk::ClearValue clear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
 	vk::RenderingAttachmentInfo colorAttach{};
 	colorAttach.imageView = sceneColor_.view();
@@ -357,7 +353,7 @@ void RendererVk::renderFrame(
 	cmd.endRendering();
 
 	// RT render
-	if (renderSettings_->useRT)
+	if (vk_.supportsRayTracing() && renderSettings_->useRT && rtWorldPass_)
 	{
 		CubemapVk* skybox = dynamic_cast<CubemapVk*>(in.skybox);
 		rtWorldPass_->setSkybox(
@@ -388,7 +384,7 @@ void RendererVk::renderFrame(
 	}
 
 	// ----------------- COMPOSITE PASS ----------------- //
-	if (renderSettings_->useRT)
+	if (vk_.supportsRayTracing() && renderSettings_->useRT)
 	{
 		compositePass_->setInput(
 			{ sceneColor_, sceneDepth_ },

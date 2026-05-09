@@ -27,6 +27,34 @@ static VKAPI_ATTR vk::Bool32 VKAPI_CALL debugCallback(
 	return VK_FALSE;
 } // end of debugCallback()
 
+static bool HasExtensions(
+	vk::PhysicalDevice device,
+	const std::vector<const char*>& extensions
+)
+{
+	vk::ResultValue rv = device.enumerateDeviceExtensionProperties(nullptr);
+	if (rv.result != vk::Result::eSuccess)
+	{
+		return false;
+	}
+
+	std::set<std::string> available;
+	for (const auto& ext : rv.value)
+	{
+		available.insert(ext.extensionName);
+	}
+
+	for (const char* required : extensions)
+	{
+		if (available.find(required) == available.end())
+		{
+			return false;
+		}
+	}
+
+	return true;
+} // end of HasExtensions()
+
 
 //--- PUBLIC ---//
 VulkanMain::VulkanMain(GLFWwindow* window)
@@ -568,6 +596,23 @@ void VulkanMain::pickPhysicalDevice()
 			physicalDevice_ = device;
 			physicalDeviceProperties_ = physicalDevice_.getProperties();
 			msaaSamples_ = getMaxUsableSampleCount();
+
+			vk::PhysicalDeviceFeatures2 feats2{};
+			vk::PhysicalDeviceBufferDeviceAddressFeatures bda{};
+			vk::PhysicalDeviceAccelerationStructureFeaturesKHR accel{};
+			vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
+
+			feats2.pNext = &bda;
+			bda.pNext = &accel;
+			accel.pNext = &rt;
+
+			physicalDevice_.getFeatures2(&feats2);
+
+			supportsRayTracing_ =
+				HasExtensions(physicalDevice_, rayTracingDeviceExtensions_) &&
+				bda.bufferDeviceAddress &&
+				accel.accelerationStructure &&
+				rt.rayTracingPipeline;
 			break;
 		}
 	} // end for
@@ -631,20 +676,28 @@ void VulkanMain::createLogicalDevice()
 	vk::PhysicalDeviceBufferDeviceAddressFeatures bda{};
 	bda.bufferDeviceAddress = VK_TRUE;
 
-	vk::PhysicalDeviceAccelerationStructureFeaturesKHR accel{};
-	accel.accelerationStructure = VK_TRUE;
-
-	vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
-	rt.rayTracingPipeline = VK_TRUE;
-
 	vk::PhysicalDeviceSynchronization2FeaturesKHR s2f{};
 	s2f.synchronization2 = VK_TRUE;
 
+	vk::PhysicalDeviceAccelerationStructureFeaturesKHR accel{};
+	vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
+
 	deviceFeatures2.pNext = &dynamicRendering;
 	dynamicRendering.pNext = &bda;
-	bda.pNext = &accel;
-	accel.pNext = &rt;
-	rt.pNext = &s2f;
+
+	if (supportsRayTracing_)
+	{
+		accel.accelerationStructure = VK_TRUE;
+		rt.rayTracingPipeline = VK_TRUE;
+
+		bda.pNext = &accel;
+		accel.pNext = &rt;
+		rt.pNext = &s2f;
+	}
+	else
+	{
+		bda.pNext = &s2f;
+	}
 
 	vk::DeviceCreateInfo createInfo{};
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -653,8 +706,19 @@ void VulkanMain::createLogicalDevice()
 	createInfo.pEnabledFeatures = nullptr;
 	createInfo.pNext = &deviceFeatures2;
 
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions_.size());
-	createInfo.ppEnabledExtensionNames = deviceExtensions_.data();
+	std::vector<const char*> enabledExtensions = requiredDeviceExtensions_;
+
+	if (supportsRayTracing_)
+	{
+		enabledExtensions.insert(
+			enabledExtensions.end(),
+			rayTracingDeviceExtensions_.begin(),
+			rayTracingDeviceExtensions_.end()
+		);
+	}
+
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size());
+	createInfo.ppEnabledExtensionNames = enabledExtensions.data();
 
 	if (enableValidationLayers_)
 	{
@@ -1095,18 +1159,19 @@ bool VulkanMain::isDeviceSuitable(vk::PhysicalDevice device)
 
 	device.getFeatures2(&feats2);
 
-	return indices.isComplete()
-		&& extensionsSupported
-		&& swapChainAdequate
-		&& feats2.features.samplerAnisotropy
-		&& feats2.features.sampleRateShading
-		&& feats2.features.shaderClipDistance
-		&& feats2.features.shaderInt64
-		&& dyn.dynamicRendering
-		&& bda.bufferDeviceAddress
-		&& accel.accelerationStructure
-		&& rt.rayTracingPipeline
-		&& s2f.synchronization2;
+	const bool rasterCheck = 
+		indices.isComplete() &&
+		extensionsSupported &&
+		swapChainAdequate &&
+		feats2.features.samplerAnisotropy &&
+		feats2.features.sampleRateShading &&
+		feats2.features.shaderClipDistance &&
+		feats2.features.shaderInt64 &&
+		dyn.dynamicRendering &&
+		bda.bufferDeviceAddress &&
+		s2f.synchronization2;
+
+	return rasterCheck;
 } // end of isDeviceSuitable()
 
 QueueFamilyIndices VulkanMain::findQueueFamilies(vk::PhysicalDevice device) 
@@ -1168,13 +1233,21 @@ bool VulkanMain::checkDeviceExtensionSupport(vk::PhysicalDevice device)
 		return false;
 	}
 
-	std::set<std::string> requiredExtensions(deviceExtensions_.begin(), deviceExtensions_.end());
+	std::set<std::string> available;
 	for (const auto& ext : rv.value) 
 	{
-		requiredExtensions.erase(ext.extensionName);
+		available.insert(ext.extensionName);
 	} // end for
 
-	return requiredExtensions.empty();
+	for (const char* required : requiredDeviceExtensions_)
+	{
+		if (available.find(required) == available.end())
+		{
+			return false;
+		}
+	} // end for
+
+	return true;
 } // end of checkDeviceExtensionSupport()
 
 SwapChainSupportDetails VulkanMain::querySwapChainSupport(vk::PhysicalDevice device) 
