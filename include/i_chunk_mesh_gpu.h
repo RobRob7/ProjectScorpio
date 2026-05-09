@@ -10,7 +10,10 @@ class IChunkMeshGPU
 public:
 	virtual ~IChunkMeshGPU() = default;
 
-	virtual void upload(const ChunkMeshData& data) = 0;
+	virtual void upload(
+		vk::CommandBuffer cmd, 
+		const ChunkMeshData& data
+	) = 0;
 	virtual void drawOpaque(vk::CommandBuffer cmd) = 0;
 	virtual void drawWater(vk::CommandBuffer cmd) = 0;
 };

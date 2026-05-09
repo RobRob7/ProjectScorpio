@@ -193,7 +193,7 @@ void RendererVk::renderFrame(
 	in.light->updateLightDirection(in.time);
 
 	// update world state
-	in.world->updateDynamic(in.camera->getCameraPosition());
+	in.world->updateDynamic(in.camera->getCameraPosition(), &frame);
 	in.world->buildRTDrawList(view, proj);
 
 	// ----------------- PASSES ----------------- //

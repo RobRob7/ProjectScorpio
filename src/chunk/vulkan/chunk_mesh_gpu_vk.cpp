@@ -36,7 +36,10 @@ ChunkMeshGPUVk::~ChunkMeshGPUVk()
 	}
 } // end of destructor
 
-void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
+void ChunkMeshGPUVk::upload(
+	vk::CommandBuffer cmd,
+	const ChunkMeshData& data
+)
 {
 	BufferVk newOpaqueRTVB(*vk_);
 	BufferVk newOpaqueRTIB(*vk_);
@@ -56,7 +59,6 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 	uint32_t newWaterRTIndexCount = 0;
 	uint32_t newWaterIndexCount = 0;
 
-	vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 	std::vector<BufferVk> stagingBuffers;
 	stagingBuffers.reserve(8);
 
@@ -397,15 +399,12 @@ void ChunkMeshGPUVk::upload(const ChunkMeshData& data)
 		);
 	}
 
-	if (!stagingBuffers.empty())
+	for (auto& staging : stagingBuffers)
 	{
-		vk_->endSingleTimeCommands(cmd);
-		stagingBuffers.clear();
-	}
-	else
-	{
-		vk_->discardSingleTimeCommands(cmd);
-	}
+		vk_->retireBuffer(frameIndex, std::move(staging));
+	} // end for
+
+	stagingBuffers.clear();
 } // end of upload()
 
 void ChunkMeshGPUVk::drawOpaque(vk::CommandBuffer cmd)

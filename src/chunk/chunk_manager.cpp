@@ -1,5 +1,7 @@
 #include "chunk_manager.h"
 
+#include "frame_context_vk.h"
+
 #include "chunk_mesh.h"
 #include "chunk_entry.h"
 
@@ -107,7 +109,7 @@ void ChunkManager::init(VulkanMain* vk)
 	streamRecenterThreshold_ = std::max(1, viewRadius_ - 10);
 } // end of init()
 
-void ChunkManager::updateDynamic(const glm::vec3& cameraPos)
+void ChunkManager::updateDynamic(const glm::vec3& cameraPos, FrameContext* frame)
 {
 	glm::vec3 prevCameraPos = lastCameraPos_;
 	lastCameraPos_ = cameraPos;
@@ -263,7 +265,7 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos)
 	} // end for
 
 	// load chunks per frame
-	const int maxNewChunksPerFrame = 1;
+	const int maxNewChunksPerFrame = 3;
 	int built = 0;
 	while (!pendingChunks_.empty() && built < maxNewChunksPerFrame)
 	{
@@ -283,10 +285,49 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos)
 		saveWorld_.loadChunkFromFile(chunk, coord.x, coord.z, "HelloWorld");
 
 		entry->rebuildCPU();
-		entry->uploadGPU();
+
+		if (vk_)
+		{
+			if (!frame) return;
+			entry->uploadGPU(frame->cmd);
+		}
+		else
+		{
+			entry->uploadGPU({});
+		}
 
 		chunks_.emplace(coord, std::move(entry));
 		++built;
+	} // end while
+
+	// process dirty chunks
+	const int maxDirtyUploadsPerFrame = 1;
+	int dirtyUploaded = 0;
+	while (!dirtyChunks_.empty() && dirtyUploaded < maxDirtyUploadsPerFrame)
+	{
+		ChunkCoord coord = dirtyChunks_.front();
+		dirtyChunks_.pop();
+		queuedDirtyChunks_.erase(coord);
+
+		auto it = chunks_.find(coord);
+		if (it == chunks_.end())
+		{
+			continue;
+		}
+
+		it->second->rebuildCPU();
+
+		if (vk_)
+		{
+			if (!frame) return;
+			it->second->uploadGPU(frame->cmd);
+		}
+		else
+		{
+			it->second->uploadGPU({});
+		}
+
+		++dirtyUploaded;
 	} // end while
 } // end of updateDynamic()
 
@@ -705,11 +746,13 @@ void ChunkManager::setBlock(int wx, int wy, int wz, BlockID id)
 
 	it->second->cpu->setBlock(localX, localY, localZ, id);
 
-	it->second->rebuildCPU();
-	it->second->uploadGPU();
-
 	// mark chunk as modified
 	it->second->cpu->getChunk().m_dirty = true;
+
+	if (queuedDirtyChunks_.insert(coord).second)
+	{
+		dirtyChunks_.push(coord);
+	}
 } // end of setBlock()
 
 void ChunkManager::placeOrRemoveBlock(bool shouldPlace, const glm::vec3& origin, const glm::vec3& dir)

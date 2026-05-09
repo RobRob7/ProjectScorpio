@@ -157,7 +157,8 @@ private:
 
 	RayTracingPipelineVk pipeline_;
 	ShaderBindingTableVk sbt_;
-	AccelerationStructureVk tlas_;
+	std::vector<AccelerationStructureVk> tlas_;
+	std::vector<bool> rtDescriptorsValid_;
 };
 
 #endif
