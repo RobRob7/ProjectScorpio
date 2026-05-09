@@ -40,10 +40,17 @@ static inline uint32_t PackVertexU32(
 
 
 //--- PUBLIC ---//
-ChunkMesh::ChunkMesh(int chunkX, int chunkZ)
+ChunkMesh::ChunkMesh(
+	int chunkX,
+	int chunkZ,
+	bool autoBuild
+)
 	: chunkData_(chunkX, chunkZ)
 {
-	buildChunkMesh();
+	if (autoBuild)
+	{
+		buildChunkMesh();
+	}
 } // end of other constructor
 
 ChunkMesh::~ChunkMesh() = default;

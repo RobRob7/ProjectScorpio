@@ -99,7 +99,11 @@ struct ChunkCoordHash
 class ChunkMesh
 {
 public:
-    ChunkMesh(int chunkX, int chunkZ);
+    ChunkMesh(
+        int chunkX, 
+        int chunkZ, 
+        bool autoBuild = true
+    );
     ~ChunkMesh();
 
     void setBlock(int x, int y, int z, BlockID id);

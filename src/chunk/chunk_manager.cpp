@@ -263,7 +263,7 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos)
 	} // end for
 
 	// load chunks per frame
-	const int maxNewChunksPerFrame = 3;
+	const int maxNewChunksPerFrame = 1;
 	int built = 0;
 	while (!pendingChunks_.empty() && built < maxNewChunksPerFrame)
 	{
@@ -282,7 +282,9 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos)
 		auto& chunk = entry->cpu->getChunk();
 		saveWorld_.loadChunkFromFile(chunk, coord.x, coord.z, "HelloWorld");
 
-		entry->rebuildAndUpload();
+		entry->rebuildCPU();
+		entry->uploadGPU();
+
 		chunks_.emplace(coord, std::move(entry));
 		++built;
 	} // end while
@@ -703,7 +705,8 @@ void ChunkManager::setBlock(int wx, int wy, int wz, BlockID id)
 
 	it->second->cpu->setBlock(localX, localY, localZ, id);
 
-	it->second->rebuildAndUpload();
+	it->second->rebuildCPU();
+	it->second->uploadGPU();
 
 	// mark chunk as modified
 	it->second->cpu->getChunk().m_dirty = true;

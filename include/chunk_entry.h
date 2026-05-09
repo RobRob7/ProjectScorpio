@@ -21,7 +21,7 @@ struct ChunkEntry
 
 	ChunkEntry(int chunkX, int chunkZ, VulkanMain* vk)
 	{
-		cpu = std::make_unique<ChunkMesh>(chunkX, chunkZ);
+		cpu = std::make_unique<ChunkMesh>(chunkX, chunkZ, false);
 
 		if (vk)
 		{
@@ -31,14 +31,18 @@ struct ChunkEntry
 		{
 			gpu = std::make_shared<ChunkMeshGPUGL>();
 		}
-	}
+	} // end of constructor
 
-	void rebuildAndUpload()
+	void rebuildCPU() const
 	{
 		cpu->rebuild();
+	} // end of rebuildCPU()
+
+	void uploadGPU()
+	{
 		gpu->upload(cpu->data());
 		++geometryVersion;
-	}
+	} // end of uploadGPU()
 };
 
 #endif
