@@ -76,7 +76,10 @@ ChunkMeshGPUGL::~ChunkMeshGPUGL()
 	}
 } // end of destructor
 
-void ChunkMeshGPUGL::upload(const ChunkMeshData& data)
+void ChunkMeshGPUGL::upload(
+	vk::CommandBuffer,
+	const ChunkMeshData& data
+)
 {
 	// OPAQUE reupload into vbo
 	glNamedBufferData(

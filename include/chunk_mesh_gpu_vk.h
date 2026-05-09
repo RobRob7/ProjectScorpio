@@ -22,7 +22,10 @@ public:
 	explicit ChunkMeshGPUVk(VulkanMain& vk);
 	~ChunkMeshGPUVk() override;
 
-	void upload(const ChunkMeshData& data) override;
+	void upload(
+		vk::CommandBuffer cmd,
+		const ChunkMeshData& data
+	) override;
 	void drawOpaque(vk::CommandBuffer cmd) override;
 	void drawWater(vk::CommandBuffer cmd) override;
 

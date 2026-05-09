@@ -31,7 +31,6 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 	outDepthImage_(vk),
 	pipeline_(vk),
 	sbt_(vk),
-	tlas_(vk),
 	packedRTOpaqueInfoBuffer_(vk),
 	packedRTWaterInfoBuffer_(vk)
 {
@@ -44,6 +43,9 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 	closestHitOpaqueDescriptorSets_.reserve(vk_.getMaxFramesInFlight());
 	closestHitWaterDescriptorSets_.reserve(vk_.getMaxFramesInFlight());
 
+	tlas_.reserve(vk_.getMaxFramesInFlight());
+	rtDescriptorsValid_.resize(vk_.getMaxFramesInFlight());
+
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
 	{
 		rayGenUBOs_.emplace_back(vk_);
@@ -54,6 +56,8 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 		missDescriptorSets_.emplace_back(vk_);
 		closestHitOpaqueDescriptorSets_.emplace_back(vk_);
 		closestHitWaterDescriptorSets_.emplace_back(vk_);
+
+		tlas_.emplace_back(vk_);
 	} // end for
 } // end of constructor
 
@@ -119,18 +123,17 @@ void RayTracingWorldPassVk::upload(
 	{
 		lastSceneKeys_ = currentKeys;
 		rtSceneDirty_ = true;
+
+		std::fill(
+			rtDescriptorsValid_.begin(),
+			rtDescriptorsValid_.end(),
+			false
+		);
 	}
 
-	if (!rtSceneDirty_)
-	{
-		rtSceneReady_ =
-			tlas_.valid() &&
-			(packedRTOpaqueInfoBufferSize_ > 0 ||
-			packedRTWaterInfoBufferSize_ > 0);
-		return;
-	}
+	AccelerationStructureVk& frameTLAS = tlas_[frameIndex];
 
-	if (rtSceneDirty_)
+	if (rtSceneDirty_ || !frameTLAS.valid())
 	{
 		RTPackedSceneCPU chunkCPUScene;
 		buildPackedOpaqueRTSceneFromDrawList(drawList, chunkCPUScene);
@@ -175,16 +178,16 @@ void RayTracingWorldPassVk::upload(
 			return;
 		}
 
-		if (tlas_.valid())
+		if (frameTLAS.valid())
 		{
 			vk_.retireAccelerationStructure(
 				frameIndex,
-				std::move(tlas_)
+				std::move(frameTLAS)
 			);
-			tlas_ = AccelerationStructureVk(vk_);
+			frameTLAS = AccelerationStructureVk(vk_);
 		}
 
-		tlas_.buildTLASOnCmd(cmd, instances);
+		frameTLAS.buildTLASOnCmd(cmd, instances);
 
 		vk::MemoryBarrier asBarrier{};
 		asBarrier.srcAccessMask =
@@ -202,16 +205,17 @@ void RayTracingWorldPassVk::upload(
 			nullptr
 		);
 
-		for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
-		{
-			updateDescriptorSet(i);
-		}
-
-		rtSceneDirty_ = false;
+		updateDescriptorSet(frameIndex);
+		rtDescriptorsValid_[frameIndex] = true;
+	}
+	else if (!rtDescriptorsValid_[frameIndex])
+	{
+		updateDescriptorSet(frameIndex);
+		rtDescriptorsValid_[frameIndex] = true;
 	}
 
 	rtSceneReady_ =
-		tlas_.valid() &&
+		frameTLAS.valid() &&
 		(packedRTOpaqueInfoBufferSize_ > 0 ||
 		packedRTWaterInfoBufferSize_ > 0);
 } // end of upload()
@@ -224,7 +228,7 @@ void RayTracingWorldPassVk::render(
 	const glm::vec3& sunDir
 )
 {
-	if (!valid())
+	if (!valid() || !rtSceneReady_ || !rtDescriptorsValid_[frame.frameIndex])
 	{
 		return;
 	}
@@ -233,11 +237,6 @@ void RayTracingWorldPassVk::render(
 
 	outColorImage_.transitionToGeneral(cmd);
 	outDepthImage_.transitionToGeneral(cmd);
-
-	if (!rtSceneReady_)
-	{
-		return;
-	}
 
 	std::vector<vk::DescriptorSet> sets = {
 		rayGenDescriptorSets_[frame.frameIndex].getSet(),
@@ -375,11 +374,11 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 			vk::ImageLayout::eGeneral
 		);
 
-		if (tlas_.valid())
+		if (tlas_[frameIndex].valid())
 		{
 			set.writeAccelerationStructure(
 				TO_API_FORM(RTChunkRayGenBinding::TLAS),
-				tlas_.handle()
+				tlas_[frameIndex].handle()
 			);
 		}
 
@@ -419,11 +418,11 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 			return;
 		}
 
-		if (tlas_.valid())
+		if (tlas_[frameIndex].valid())
 		{
 			set.writeAccelerationStructure(
 				TO_API_FORM(RTOpaqueClosestHitBinding::TLAS),
-				tlas_.handle()
+				tlas_[frameIndex].handle()
 			);
 		}
 
@@ -461,11 +460,11 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 			return;
 		}
 
-		if (tlas_.valid())
+		if (tlas_[frameIndex].valid())
 		{
 			set.writeAccelerationStructure(
 				TO_API_FORM(RTWaterClosestHitBinding::TLAS),
-				tlas_.handle()
+				tlas_[frameIndex].handle()
 			);
 		}
 

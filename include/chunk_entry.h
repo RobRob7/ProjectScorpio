@@ -6,11 +6,11 @@
 #include "chunk_mesh_gpu_gl.h"
 #include "chunk_mesh_gpu_vk.h"
 
-class IChunkMeshGPU;
-class VulkanMain;
-
 #include <memory>
 #include <cstdint>
+
+class IChunkMeshGPU;
+class VulkanMain;
 
 struct ChunkEntry
 {
@@ -38,9 +38,9 @@ struct ChunkEntry
 		cpu->rebuild();
 	} // end of rebuildCPU()
 
-	void uploadGPU()
+	void uploadGPU(vk::CommandBuffer cmd)
 	{
-		gpu->upload(cpu->data());
+		gpu->upload(cmd, cpu->data());
 		++geometryVersion;
 	} // end of uploadGPU()
 };
