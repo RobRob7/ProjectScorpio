@@ -52,7 +52,7 @@ void RendererVk::init()
 		renderSettings_ = std::make_unique<RenderSettings>();
 	}
 
-	if (!rtWorldPass_)
+	if (vk_.supportsRayTracing() && !rtWorldPass_)
 	{
 		rtWorldPass_ = std::make_unique<RayTracingWorldPassVk>(vk_);
 	}
@@ -72,7 +72,8 @@ void RendererVk::init()
 			gbufferPass_->getNormalImage(),
 			gbufferPass_->getDepthImage(),
 			shadowMapPass_->getDepthImage(),
-			rtWorldPass_->getOutDepthImage()
+			shadowMapPass_->getDepthImage()
+			//rtWorldPass_->getOutDepthImage()
 		);
 	}
 	if (!ssaoPass_)
@@ -119,7 +120,14 @@ void RendererVk::init()
 		presentPass_ = std::make_unique<PresentPassVk>(vk_);
 	}
 
-	rtWorldPass_->init();
+	if (rtWorldPass_)
+	{
+		rtWorldPass_->init();
+	}
+	else
+	{
+		renderSettings_->useRT = false;
+	}
 
 	gbufferPass_->init();
 	shadowMapPass_->init();
