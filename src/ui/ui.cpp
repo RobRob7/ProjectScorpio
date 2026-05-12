@@ -28,6 +28,7 @@
 #define NOMINMAX
 #include <windows.h>
 #include <psapi.h>
+#include <filesystem>
 
 //--- HELPER ---//
 static size_t GetProcessMemoryMB()
@@ -62,6 +63,13 @@ UI::UI(
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
+
+	std::filesystem::path path = std::filesystem::path(RESOURCES_PATH) / 
+		"fonts/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf";
+	io.Fonts->AddFontFromFileTTF(
+		path.string().c_str(),
+		22.0f
+	);
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
 	setDarkTheme();
@@ -163,8 +171,10 @@ void UI::buildUI(float dt, IScene& scene)
 		glDisable(GL_FRAMEBUFFER_SRGB);
 	}
 
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
 	drawTitleBar();
 	drawMenuBar(scene);
+	ImGui::PopStyleVar();
 
 	if (statsEnabled_)
 	{
@@ -266,11 +276,12 @@ void UI::onSwapchainRecreated()
 //--- PRIVATE ---//
 void UI::drawTitleBar()
 {
+	ImGui::SetNextWindowBgAlpha(1.0f);
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 
-	const float barHeight = 30.0f;
 	const float padding = 8.0f;
-	const float btnSize = 18.0f;
+	const float btnSize = ImGui::GetFrameHeight();
+	const float barHeight = btnSize + 8.0f;
 
 	ImGui::SetNextWindowPos(vp->Pos);
 	ImGui::SetNextWindowSize(ImVec2(vp->Size.x, barHeight));
@@ -315,18 +326,32 @@ void UI::drawTitleBar()
 	float right = ImGui::GetWindowContentRegionMax().x;
 	ImGui::SetCursorPosX(right - (btnSize * 3 + padding * 2));
 
-	if (ImGui::Button("_", ImVec2(btnSize, btnSize)))
+	if (ImGui::Button("-", ImVec2(btnSize, btnSize)))
 		glfwIconifyWindow(window_);
 
 	ImGui::SameLine();
 
-	if (ImGui::Button("[]", ImVec2(btnSize, btnSize)))
+	if (ImGui::Button("##max", ImVec2(btnSize, btnSize)))
 	{
 		if (glfwGetWindowAttrib(window_, GLFW_MAXIMIZED))
 			glfwRestoreWindow(window_);
 		else
 			glfwMaximizeWindow(window_);
 	}
+
+	ImVec2 min = ImGui::GetItemRectMin();
+	ImVec2 max = ImGui::GetItemRectMax();
+	ImDrawList* draw = ImGui::GetWindowDrawList();
+
+	float pad = btnSize * 0.30f;
+	draw->AddRect(
+		ImVec2(min.x + pad, min.y + pad),
+		ImVec2(max.x - pad, max.y - pad),
+		ImGui::GetColorU32(ImGuiCol_Text),
+		0.0f,
+		0,
+		1.5f
+	);
 
 	ImGui::SameLine();
 
@@ -349,10 +374,12 @@ void UI::drawTitleBar()
 
 void UI::drawMenuBar(IScene& scene)
 {
+	ImGui::SetNextWindowBgAlpha(1.0f);
+
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 
-	const float titleBarHeight = 30.0f;
-	const float menuBarHeight = 26.0f;
+	const float titleBarHeight = ImGui::GetFrameHeight() + 8.0f;
+	const float menuBarHeight = ImGui::GetFrameHeight() + 4.0f;
 	const float padding = 8.0f;
 
 	ImGui::SetNextWindowPos(ImVec2(vp->Pos.x, vp->Pos.y + titleBarHeight));
@@ -373,6 +400,27 @@ void UI::drawMenuBar(IScene& scene)
 
 	if (ImGui::BeginMenuBar())
 	{
+		// GENERAL OPTIONS
+		if (ImGui::BeginMenu("Options"))
+		{
+			// font size
+			ImGuiIO& io = ImGui::GetIO();
+
+			static float fontScale = 1.0f;
+			if (ImGui::SliderFloat(
+				"Font Scale",
+				&fontScale,
+				0.75f,
+				1.25f,
+				"%.2f"
+			))
+			{
+				io.FontGlobalScale = fontScale;
+			}
+
+			ImGui::EndMenu();
+		}
+
 		// VIEW OPTIONS
 		if (ImGui::BeginMenu("View"))
 		{
@@ -517,8 +565,15 @@ void UI::drawStatsFPS(IScene& scene, float dt)
 
 	const float padding = 10.0f;
 
-	const float renderLeft = vp->Pos.x + INSPECTOR_WIDTH;
-	const float renderTop = vp->Pos.y + TOP_BAR_HEIGHT*2;
+	float topBarsHeight =
+		(ImGui::GetFrameHeight() + 8.0f) +
+		(ImGui::GetFrameHeight() + 4.0f);
+
+	float minWidth = 360.0f;
+	float fontBasedWidth = ImGui::GetFontSize() * 22.0f;
+
+	const float renderLeft = vp->Pos.x + std::max(minWidth, fontBasedWidth);
+	const float renderTop = vp->Pos.y + topBarsHeight;
 	const float renderRight = vp->Pos.x + vp->Size.x;
 
 	ImVec2 anchor = ImVec2(renderRight - padding, renderTop + padding);
@@ -573,8 +628,17 @@ void UI::drawInspector(IScene& scene)
 {
 	ImGuiViewport* vp = ImGui::GetMainViewport();
 
-	ImVec2 pos = ImVec2(vp->Pos.x, vp->Pos.y + TOP_BAR_HEIGHT*2);
-	ImVec2 size = ImVec2(INSPECTOR_WIDTH, vp->Size.y - TOP_BAR_HEIGHT*2);
+	float topBarsHeight =
+		(ImGui::GetFrameHeight() + 8.0f) +
+		(ImGui::GetFrameHeight() + 4.0f);
+
+	float inspectorWidth = std::max(
+		460.0f,
+		ImGui::GetFontSize() * 26.0f
+	);
+
+	ImVec2 pos = ImVec2(vp->Pos.x, vp->Pos.y + topBarsHeight);
+	ImVec2 size = ImVec2(inspectorWidth, vp->Size.y - topBarsHeight);
 
 	ImGui::SetNextWindowViewport(vp->ID);
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always);

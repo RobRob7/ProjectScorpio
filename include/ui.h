@@ -16,9 +16,6 @@ struct FrameContext;
 struct GLFWwindow;
 struct RenderSettings;
 
-constexpr float TOP_BAR_HEIGHT = 36.0f;
-constexpr float INSPECTOR_WIDTH = 400.0f;
-
 class UI
 {
 public:
