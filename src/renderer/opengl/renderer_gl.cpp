@@ -318,7 +318,7 @@ void RendererGL::resizeForwardTargets()
     }
     glCreateTextures(GL_TEXTURE_2D, 1, &forwardColorTex_);
 
-    glTextureStorage2D(forwardColorTex_, 1, GL_RGBA8, width_, height_);
+    glTextureStorage2D(forwardColorTex_, 1, GL_SRGB8_ALPHA8, width_, height_);
     glTextureParameteri(forwardColorTex_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTextureParameteri(forwardColorTex_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTextureParameteri(forwardColorTex_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
