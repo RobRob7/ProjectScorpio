@@ -592,11 +592,28 @@ void UI::drawStatsFPS(IScene& scene, float dt)
 
 	if (ImGui::Begin("##StatsOverlay", nullptr, flags))
 	{
-		float ms = dt * 1000.0f;
-		float fps = (dt > 0.0f) ? (1.0f / dt) : 0.0f;
+		static float timer = 0.0f;
+		static float displayFps = 0.0f;
+		static float displayMs = 0.0f;
+		static float smoothedDt = 0.0f;
 
-		ImGui::Text("FPS: %.1f", fps);
-		ImGui::Text("Frametime: %.3f ms", ms);
+		if (smoothedDt <= 0.0f)
+			smoothedDt = dt;
+
+		smoothedDt += 0.08f * (dt - smoothedDt);
+
+		timer += dt;
+
+		// update fps, frametime every 100ms
+		if (timer >= 0.1f)
+		{
+			displayMs = smoothedDt * 1000.0f;
+			displayFps = 1.0f / smoothedDt;
+			timer = 0.0f;
+		}
+
+		ImGui::Text("FPS: %.1f", displayFps);
+		ImGui::Text("Frametime: %.3f ms", displayMs);
 
 		ImGui::Separator();
 		ImGui::Text("RAM (Working Set): %zu MB", GetProcessMemoryMB());
