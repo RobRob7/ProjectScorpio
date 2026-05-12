@@ -28,7 +28,8 @@
 #include "ssao_pass_vk.h"
 #include "water_pass_vk.h"
 #include "chunk_pass_vk.h"
-#include "composite_pass_vk.h"
+#include "hybrid_composite_pass_vk.h"
+#include "post_composite_pass_vk.h"
 #include "fxaa_pass_vk.h"
 #include "fog_pass_vk.h"
 #include "present_pass_vk.h"
@@ -102,19 +103,25 @@ void RendererVk::init()
 		);
 	}
 
-	if (!compositePass_)
+	if (!compositePassHybrid_)
 	{
-		compositePass_ = std::make_unique<CompositePassVk>(vk_);
+		compositePassHybrid_ = std::make_unique<HybridCompositePassVk>(vk_);
 	}
 
-	if (!fxaaPass_)
+	if (!compositePassPost_)
 	{
-		fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
+		compositePassPost_ = std::make_unique<PostCompositePassVk>(vk_);
 	}
+
 	if (!fogPass_)
 	{
 		fogPass_ = std::make_unique<FogPassVk>(vk_);
 	}
+	if (!fxaaPass_)
+	{
+		fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
+	}
+
 	if (!presentPass_)
 	{
 		presentPass_ = std::make_unique<PresentPassVk>(vk_);
@@ -141,10 +148,11 @@ void RendererVk::init()
 		{vk::Format::eUndefined, shadowMapPass_->getDepthImage().format()}
 	);
 
-	compositePass_->init();
+	compositePassHybrid_->init();
+	compositePassPost_->init();
 
-	fxaaPass_->init();
 	fogPass_->init();
+	fxaaPass_->init();
 	presentPass_->init();
 } // end of init()
 
@@ -165,10 +173,11 @@ void RendererVk::resize(int w, int h)
 	if (waterPass_)		waterPass_->resize();
 	if (chunkPass_)		chunkPass_->resize();
 
-	if (compositePass_)	compositePass_->resize();
+	if (compositePassHybrid_)	compositePassHybrid_->resize();
+	if (compositePassPost_)	compositePassPost_->resize();
 
-	if (fxaaPass_)		fxaaPass_->resize();
 	if (fogPass_)		fogPass_->resize();
+	if (fxaaPass_)		fxaaPass_->resize();
 
 	if (presentPass_)	presentPass_->resize();
 
@@ -197,8 +206,12 @@ void RendererVk::renderFrame(
 
 	vk::CommandBuffer cmd = frame.cmd;
 
-	// update light direction
-	in.light->updateLightDirection(in.time);
+	// update light/sun
+	in.light->updateLight(
+		in.time, 
+		in.camera->getCameraPosition(),
+		renderSettings_->sunPaused
+	);
 
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), &frame);
@@ -350,13 +363,25 @@ void RendererVk::renderFrame(
 			);
 		}
 
-		if (in.skybox) in.skybox->render(
-			&frame,
-			view,
-			proj,
-			in.light->getDirection(),
-			in.time
-		);
+		if (in.skybox) 
+		{
+			in.skybox->render(
+				&frame,
+				view,
+				proj,
+				in.light->getDirection(),
+				in.time
+			);
+		}
+
+		if (in.light)
+		{
+			in.light->render(
+				&frame,
+				view,
+				proj
+			);
+		}
 	}
 	cmd.endRendering();
 
@@ -391,72 +416,87 @@ void RendererVk::renderFrame(
 
 	}
 
-	// ----------------- COMPOSITE PASS ----------------- //
+	// ----------------- HYBRID COMPOSITE PASS ----------------- //
 	if (vk_.supportsRayTracing() && renderSettings_->useRT)
 	{
-		compositePass_->setInput(
+		compositePassHybrid_->setInput(
 			{ sceneColor_, sceneDepth_ },
 			{ rtWorldPass_->getOutColorImage(), rtWorldPass_->getOutDepthImage() }
 		);
-		compositePass_->render(
+		compositePassHybrid_->render(
 			frame,
 			in.camera->getNearPlane(),
 			in.camera->getFarPlane()
 		);
 	}
-	// --------------- END COMPOSITE PASS --------------- //
+	// --------------- END HYBRID COMPOSITE PASS --------------- //
 
 
 	// ----------------- POST-PROCESSING ----------------- //
+	ImageVk* finalSceneColor = nullptr;
+	ImageVk* finalSceneDepth = nullptr;
+	ImageVk* postBaseColor = nullptr;
 	ImageVk* postColor = nullptr;
-	ImageVk* postDepth = nullptr;
 	if (renderSettings_->useRT)
 	{
-		postColor = &compositePass_->getOutColorImage();
-		postDepth = &compositePass_->getOutDepthImage();
+		finalSceneColor = &compositePassHybrid_->getOutColorImage();
+		finalSceneDepth = &compositePassHybrid_->getOutDepthImage();
 	}
 	else
 	{
-		postColor = &sceneColor_;
-		postDepth = &sceneDepth_;
+		finalSceneColor = &sceneColor_;
+		finalSceneDepth = &sceneDepth_;
 	}
+
+	postBaseColor = finalSceneColor;
 
 	// FOG
 	if (renderSettings_->useFog)
 	{
-		fogPass_->setInputShadowMap(shadowMapPass_->getDepthImage());
-		fogPass_->setInput(*postColor, *postDepth);
+		fogPass_->setInput(
+			*finalSceneDepth,
+			shadowMapPass_->getDepthImage()
+		);
 		
 		Fog_Constants::FogPassUBO fogUBO{};
 		fogUBO.u_useVolFog = renderSettings_->fogSettings.volumetricFog;
 		fogUBO.u_invViewProj = glm::inverse(proj * view);
 		fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
-		fogUBO.u_cameraPos = in.camera->getCameraPosition();
-		fogUBO.u_fogDensity = 0.02f;
+		fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
 		fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
 		fogUBO.u_fogStartEnd = { renderSettings_->fogSettings.start, renderSettings_->fogSettings.end };
-		fogUBO.u_fogColor = renderSettings_->fogSettings.color;
+		fogUBO.u_fogColor = in.light->getLightColor();
 		fogUBO.u_lightDir = in.light->getDirection();
-		fogUBO.u_maxDistance = 150.0f;
+		fogUBO.u_maxDistance = renderSettings_->fogSettings.maxDistance;
 		fogUBO.u_ambStr = in.world->getAmbientStrength();
-		fogUBO.u_scatteringStrength = 0.5f;
-		fogUBO.u_shadowBias = 0.001f;
-		fogUBO.u_sampleCount = 32;
+		fogUBO.u_stepSize = renderSettings_->fogSettings.stepSize;
+		fogUBO.u_scatteringDensity = renderSettings_->fogSettings.scatteringDensity;
+		fogUBO.u_absorptionDensity = renderSettings_->fogSettings.absorptionDensity;
 
 		fogPass_->render(
 			frame,
 			fogUBO
 		);
-		postColor = &fogPass_->getOutputImage();
+
+		compositePassPost_->setInput(
+			*postBaseColor,
+			fogPass_->getOutputImage()
+		);
+		compositePassPost_->render(frame);
+
+		postBaseColor = &compositePassPost_->getOutColorImage();
 	}
 
 	// FXAA
 	if (renderSettings_->useFXAA)
 	{
-		fxaaPass_->setInput(*postColor);
+		fxaaPass_->setInput(*postBaseColor);
 		fxaaPass_->render(frame);
-		postColor = &fxaaPass_->getOutputImage();
+
+		postBaseColor = &fxaaPass_->getOutputImage();
 	}
+
+	postColor = postBaseColor;
 	// --------------- END POST-PROCESSING --------------- //
 
 	// swap swapchain color image to color attachment

@@ -30,7 +30,7 @@ void Scene::init()
 
 	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
 
-	light_ = std::make_unique<LightGL>(camera_->getCameraPosition() + glm::vec3(0.0f, -10.0f, 0.0f));
+	light_ = std::make_unique<LightGL>();
 	light_->init();
 
 	skybox_ = std::make_unique<CubemapGL>();

@@ -278,7 +278,7 @@ void RayTracingWorldPassVk::render(
 	missUBOs_[frame.frameIndex].upload(&missData_, sizeof(missData_));
 
 	closestHitData_.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f);
-	closestHitData_.u_lightColor = glm::vec4(in.light->getColor(), 0.0f);
+	closestHitData_.u_lightColor = glm::vec4(in.light->getLightColor(), 0.0f);
 	closestHitData_.u_time = in.time;
 	closestHitUBOs_[frame.frameIndex].upload(&closestHitData_, sizeof(closestHitData_));
 

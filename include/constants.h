@@ -81,74 +81,30 @@ namespace World
 
 namespace Light_Constants
 {
+	const float SUN_DISTANCE = 1000.0f;
+	const float SUN_SCALE = SUN_DISTANCE * 0.05f;
+
 	const float MIN_COLOR = 0.0f;
 	const float MAX_COLOR = 1.0f;
 
 	const float MIN_SPEED = 0.0f;
 	const float MAX_SPEED = 0.5f;
 
+	const glm::vec3 INIT_LIGHT_COLOR = glm::vec3(1.0f, 1.0f, 1.0f);
+	const glm::vec3 INIT_VISUAL_COLOR = glm::vec3(1.0f, 1.0f, 0.0f);
 
 	struct LightUBO
 	{
-		glm::mat4 model;
-		glm::mat4 view;
-		glm::mat4 proj;
-		glm::vec4 color;
-	};
+		glm::mat4 u_invViewProj;
+		glm::mat4 u_viewProj;
+		
+		glm::vec3 u_camPos;
+		float u_sunDistance;
 
-	inline constexpr std::array<float, 108> CUBE_VERTICES = {
-		// Back face
-		 0.5f,  0.5f, -0.5f,
-		 0.5f, -0.5f, -0.5f,
-		-0.5f, -0.5f, -0.5f,
-		-0.5f, -0.5f, -0.5f,
-		-0.5f,  0.5f, -0.5f,
-		 0.5f,  0.5f, -0.5f,
+		glm::vec4 u_lightPos;
 
-		 // Front face
-		 -0.5f, -0.5f,  0.5f,
-		  0.5f, -0.5f,  0.5f,
-		  0.5f,  0.5f,  0.5f,
-		  0.5f,  0.5f,  0.5f,
-		 -0.5f,  0.5f,  0.5f,
-		 -0.5f, -0.5f,  0.5f,
-
-		 // Left face
-		 -0.5f,  0.5f,  0.5f,
-		 -0.5f,  0.5f, -0.5f,
-		 -0.5f, -0.5f, -0.5f,
-		 -0.5f, -0.5f, -0.5f,
-		 -0.5f, -0.5f,  0.5f,
-		 -0.5f,  0.5f,  0.5f,
-
-		 // Right face
-		  0.5f, -0.5f, -0.5f,
-		  0.5f,  0.5f, -0.5f,
-		  0.5f,  0.5f,  0.5f,
-		  0.5f,  0.5f,  0.5f,
-		  0.5f, -0.5f,  0.5f,
-		  0.5f, -0.5f, -0.5f,
-
-		  // Bottom face
-		  -0.5f, -0.5f, -0.5f,
-		   0.5f, -0.5f, -0.5f,
-		   0.5f, -0.5f,  0.5f,
-		   0.5f, -0.5f,  0.5f,
-		  -0.5f, -0.5f,  0.5f,
-		  -0.5f, -0.5f, -0.5f,
-
-		  // Top face
-		   0.5f,  0.5f,  0.5f,
-		   0.5f,  0.5f, -0.5f,
-		  -0.5f,  0.5f, -0.5f,
-		  -0.5f,  0.5f, -0.5f,
-		  -0.5f,  0.5f,  0.5f,
-		   0.5f,  0.5f,  0.5f
-	};
-
-	struct VertexLight
-	{
-		glm::vec3 pos;
+		glm::vec3 u_lightVisualColor;
+		float u_sunRadius;
 	};
 };
 
@@ -424,13 +380,14 @@ namespace FXAA_Constants
 
 namespace Fog_Constants
 {
+	const uint32_t RES_FACTOR = 2;
+
 	struct FogPassUBO
 	{
 		glm::mat4 u_invViewProj;
 		glm::mat4 u_lightSpaceMatrix;
 
-		glm::vec3 u_cameraPos;
-		float u_fogDensity;
+		glm::vec4 u_cameraPos;
 
 		glm::vec2 u_nearFar;
 		glm::vec2 u_fogStartEnd;
@@ -442,9 +399,9 @@ namespace Fog_Constants
 		float u_maxDistance;
 
 		float u_ambStr;
-		float u_scatteringStrength;
-		float u_shadowBias;
-		int u_sampleCount;
+		float u_stepSize;
+		float u_scatteringDensity;
+		float u_absorptionDensity;
 	};
 };
 

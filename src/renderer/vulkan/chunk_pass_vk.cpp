@@ -154,7 +154,7 @@ void ChunkPassVk::renderOpaque(
 		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
 
 		chunkUBOData_.u_lightDir = in.light->getDirection();
-		chunkUBOData_.u_lightColor = in.light->getColor();
+		chunkUBOData_.u_lightColor = in.light->getLightColor();
 
 		opaqueUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_), 0);
 
@@ -216,7 +216,7 @@ void ChunkPassVk::renderOpaque(
 		chunkUBOData_.u_viewPos = camera.getCameraPosition();
 
 		chunkUBOData_.u_lightDir = in.light->getDirection();
-		chunkUBOData_.u_lightColor = in.light->getColor();
+		chunkUBOData_.u_lightColor = in.light->getLightColor();
 
 		reflUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_), 0);
 
@@ -272,7 +272,7 @@ void ChunkPassVk::renderOpaque(
 		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
 
 		chunkUBOData_.u_lightDir = in.light->getDirection();
-		chunkUBOData_.u_lightColor = in.light->getColor();
+		chunkUBOData_.u_lightColor = in.light->getLightColor();
 
 		refrUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_), 0);
 

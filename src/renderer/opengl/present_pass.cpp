@@ -34,7 +34,11 @@ void PresentPass::resize(int w, int h)
 
 void PresentPass::render(uint32_t finalColorTex)
 {
-	if (!shader_ || !finalColorTex || width_ <= 0 || height_ <= 0 || fsVao_ == 0)
+	if (!shader_ || 
+		!finalColorTex || 
+		width_ <= 0 || 
+		height_ <= 0 || 
+		fsVao_ == 0)
 		return;
 
 	// bind textures

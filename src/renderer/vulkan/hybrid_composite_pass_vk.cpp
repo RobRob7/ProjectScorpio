@@ -1,4 +1,4 @@
-#include "composite_pass_vk.h"
+#include "hybrid_composite_pass_vk.h"
 
 #include "frame_context_vk.h"
 
@@ -12,7 +12,7 @@
 #include <cstdint>
 
 //--- PUBLIC ---//
-CompositePassVk::CompositePassVk(VulkanMain& vk)
+HybridCompositePassVk::HybridCompositePassVk(VulkanMain& vk)
     : vk_(vk),
     hybridColorImage_(vk),
     hybridDepthImage_(vk),
@@ -25,14 +25,14 @@ CompositePassVk::CompositePassVk(VulkanMain& vk)
     } // end for
 } // end of constructor
 
-CompositePassVk::~CompositePassVk() = default;
+HybridCompositePassVk::~HybridCompositePassVk() = default;
 
-void CompositePassVk::init()
+void HybridCompositePassVk::init()
 {
     shader_ = std::make_unique<ShaderModuleVk>(
         vk_.getDevice(),
-        "compositepass/compositepass.vert.spv",
-        "compositepass/compositepass.frag.spv"
+        "compositepass/hybrid_compositepass.vert.spv",
+        "compositepass/hybrid_compositepass.frag.spv"
     );
 
     createAttachment();
@@ -40,7 +40,7 @@ void CompositePassVk::init()
     createPipeline();
 } // end of init()
 
-void CompositePassVk::resize()
+void HybridCompositePassVk::resize()
 {
     hybridColorImage_.destroy();
     hybridDepthImage_.destroy();
@@ -48,7 +48,7 @@ void CompositePassVk::resize()
     refreshInput();
 } // end of resize()
 
-void CompositePassVk::render(
+void HybridCompositePassVk::render(
     FrameContext& frame,
     float nearPlane,
     float farPlane
@@ -65,22 +65,22 @@ void CompositePassVk::render(
     if (!desc.valid()) return;
 
     desc.writeCombinedImageSampler(
-        TO_API_FORM(CompositePassBinding::RastColorTex),
+        TO_API_FORM(HybridCompositePassBinding::RastColorTex),
         rasterColor_->view(),
         rasterColor_->sampler()
     );
     desc.writeCombinedImageSampler(
-        TO_API_FORM(CompositePassBinding::RastDepthTex),
+        TO_API_FORM(HybridCompositePassBinding::RastDepthTex),
         rasterDepth_->view(),
         rasterDepth_->sampler()
     );
     desc.writeCombinedImageSampler(
-        TO_API_FORM(CompositePassBinding::RTColorTex),
+        TO_API_FORM(HybridCompositePassBinding::RTColorTex),
         rtColor_->view(),
         rtColor_->sampler()
     );
     desc.writeCombinedImageSampler(
-        TO_API_FORM(CompositePassBinding::RTDepthTex),
+        TO_API_FORM(HybridCompositePassBinding::RTDepthTex),
         rtDepth_->view(),
         rtDepth_->sampler()
     );
@@ -153,7 +153,7 @@ void CompositePassVk::render(
 
 
 //--- PRIVATE ---//
-void CompositePassVk::refreshInput()
+void HybridCompositePassVk::refreshInput()
 {
     if (!rasterColor_ || !rasterDepth_ ||
         !rtColor_ || !rtDepth_)
@@ -162,29 +162,29 @@ void CompositePassVk::refreshInput()
     for (auto& set : descriptorSets_)
     {
         set.writeCombinedImageSampler(
-            TO_API_FORM(CompositePassBinding::RastColorTex),
+            TO_API_FORM(HybridCompositePassBinding::RastColorTex),
             rasterColor_->view(),
             rasterColor_->sampler()
         );
         set.writeCombinedImageSampler(
-            TO_API_FORM(CompositePassBinding::RastDepthTex),
+            TO_API_FORM(HybridCompositePassBinding::RastDepthTex),
             rasterDepth_->view(),
             rasterDepth_->sampler()
         );
         set.writeCombinedImageSampler(
-            TO_API_FORM(CompositePassBinding::RTColorTex),
+            TO_API_FORM(HybridCompositePassBinding::RTColorTex),
             rtColor_->view(),
             rtColor_->sampler()
         );
         set.writeCombinedImageSampler(
-            TO_API_FORM(CompositePassBinding::RTDepthTex),
+            TO_API_FORM(HybridCompositePassBinding::RTDepthTex),
             rtDepth_->view(),
             rtDepth_->sampler()
         );
     } // end for
 } // end of refreshInput()
 
-void CompositePassVk::createAttachment()
+void HybridCompositePassVk::createAttachment()
 {
     vk::Extent2D extent = vk_.getSwapChainExtent();
 
@@ -247,30 +247,30 @@ void CompositePassVk::createAttachment()
     );
 } // end of createAttachment()
 
-void CompositePassVk::createDescriptorSet()
+void HybridCompositePassVk::createDescriptorSet()
 {
     for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
     {
         vk::DescriptorSetLayoutBinding rastColorBinding{};
-        rastColorBinding.binding = TO_API_FORM(CompositePassBinding::RastColorTex);
+        rastColorBinding.binding = TO_API_FORM(HybridCompositePassBinding::RastColorTex);
         rastColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         rastColorBinding.descriptorCount = 1;
         rastColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
         vk::DescriptorSetLayoutBinding rastDepthBinding{};
-        rastDepthBinding.binding = TO_API_FORM(CompositePassBinding::RastDepthTex);
+        rastDepthBinding.binding = TO_API_FORM(HybridCompositePassBinding::RastDepthTex);
         rastDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         rastDepthBinding.descriptorCount = 1;
         rastDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
         vk::DescriptorSetLayoutBinding rtColorBinding{};
-        rtColorBinding.binding = TO_API_FORM(CompositePassBinding::RTColorTex);
+        rtColorBinding.binding = TO_API_FORM(HybridCompositePassBinding::RTColorTex);
         rtColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         rtColorBinding.descriptorCount = 1;
         rtColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
         vk::DescriptorSetLayoutBinding rtDepthBinding{};
-        rtDepthBinding.binding = TO_API_FORM(CompositePassBinding::RTDepthTex);
+        rtDepthBinding.binding = TO_API_FORM(HybridCompositePassBinding::RTDepthTex);
         rtDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         rtDepthBinding.descriptorCount = 1;
         rtDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
@@ -307,12 +307,12 @@ void CompositePassVk::createDescriptorSet()
         descriptorSets_[i].allocate();
 
         descriptorSets_[i].setDebugName(
-            "CompositePassVk::descriptorSets_ frame " + std::to_string(i)
+            "HybridCompositePassVk::descriptorSets_ frame " + std::to_string(i)
         );
     } // end for
 } // end of createDescriptorSet()
 
-void CompositePassVk::createPipeline()
+void HybridCompositePassVk::createPipeline()
 {
     GraphicsPipelineDescVk desc{};
     desc.vertShader = shader_->vertShader();

@@ -16,6 +16,7 @@
 #include "present_pass.h"
 #include "water_pass.h"
 #include "fog_pass.h"
+#include "post_composite_pass_gl.h"
 
 #include "render_inputs.h"
 
@@ -44,10 +45,12 @@ void RendererGL::init()
     if (!ssaoPass_)             ssaoPass_ = std::make_unique<SSAOPass>();
     if (!fxaaPass_)             fxaaPass_ = std::make_unique<FXAAPass>();
     if (!fogPass_)              fogPass_ = std::make_unique<FogPass>();
+    if (!compositePassPost_)    compositePassPost_ = std::make_unique<PostCompositePassGL>();
     if (!presentPass_)          presentPass_ = std::make_unique<PresentPass>();
     if (!waterPass_)            waterPass_ = std::make_unique<WaterPass>();
 
     if (!chunkPass_)            chunkPass_ = std::make_unique<ChunkPassGL>();
+
     chunkPass_->init();
 
 	gbuffer_->init();
@@ -62,6 +65,7 @@ void RendererGL::init()
     waterPass_->init();
     fxaaPass_->init();
     fogPass_->init();
+    compositePassPost_->init();
     presentPass_->init();
 } // end of init()
 
@@ -78,6 +82,7 @@ void RendererGL::resize(int w, int h)
     fxaaPass_->resize(width_, height_);
     waterPass_->resize(width_, height_);
     fogPass_->resize(width_, height_);
+    compositePassPost_->resize(width_, height_);
     presentPass_->resize(width_, height_);
 
     resizeForwardTargets();
@@ -95,8 +100,12 @@ void RendererGL::renderFrame(
 
     in.world->updateDynamic(in.camera->getCameraPosition());
 
-    // update light direction
-    in.light->updateLightDirection(in.time);
+    // update light/sun
+    in.light->updateLight(
+        in.time, 
+        in.camera->getCameraPosition(),
+        renderSettings_->sunPaused
+    );
 
     // update opaque + water shader
     chunkPass_->updateShader(in, *renderSettings_, width_, height_);
@@ -192,52 +201,68 @@ void RendererGL::renderFrame(
         in.light->getDirection(),
         in.time
     );
+
+    in.light->render(
+        nullptr,
+        view,
+        proj
+    );
     // --------------- END FORWARD RENDER --------------- //
 
 
     // ----------------- POST-PROCESSING ----------------- //
+    uint32_t finalSceneDepth = forwardDepthTex_;
+    uint32_t postBaseColor = forwardColorTex_;
+    uint32_t postColor{};
+
     // FOG
-    uint32_t finalColorTex = forwardColorTex_;
     if (renderSettings_->useFog)
     {
         Fog_Constants::FogPassUBO fogUBO{};
         fogUBO.u_useVolFog = renderSettings_->fogSettings.volumetricFog;
         fogUBO.u_invViewProj = glm::inverse(proj * view);
         fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
-        fogUBO.u_cameraPos = in.camera->getCameraPosition();
-        fogUBO.u_fogDensity = 0.02f;
+        fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
         fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
         fogUBO.u_fogStartEnd = { renderSettings_->fogSettings.start, renderSettings_->fogSettings.end };
-        fogUBO.u_fogColor = renderSettings_->fogSettings.color;
+        fogUBO.u_fogColor = in.light->getLightColor();
         fogUBO.u_lightDir = in.light->getDirection();
-        fogUBO.u_maxDistance = 150.0f;
+        fogUBO.u_maxDistance = renderSettings_->fogSettings.maxDistance;
         fogUBO.u_ambStr = in.world->getAmbientStrength();
-        fogUBO.u_scatteringStrength = 0.5f;
-        fogUBO.u_shadowBias = 0.001f;
-        fogUBO.u_sampleCount = 32;
+        fogUBO.u_stepSize = renderSettings_->fogSettings.stepSize;
+        fogUBO.u_scatteringDensity = renderSettings_->fogSettings.scatteringDensity;
+        fogUBO.u_absorptionDensity = renderSettings_->fogSettings.absorptionDensity;
 
         fogPass_->render(
-            finalColorTex,
             forwardDepthTex_,
             shadowMapPass_->getDepthTexture(),
             fogUBO
         );
-        finalColorTex = fogPass_->getOutputTex();
+        
+        compositePassPost_->setInput(
+            postBaseColor,
+            fogPass_->getOutputTex()
+        );
+        compositePassPost_->render();
+
+        postBaseColor = compositePassPost_->getOutColorImage();
     }
 
     // FXAA
     if (renderSettings_->useFXAA)
     {
-        fxaaPass_->render(finalColorTex);
-        finalColorTex = fxaaPass_->getOutputTex();
+        fxaaPass_->render(postBaseColor);
+        postBaseColor = fxaaPass_->getOutputTex();
     }
+
+    postColor = postBaseColor;
     // --------------- END POST-PROCESSING --------------- //
 
 
     // ----------------- PRESENT PASS ----------------- //
     if (presentPass_)
     {
-        presentPass_->render(finalColorTex);
+        presentPass_->render(postColor);
     }
     // --------------- END PRESENT PASS --------------- //
 

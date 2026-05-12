@@ -84,7 +84,7 @@ void WaterPass::updateShader(
     waterUBO_.u_screenSize = glm::vec2{ w, h };
     waterUBO_.u_viewPos = in.camera->getCameraPosition();
     waterUBO_.u_lightDir = in.light->getDirection();
-    waterUBO_.u_lightColor = in.light->getColor();
+    waterUBO_.u_lightColor = in.light->getLightColor();
     waterUBO_.u_ambientStrength = in.world->getAmbientStrength();
     ubo_.update(&waterUBO_, sizeof(waterUBO_));
 } // end of updateShader()
@@ -328,7 +328,7 @@ void WaterPass::waterReflectionPass(
 
     chunkOpaqueUBO.u_viewPos = camera.getCameraPosition();
     chunkOpaqueUBO.u_lightDir = in.light->getDirection();
-    chunkOpaqueUBO.u_lightColor = in.light->getColor();
+    chunkOpaqueUBO.u_lightColor = in.light->getLightColor();
 
     // render objects (non-UI)
     chunk.renderOpaque(
@@ -347,6 +347,11 @@ void WaterPass::waterReflectionPass(
         proj,
         in.light->getDirection(),
         in.time
+    );
+    in.light->render(
+        nullptr,
+        reflView,
+        proj
     );
 
     // restore camera
@@ -390,7 +395,7 @@ void WaterPass::waterRefractionPass(
 
     chunkOpaqueUBO.u_viewPos = in.camera->getCameraPosition();
     chunkOpaqueUBO.u_lightDir = in.light->getDirection();
-    chunkOpaqueUBO.u_lightColor = in.light->getColor();
+    chunkOpaqueUBO.u_lightColor = in.light->getLightColor();
 
     // render objects (non-UI)
     chunk.renderOpaque(

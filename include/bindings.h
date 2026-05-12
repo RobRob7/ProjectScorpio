@@ -77,6 +77,7 @@ enum class FogPassBinding : uint32_t
     ForwardColorTex = 1,
     ForwardDepthTex = 2,
     ShadowMapTex = 3,
+    OutColorTex = 4
 };
 
 enum class GbufferBinding : uint32_t
@@ -123,15 +124,23 @@ enum class PresentPassBinding : uint32_t
 {
     UBO = 0,
     ForwardColorTex = 1,
+    PostProcessTex
 };
 
-enum class CompositePassBinding : uint32_t
+enum class HybridCompositePassBinding : uint32_t
 {
     UBO = 0,
     RastColorTex = 1,
     RastDepthTex = 2,
     RTColorTex = 3,
     RTDepthTex = 4,
+};
+
+enum class PostCompositePassBinding : uint32_t
+{
+    UBO = 0,
+    FogColorTex = 1,
+    SceneColorTex = 2,
 };
 
 #endif

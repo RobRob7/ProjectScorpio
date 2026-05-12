@@ -130,7 +130,7 @@ void WaterPassVk::renderWater(
 	ubo.u_viewPos = in.camera->getCameraPosition();
 
 	ubo.u_lightDir = in.light->getDirection();
-	ubo.u_lightColor = in.light->getColor();
+	ubo.u_lightColor = in.light->getLightColor();
 
 	uboBuffers_[frame.frameIndex].upload(&ubo, sizeof(ubo), 0);
 
@@ -511,14 +511,9 @@ void WaterPassVk::waterReflectionPass(
 {
 	vk::CommandBuffer cmd = frame.cmd;
 
-	vk::ClearValue normalClear{};
-	normalClear.color.float32[0] = 0.0f;
-	normalClear.color.float32[1] = 0.0f;
-	normalClear.color.float32[2] = 0.0f;
-	normalClear.color.float32[3] = 1.0f;
+	vk::ClearValue normalClear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
-	vk::ClearValue depthClear{};
-	depthClear.depthStencil = vk::ClearDepthStencilValue{ 1.0f, 0 };
+	vk::ClearValue depthClear{ {1.0f, 0} };
 
 	vk::RenderingAttachmentInfo colorAttachment{};
 	colorAttachment.imageView = reflColorImage_.view();
@@ -606,6 +601,16 @@ void WaterPassVk::waterReflectionPass(
 				in.time
 			);
 		}
+		if (in.light)
+		{
+			in.light->renderOffscreen(
+				&frame,
+				reflView,
+				proj,
+				width_,
+				height_
+			);
+		}
 	}
 	cmd.endRendering();
 } // end of waterReflectionPass()
@@ -620,14 +625,9 @@ void WaterPassVk::waterRefractionPass(
 {
 	vk::CommandBuffer cmd = frame.cmd;
 
-	vk::ClearValue normalClear{};
-	normalClear.color.float32[0] = 0.0f;
-	normalClear.color.float32[1] = 0.0f;
-	normalClear.color.float32[2] = 0.0f;
-	normalClear.color.float32[3] = 1.0f;
+	vk::ClearValue normalClear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
-	vk::ClearValue depthClear{};
-	depthClear.depthStencil = vk::ClearDepthStencilValue{ 1.0f, 0 };
+	vk::ClearValue depthClear{ {1.0f, 0} };
 
 	vk::RenderingAttachmentInfo colorAttachment{};
 	colorAttachment.imageView = refrColorImage_.view();

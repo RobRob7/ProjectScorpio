@@ -3,7 +3,7 @@
 #include "constants.h"
 
 #include "bindings.h"
-#include "shader_vk.h"
+#include "compute_shader_vk.h"
 #include "vulkan_main.h"
 #include "image_vk.h"
 
@@ -17,7 +17,7 @@ using namespace Fog_Constants;
 FogPassVk::FogPassVk(VulkanMain& vk)
 	: vk_(vk),
 	outputImage_(vk),
-	pipeline_(vk)
+	computePipeline_(vk)
 {
 	uboBuffers_.reserve(vk.getMaxFramesInFlight());
 	descriptorSets_.reserve(vk.getMaxFramesInFlight());
@@ -32,10 +32,9 @@ FogPassVk::~FogPassVk() = default;
 
 void FogPassVk::init()
 {
-	shader_ = std::make_unique<ShaderModuleVk>(
+	compShader_ = std::make_unique<ComputeShaderModuleVk>(
 		vk_.getDevice(),
-		"fogpass/fog.vert.spv",
-		"fogpass/fog.frag.spv"
+		"fogpass/fog.comp.spv"
 	);
 
 	createAttachment();
@@ -55,21 +54,25 @@ void FogPassVk::render(
 )
 {
 	if (!inputShadowMapImage_ ||
-		!inputColorImage_ || 
+		//!inputColorImage_ || 
 		!inputDepthImage_ ||
-		!pipeline_.valid())
+		!outputImage_.valid() ||
+		!computePipeline_.valid())
 	{
 		return;
 	}
 
+	vk::CommandBuffer cmd = frame.cmd;
+	vk::Extent2D extent = frame.extent;
+
 	DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
 	if (!desc.valid()) return;
 
-	desc.writeCombinedImageSampler(
-		TO_API_FORM(FogPassBinding::ForwardColorTex),
-		inputColorImage_->view(),
-		inputColorImage_->sampler()
-	);
+	//desc.writeCombinedImageSampler(
+	//	TO_API_FORM(FogPassBinding::ForwardColorTex),
+	//	inputColorImage_->view(),
+	//	inputColorImage_->sampler()
+	//);
 
 	desc.writeCombinedImageSampler(
 		TO_API_FORM(FogPassBinding::ForwardDepthTex),
@@ -83,60 +86,34 @@ void FogPassVk::render(
 		inputShadowMapImage_->sampler()
 	);
 
+	desc.writeStorageImage(
+		TO_API_FORM(FogPassBinding::OutColorTex),
+		outputImage_.view(),
+		vk::ImageLayout::eGeneral
+	);
+
+	outputImage_.transitionToGeneral(cmd);
+
 	vk::DescriptorSet set = desc.getSet();
-
-	vk::CommandBuffer cmd = frame.cmd;
-	vk::Extent2D extent = frame.extent;
-
-	outputImage_.transitionToColorAttachment(cmd);
 
 	uboBuffers_[frame.frameIndex].upload(&fogUBO, sizeof(fogUBO));
 
-	vk::ClearValue clear{ {0.0f, 0.0f, 0.0f, 1.0f} };
+	cmd.bindPipeline(vk::PipelineBindPoint::eCompute, computePipeline_.getPipeline());
+	cmd.bindDescriptorSets(
+		vk::PipelineBindPoint::eCompute,
+		computePipeline_.getLayout(),
+		0,
+		1, &set,
+		0, nullptr
+	);
 
-	vk::RenderingAttachmentInfo colorAttach{};
-	colorAttach.imageView = outputImage_.view();
-	colorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
-	colorAttach.loadOp = vk::AttachmentLoadOp::eDontCare;
-	colorAttach.storeOp = vk::AttachmentStoreOp::eStore;
-	colorAttach.clearValue = clear;
+	uint32_t fogWidth = (extent.width + 1) / resFactor_;
+	uint32_t fogHeight = (extent.height + 1) / resFactor_;
 
-	vk::RenderingInfo renderingInfo{};
-	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = extent;
-	renderingInfo.layerCount = 1;
-	renderingInfo.colorAttachmentCount = 1;
-	renderingInfo.pColorAttachments = &colorAttach;
-	renderingInfo.pDepthAttachment = nullptr;
+	uint32_t groupX = (fogWidth + 7) / 8;
+	uint32_t groupY = (fogHeight + 7) / 8;
 
-	cmd.beginRendering(renderingInfo);
-	{
-		vk::Viewport viewport{};
-		viewport.x = 0.0f;
-		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(extent.width);
-		viewport.height = static_cast<float>(extent.height);
-		viewport.minDepth = 0.0f;
-		viewport.maxDepth = 1.0f;
-		cmd.setViewport(0, 1, &viewport);
-
-		vk::Rect2D scissor{};
-		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = extent;
-		cmd.setScissor(0, 1, &scissor);
-
-		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
-		cmd.bindDescriptorSets(
-			vk::PipelineBindPoint::eGraphics,
-			pipeline_.getLayout(),
-			0,
-			1, &set,
-			0, nullptr
-		);
-
-		cmd.draw(3, 1, 0, 0);
-	}
-	cmd.endRendering();
+	cmd.dispatch(groupX, groupY, 1);
 
 	outputImage_.transitionToShaderRead(cmd);
 } // end of render()
@@ -145,16 +122,16 @@ void FogPassVk::render(
 //--- PRIVATE ---//
 void FogPassVk::refreshInput()
 {
-	if (!inputColorImage_ || !inputDepthImage_)
+	if (!inputDepthImage_ || !inputShadowMapImage_)
 		return;
 
 	for (auto& set : descriptorSets_)
 	{
-		set.writeCombinedImageSampler(
-			TO_API_FORM(FogPassBinding::ForwardColorTex),
-			inputColorImage_->view(),
-			inputColorImage_->sampler()
-		);
+		//set.writeCombinedImageSampler(
+		//	TO_API_FORM(FogPassBinding::ForwardColorTex),
+		//	inputColorImage_->view(),
+		//	inputColorImage_->sampler()
+		//);
 
 		set.writeCombinedImageSampler(
 			TO_API_FORM(FogPassBinding::ForwardDepthTex),
@@ -167,6 +144,12 @@ void FogPassVk::refreshInput()
 			inputShadowMapImage_->view(),
 			inputShadowMapImage_->sampler()
 		);
+
+		set.writeStorageImage(
+			TO_API_FORM(FogPassBinding::OutColorTex),
+			outputImage_.view(),
+			vk::ImageLayout::eGeneral
+		);
 	} // end for
 } // end of refreshInput()
 
@@ -174,15 +157,20 @@ void FogPassVk::createAttachment()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
 
+	uint32_t fogWidth = (extent.width + 1) / resFactor_;
+	uint32_t fogHeight = (extent.height + 1) / resFactor_;
+
 	outputImage_.createImage(
-		extent.width,
-		extent.height,
+		fogWidth,
+		fogHeight,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
 		outputFormat_,
 		vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eSampled,
+		vk::ImageUsageFlagBits::eColorAttachment | 
+		vk::ImageUsageFlagBits::eSampled |
+		vk::ImageUsageFlagBits::eStorage,
 		vk::MemoryPropertyFlagBits::eDeviceLocal
 	);
 
@@ -222,40 +210,50 @@ void FogPassVk::createDescriptorSet()
 		uboBinding.binding = TO_API_FORM(FogPassBinding::UBO);
 		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
 		uboBinding.descriptorCount = 1;
-		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | vk::ShaderStageFlagBits::eFragment;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | 
+			vk::ShaderStageFlagBits::eFragment |
+			vk::ShaderStageFlagBits::eCompute;
 
-		vk::DescriptorSetLayoutBinding inputColorBinding{};
-		inputColorBinding.binding = TO_API_FORM(FogPassBinding::ForwardColorTex);
-		inputColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-		inputColorBinding.descriptorCount = 1;
-		inputColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		//vk::DescriptorSetLayoutBinding inputColorBinding{};
+		//inputColorBinding.binding = TO_API_FORM(FogPassBinding::ForwardColorTex);
+		//inputColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		//inputColorBinding.descriptorCount = 1;
+		//inputColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment |
+		//	vk::ShaderStageFlagBits::eCompute;
 
 		vk::DescriptorSetLayoutBinding inputDepthBinding{};
 		inputDepthBinding.binding = TO_API_FORM(FogPassBinding::ForwardDepthTex);
 		inputDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
 		inputDepthBinding.descriptorCount = 1;
-		inputDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		inputDepthBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
 
 		vk::DescriptorSetLayoutBinding inputShadowBinding{};
 		inputShadowBinding.binding = TO_API_FORM(FogPassBinding::ShadowMapTex);
 		inputShadowBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
 		inputShadowBinding.descriptorCount = 1;
-		inputShadowBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+		inputShadowBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+
+		vk::DescriptorSetLayoutBinding outputColorBinding;
+		outputColorBinding.binding = TO_API_FORM(FogPassBinding::OutColorTex);
+		outputColorBinding.descriptorType = vk::DescriptorType::eStorageImage;
+		outputColorBinding.descriptorCount = 1;
+		outputColorBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
 
 		descriptorSets_[i].createLayout({
 			uboBinding, 
-			inputColorBinding, 
+			//inputColorBinding, 
 			inputDepthBinding,
-			inputShadowBinding
+			inputShadowBinding,
+			outputColorBinding
 			});
 
 		vk::DescriptorPoolSize uboPool;
 		uboPool.type = vk::DescriptorType::eUniformBuffer;
 		uboPool.descriptorCount = 1;
 
-		vk::DescriptorPoolSize inputColorPool;
-		inputColorPool.type = vk::DescriptorType::eCombinedImageSampler;
-		inputColorPool.descriptorCount = 1;
+		//vk::DescriptorPoolSize inputColorPool;
+		//inputColorPool.type = vk::DescriptorType::eCombinedImageSampler;
+		//inputColorPool.descriptorCount = 1;
 
 		vk::DescriptorPoolSize inputDepthPool;
 		inputDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
@@ -264,12 +262,17 @@ void FogPassVk::createDescriptorSet()
 		vk::DescriptorPoolSize inputShadowPool;
 		inputShadowPool.type = vk::DescriptorType::eCombinedImageSampler;
 		inputShadowPool.descriptorCount = 1;
+		
+		vk::DescriptorPoolSize outputColorPool;
+		outputColorPool.type = vk::DescriptorType::eStorageImage;
+		outputColorPool.descriptorCount = 1;
 
 		descriptorSets_[i].createPool({
 			uboPool, 
-			inputColorPool, 
+			//inputColorPool, 
 			inputDepthPool,
-			inputShadowPool
+			inputShadowPool,
+			outputColorPool
 			});
 		descriptorSets_[i].allocate();
 
@@ -287,18 +290,9 @@ void FogPassVk::createDescriptorSet()
 
 void FogPassVk::createPipeline()
 {
-	GraphicsPipelineDescVk desc{};
-	desc.vertShader = shader_->vertShader();
-	desc.fragShader = shader_->fragShader();
+	ComputePipelineDescVk compDesc{};
+	compDesc.computeShader = compShader_->shader();
+	compDesc.setLayouts = { descriptorSets_[0].getLayout() };
 
-	desc.setLayouts = { descriptorSets_[0].getLayout()};
-
-	desc.colorFormat = outputFormat_;
-
-	desc.cullMode = vk::CullModeFlagBits::eNone;
-	desc.frontFace = vk::FrontFace::eClockwise;
-	desc.depthTestEnable = false;
-	desc.depthWriteEnable = false;
-
-	pipeline_.create(desc);
+	computePipeline_.create(compDesc);
 } // end of createPipeline()

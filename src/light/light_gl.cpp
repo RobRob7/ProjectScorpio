@@ -12,42 +12,16 @@
 using namespace Light_Constants;
 
 //--- PUBLIC ---//
-LightGL::LightGL(
-	const glm::vec3& pos, 
-	const glm::vec3& dir,
-	const glm::vec3& color
-)
-	: position_(pos)
-{
-	setDirection(dir);
-	setColor(color);
-} // end of constructor
+LightGL::LightGL() = default;
 
-LightGL::~LightGL()
-{
-	destroyGL();
-} // end of destructor
+LightGL::~LightGL() = default;
 
 void LightGL::init()
 {
-	destroyGL();
-
-	shader_ = std::make_unique<Shader>("light/light.vert", "light/light.frag");
-
-	// vao + vbo
-	glCreateVertexArrays(1, &vao_);
-	glCreateBuffers(1, &vbo_);
-
-	// upload data to buffer
-	glNamedBufferData(vbo_, CUBE_VERTICES.size() * sizeof(float), CUBE_VERTICES.data(), GL_STATIC_DRAW);
-
-	// attach buffers to vao
-	glVertexArrayVertexBuffer(vao_, 0, vbo_, 0, sizeof(VertexLight));
-
-	// position
-	glEnableVertexArrayAttrib(vao_, 0);
-	glVertexArrayAttribFormat(vao_, 0, 3, GL_FLOAT, GL_FALSE, offsetof(VertexLight, pos));
-	glVertexArrayAttribBinding(vao_, 0, 0);
+	shader_ = std::make_unique<Shader>(
+		"light/light.vert", 
+		"light/light.frag"
+	);
 
 	// UBO
 	ubo_.init<sizeof(LightUBO)>();
@@ -59,36 +33,51 @@ void LightGL::render(
 	const glm::mat4& proj
 )
 {
-	if (!shader_ || vao_ == 0)
+	if (!shader_)
 		return;
 
 	// bind ubo
 	ubo_.bind();
 
 	shader_->use();
-	glm::mat4 model = glm::mat4(1.0f);
-	model = glm::translate(model, position_);
 
-	LightUBO lightUBO{};
-	lightUBO.model = model;
-	lightUBO.view = view;
-	lightUBO.proj = proj;
-	lightUBO.color = glm::vec4(color_, 1.0f);
-	ubo_.update(&lightUBO, sizeof(lightUBO));
+	LightUBO ubo{};
+	ubo.u_invViewProj = glm::inverse(proj * view);
+	ubo.u_viewProj = proj * view;
+	ubo.u_camPos = camPos_;
+	ubo.u_sunDistance = SUN_DISTANCE;
+	ubo.u_lightPos = glm::vec4(position_, 1.0f);
+	ubo.u_lightVisualColor = visualColor_;
+	ubo.u_sunRadius = SUN_SCALE / 2.0f;
+	ubo_.update(&ubo, sizeof(ubo));
 
-	glBindVertexArray(vao_);
-	glDrawArrays(GL_TRIANGLES, 0, 36);
+	glDrawArrays(GL_TRIANGLES, 0, 3);
 } // end of render
 
-void LightGL::updateLightDirection(float time)
+void LightGL::updateLight(
+	float time, 
+	glm::vec3& camPos,
+	bool paused
+)
 {
-	if (speed_ <= 0.0f)
+	camPos_ = camPos;
+
+	if (firstUpdate_)
 	{
-		return;
+		lastTime_ = time;
+		firstUpdate_ = false;
 	}
 
-	float t = time * speed_;
-	float cycle = t * glm::two_pi<float>();
+	float dt = time - lastTime_;
+	lastTime_ = time;
+
+	if (!paused)
+	{
+		sunTime_ += dt * speed_;
+	}
+
+	// update direction
+	float cycle = sunTime_ * glm::two_pi<float>();
 
 	float azimuth = cycle;
 	float elevation = glm::sin(cycle) * glm::radians(75.0f);
@@ -98,22 +87,27 @@ void LightGL::updateLightDirection(float time)
 		glm::sin(elevation),
 		glm::cos(elevation) * glm::sin(azimuth)
 	));
-
 	setDirection(sunDir);
-} // end of updateLightDirection()
 
+	// update position
+	glm::vec3 sunVisualPos = camPos - direction_ * SUN_DISTANCE;
+	setPosition(sunVisualPos);
 
-//--- PRIVATE ---//
-void LightGL::destroyGL()
-{
-	if (vao_)
-	{
-		glDeleteVertexArrays(1, &vao_);
-		vao_ = 0;
-	}
-	if (vbo_)
-	{
-		glDeleteBuffers(1, &vbo_);
-		vbo_ = 0;
-	}
-} // end of destroyGL()
+	// update visual color
+	float sunHeight = glm::max(-direction_.y, 0.0f);
+	float tColor = glm::smoothstep(0.0f, 0.35f, sunHeight);
+
+	glm::vec3 sunsetColor = glm::vec3(
+		INIT_VISUAL_COLOR.r,
+		INIT_VISUAL_COLOR.g / 2.0f,
+		INIT_VISUAL_COLOR.b
+	);
+
+	glm::vec3 noonColor = INIT_VISUAL_COLOR;
+
+	visualColor_ = glm::mix(
+		sunsetColor,
+		noonColor,
+		tColor
+	);
+} // end of updateLight()

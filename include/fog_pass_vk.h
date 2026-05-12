@@ -6,7 +6,7 @@
 
 #include "buffer_vk.h"
 #include "descriptor_set_vk.h"
-#include "graphics_pipeline_vk.h"
+#include "compute_pipeline_vk.h"
 #include "image_vk.h"
 
 #include <vulkan/vulkan.hpp>
@@ -15,7 +15,7 @@
 #include <vector>
 
 class VulkanMain;
-class ShaderModuleVk;
+class ComputeShaderModuleVk;
 struct RenderSettings;
 
 class FogPassVk
@@ -32,15 +32,15 @@ public:
 		Fog_Constants::FogPassUBO& fogUBO
 	);
 
-	void setInputShadowMap(ImageVk& inputShadowMap)
-	{
-		inputShadowMapImage_ = &inputShadowMap;
-	} // end of setInputShadowMap()
+	//void setInputShadowMap(ImageVk& inputShadowMap)
+	//{
+	//	inputShadowMapImage_ = &inputShadowMap;
+	//} // end of setInputShadowMap()
 
-	void setInput(ImageVk& inputColor, ImageVk& inputDepth)
+	void setInput(ImageVk& inputDepth, ImageVk& inputShadowMap)
 	{
-		inputColorImage_ = &inputColor;
 		inputDepthImage_ = &inputDepth;
+		inputShadowMapImage_ = &inputShadowMap;
 	} // end of setInput()
 
 	ImageVk& getOutputImage() { return outputImage_; }
@@ -54,18 +54,19 @@ private:
 private:
 	VulkanMain& vk_;
 
-	ImageVk* inputColorImage_{ nullptr };
+	uint32_t resFactor_{ Fog_Constants::RES_FACTOR };
+
 	ImageVk* inputDepthImage_{ nullptr };
 	ImageVk* inputShadowMapImage_{ nullptr };
 
 	ImageVk outputImage_;
 	vk::Format outputFormat_{ vk::Format::eR16G16B16A16Sfloat };
 
-	std::unique_ptr<ShaderModuleVk> shader_;
+	std::unique_ptr<ComputeShaderModuleVk> compShader_;
 
 	std::vector<BufferVk> uboBuffers_;
 	std::vector<DescriptorSetVk> descriptorSets_;
-	GraphicsPipelineVk pipeline_;
+	ComputePipelineVk computePipeline_;
 };
 
 #endif
