@@ -6,7 +6,6 @@ GLSLC = "glslc"
 GLSLANG = "glslangValidator"
 
 VALID_EXTENSIONS = {
-    # ".glsl",
     ".vert",
     ".frag",
     ".comp",

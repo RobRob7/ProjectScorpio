@@ -19,12 +19,7 @@ class ShaderModuleVk;
 class LightVk final : public ILight
 {
 public:
-	LightVk(
-		VulkanMain& vk, 
-		const glm::vec3& pos, 
-		const glm::vec3& dir = glm::vec3(-0.6f, -1.0f, -0.35f),
-		const glm::vec3& color = glm::vec3(1.0f)
-	);
+	LightVk(VulkanMain& vk);
 	~LightVk() override;
 	
 	void init() override;
@@ -38,21 +33,20 @@ public:
 		const FrameContext* frame,
 		const glm::mat4& view,
 		const glm::mat4& proj,
-		const glm::vec3& position,
 		uint32_t width,
 		uint32_t height
 	);
 
-	virtual void updateLightDirection(float time) override;
+	void updateLight(
+		float time, 
+		glm::vec3& camPos, 
+		bool paused
+	) override;
 
-	float& getSpeed() override { return speed_; }
 	const float& getSpeed() const override { return speed_; }
-	glm::vec3& getDirection() override { return direction_; }
 	const glm::vec3& getDirection() const override { return direction_; };
-	glm::vec3& getPosition() override { return position_; }
 	const glm::vec3& getPosition() const override { return position_; }
-	glm::vec3& getColor() override { return color_; }
-	const glm::vec3& getColor() const override { return color_; }
+	const glm::vec3& getLightColor() const override { return lightColor_; }
 
 	void setSpeed(const float speed) override
 	{
@@ -67,17 +61,17 @@ public:
 
 	void setPosition(const glm::vec3& pos) override { position_ = pos; } 
 
-	void setColor(const glm::vec3& color) override
+	void setLightColor(const glm::vec3& color) override
 	{
-		color_ = {
-		std::clamp(color.x, Light_Constants::MIN_COLOR, Light_Constants::MAX_COLOR),
-		std::clamp(color.y, Light_Constants::MIN_COLOR, Light_Constants::MAX_COLOR),
-		std::clamp(color.z, Light_Constants::MIN_COLOR, Light_Constants::MAX_COLOR)
+		lightColor_ =
+		{
+			std::clamp(color.x, Light_Constants::MIN_COLOR, Light_Constants::MAX_COLOR),
+			std::clamp(color.y, Light_Constants::MIN_COLOR, Light_Constants::MAX_COLOR),
+			std::clamp(color.z, Light_Constants::MIN_COLOR, Light_Constants::MAX_COLOR)
 		};
-	} // end of setColor()
+	}
 
 private:
-	void createVertexBuffer();
 	void createUBOs();
 	void createDescriptorSets();
 	void createPipeline();
@@ -86,12 +80,8 @@ private:
 
 	std::unique_ptr<ShaderModuleVk> shader_;
 
-	BufferVk vertexBuffer_;
-
 	std::vector<BufferVk> uboBuffers_;
 	std::vector<BufferVk> uboBuffersOffscreen_;
-
-	uint32_t vertexCount_{};
 
 	std::vector<DescriptorSetVk> descriptorSets_;
 	std::vector<DescriptorSetVk> descriptorSetsOffscreen_;
@@ -99,10 +89,16 @@ private:
 	GraphicsPipelineVk pipeline_;
 	GraphicsPipelineVk pipelineOffscreen_;
 
+	float sunTime_{ 0.0f };
+	float lastTime_{ 0.0f };
+	bool firstUpdate_{ true };
+
 	float speed_{ 0.1f };
+	glm::vec3 visualColor_{};
 	glm::vec3 direction_{};
 	glm::vec3 position_{};
-	glm::vec3 color_{};
+	glm::vec3 lightColor_{ INIT_LIGHT_COLOR };
+	glm::vec3 camPos_{};
 };
 
 #endif

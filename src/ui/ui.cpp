@@ -692,30 +692,34 @@ void UI::drawInspector(IScene& scene)
 		ImGui::Separator();
 	}
 
-	// ------- light -------
-	if (ImGui::CollapsingHeader("Light", ImGuiTreeNodeFlags_DefaultOpen))
+	// ------- sun -------
+	if (ImGui::CollapsingHeader("Sun", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ILight& light = scene.getLight();
 		float speed = light.getSpeed();
-		glm::vec3 color = light.getColor();
+		glm::vec3 color = light.getLightColor();
+
+		if (ImGui::Checkbox("Pause", &renderSettings_.sunPaused))
+		{
+		}
 
 		bool changed = false;
 
-		changed |= ImGui::DragFloat("Direction Speed##light", &speed, 0.01f);
+		changed |= ImGui::DragFloat("Direction Speed##sun", &speed, 0.01f);
 		if (ImGui::Button("Reset##dirSpeed"))
 		{
 			light.setSpeed(0.1f);
 		}
-		changed |= ImGui::ColorEdit3("Color##light", glm::value_ptr(color));
+		changed |= ImGui::ColorEdit3("Color##sun", glm::value_ptr(color));
 		if (ImGui::Button("Reset##Color"))
 		{
-			light.setColor(glm::vec3(Light_Constants::MAX_COLOR));
+			light.setLightColor(glm::vec3(Light_Constants::MAX_COLOR));
 		}
 
 		if (changed)
 		{
 			light.setSpeed(speed);
-			light.setColor(color);
+			light.setLightColor(color);
 		}
 
 		ImGui::Separator();
@@ -725,12 +729,6 @@ void UI::drawInspector(IScene& scene)
 	if (ImGui::CollapsingHeader("Fog", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		bool changed = false;
-
-		changed |= ImGui::ColorEdit3("Color##fog", glm::value_ptr(renderSettings_.fogSettings.color));
-		if (ImGui::Button("Reset##fog_color"))
-		{
-			renderSettings_.fogSettings.color = glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f };
-		}
 		changed |= ImGui::DragFloat("Start Pos##fog", &renderSettings_.fogSettings.start, 0.1f, 0.0f, renderSettings_.fogSettings.end);
 		if (ImGui::Button("Reset##fog_start"))
 		{
@@ -741,6 +739,27 @@ void UI::drawInspector(IScene& scene)
 		{
 			renderSettings_.fogSettings.end = 200.0f;
 		}
+		changed |= ImGui::DragFloat("Max Ray Distance##fog", &renderSettings_.fogSettings.maxDistance, 0.1f, 0.0f, 200.0f);
+		if (ImGui::Button("Reset##fog_maxdistance"))
+		{
+			renderSettings_.fogSettings.maxDistance = 100.0f;
+		}
+		changed |= ImGui::DragFloat("Step Size##fog", &renderSettings_.fogSettings.stepSize, 0.01f, 0.01f, 1.5f);
+		if (ImGui::Button("Reset##fog_stepsize"))
+		{
+			renderSettings_.fogSettings.stepSize = 0.5f;
+		}
+		changed |= ImGui::DragFloat("Scattering Density##fog", &renderSettings_.fogSettings.scatteringDensity, 0.005f, 0.0f, 0.03f);
+		if (ImGui::Button("Reset##fog_scatteringdensity"))
+		{
+			renderSettings_.fogSettings.scatteringDensity = 0.015f;
+		}
+		changed |= ImGui::DragFloat("Absorption Density##fog", &renderSettings_.fogSettings.absorptionDensity, 0.001f, 0.0f, 0.01f);
+		if (ImGui::Button("Reset##fog_absorptiondensity"))
+		{
+			renderSettings_.fogSettings.absorptionDensity = 0.003f;
+		}
+
 
 		// ensure start + kMinGap <= end ALWAYS
 		if (changed)

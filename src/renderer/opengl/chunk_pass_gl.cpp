@@ -45,7 +45,7 @@ void ChunkPassGL::updateShader(
     chunkOpaqueUBO_.u_ambientStrength = in.world->getAmbientStrength();
     chunkOpaqueUBO_.u_viewPos = in.camera->getCameraPosition();
     chunkOpaqueUBO_.u_lightDir = in.light->getDirection();
-    chunkOpaqueUBO_.u_lightColor = in.light->getColor();
+    chunkOpaqueUBO_.u_lightColor = in.light->getLightColor();
     // ssao
     chunkOpaqueUBO_.u_screenSize = glm::vec2{ w, h };
     chunkOpaqueUBO_.u_useSSAO = rs.useSSAO ? 1 : 0;

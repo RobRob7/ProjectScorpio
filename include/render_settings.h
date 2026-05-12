@@ -15,10 +15,17 @@ enum class DebugMode : int
 struct FogSettings
 {
 	bool volumetricFog = false;
-	glm::vec3 color{ 1.0f, 1.0f, 1.0f };
 
 	float start{ 50.0f };
 	float end{ 175.0f };
+
+	float rayZLimit{ 75.0f };
+
+	float maxDistance{ 100.0f };
+	float stepSize{ 0.5f };
+
+	float scatteringDensity{ 0.015f };
+	float absorptionDensity{ 0.003f };
 };
 
 struct RenderSettings
@@ -35,10 +42,13 @@ struct RenderSettings
 	bool useShadowMap = true;
 	bool useSSAO = true;
 	bool useFXAA = false;
-	bool useFog = false;
+	bool useFog = true;
 
 	// fog controls
 	FogSettings fogSettings;
+
+	// sun controls
+	bool sunPaused{ false };
 };
 
 #endif

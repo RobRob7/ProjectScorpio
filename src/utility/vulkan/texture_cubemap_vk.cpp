@@ -87,7 +87,7 @@ void TextureCubemapVk::loadFromFiles(const std::array<std::string_view, 6>& face
 		6,
 		true,
 		vk::SampleCountFlagBits::e1,
-		vk::Format::eR8G8B8A8Srgb,
+		vk::Format::eR8G8B8A8Unorm,
 		vk::ImageTiling::eOptimal,
 		vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
 		vk::MemoryPropertyFlagBits::eDeviceLocal,
@@ -114,7 +114,7 @@ void TextureCubemapVk::loadFromFiles(const std::array<std::string_view, 6>& face
 
 	image_.generateMipmaps(
 		image_.image(),
-		vk::Format::eR8G8B8A8Srgb,
+		vk::Format::eR8G8B8A8Unorm,
 		texWidth,
 		texHeight,
 		image_.mipLevels(),
@@ -122,7 +122,7 @@ void TextureCubemapVk::loadFromFiles(const std::array<std::string_view, 6>& face
 	);
 
 	image_.createImageView(
-		vk::Format::eR8G8B8A8Srgb,
+		vk::Format::eR8G8B8A8Unorm,
 		vk::ImageAspectFlagBits::eColor,
 		vk::ImageViewType::eCube,
 		6
@@ -131,9 +131,9 @@ void TextureCubemapVk::loadFromFiles(const std::array<std::string_view, 6>& face
 	image_.createSampler(
 		vk::Filter::eLinear,
 		vk::Filter::eLinear,
-		vk::SamplerMipmapMode::eNearest,
+		vk::SamplerMipmapMode::eLinear,
 		vk::SamplerAddressMode::eClampToEdge,
-		vk::False
+		false
 	);
 } // end of loadFromFiles()
 

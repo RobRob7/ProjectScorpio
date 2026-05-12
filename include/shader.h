@@ -45,7 +45,6 @@ private:
 	mutable std::unordered_map<std::string, int32_t> uniformLocationCache_;
 private: 
 	int32_t getUniformLocation(std::string_view name) const;
-	void checkCompileErrors(uint32_t shader, std::string_view type, std::string_view path);
 };
 
 #endif

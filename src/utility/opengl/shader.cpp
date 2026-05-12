@@ -82,6 +82,32 @@ static std::string LoadShaderWithIncludes(
 	return output.str();
 } // end of LoadShaderWithIncludes()
 
+static void CheckCompileErrors(uint32_t shader, std::string_view type, std::string_view path)
+{
+	GLint success;
+	GLchar infoLog[1024];
+
+	if (type != "PROGRAM")
+	{
+		glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+		if (!success)
+		{
+			glGetShaderInfoLog(shader, 1024, NULL, infoLog);
+			throw std::runtime_error("ERROR::SHADER_COMPILATION_ERROR of type: " + std::string(type) + "-" + std::string(path) + "\n" + infoLog + "\n -- --------------------------------------------------- -- ");
+		}
+	}
+	else
+	{
+		glGetProgramiv(shader, GL_LINK_STATUS, &success);
+		if (!success)
+		{
+			glGetProgramInfoLog(shader, 1024, NULL, infoLog);
+			throw std::runtime_error("ERROR::PROGRAM_LINKING_ERROR of type: " + std::string(type) + "\n" + infoLog + "\n -- --------------------------------------------------- -- ");
+		}
+	}
+} // end of CheckCompileErrors()
+
+
 //--- PUBLIC ---//
 Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geometryPath)
 {
@@ -158,13 +184,13 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geo
 	vertex = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertex, 1, &vertexShaderCode, NULL);
 	glCompileShader(vertex);
-	checkCompileErrors(vertex, "VERTEX", vertexPath);
+	CheckCompileErrors(vertex, "VERTEX", vertexPath);
 
 	// fragment shader compile
 	fragment = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragment, 1, &fragmentShaderCode, NULL);
 	glCompileShader(fragment);
-	checkCompileErrors(fragment, "FRAGMENT", fragmentPath);
+	CheckCompileErrors(fragment, "FRAGMENT", fragmentPath);
 
 	// check for geometry shader and compile if needed
 	uint32_t geometry;
@@ -174,7 +200,7 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geo
 		geometry = glCreateShader(GL_GEOMETRY_SHADER);
 		glShaderSource(geometry, 1, &geometryShaderCode, NULL);
 		glCompileShader(geometry);
-		checkCompileErrors(geometry, "GEOMETRY", geometryPath);
+		CheckCompileErrors(geometry, "GEOMETRY", geometryPath);
 	}
 
 	// create shader program
@@ -188,7 +214,7 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath, const char* geo
 	
 	// link program
 	glLinkProgram(ID_);
-	checkCompileErrors(ID_, "PROGRAM", "");
+	CheckCompileErrors(ID_, "PROGRAM", "");
 
 	// delete the shaders (no longer needed)
 	glDeleteShader(vertex);
@@ -315,28 +341,3 @@ int32_t Shader::getUniformLocation(std::string_view name) const
 	uniformLocationCache_.emplace(std::move(key), location);
 	return location;
 } // end of getUniformLocation()
-
-void Shader::checkCompileErrors(uint32_t shader, std::string_view type, std::string_view path)
-{
-	GLint success;
-	GLchar infoLog[1024];
-
-	if (type != "PROGRAM")
-	{
-		glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-		if (!success)
-		{
-			glGetShaderInfoLog(shader, 1024, NULL, infoLog);
-			throw std::runtime_error("ERROR::SHADER_COMPILATION_ERROR of type: " + std::string(type) + "-" + std::string(path) + "\n" + infoLog + "\n -- --------------------------------------------------- -- ");
-		}
-	}
-	else
-	{
-		glGetProgramiv(shader, GL_LINK_STATUS, &success);
-		if (!success)
-		{
-			glGetProgramInfoLog(shader, 1024, NULL, infoLog);
-			throw std::runtime_error("ERROR::PROGRAM_LINKING_ERROR of type: " + std::string(type) + "\n" + infoLog + "\n -- --------------------------------------------------- -- ");
-		}
-	}
-} // end of checkCompileErrors(...)

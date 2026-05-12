@@ -32,7 +32,7 @@ void SceneVk::init()
 
 	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
 
-	light_ = std::make_unique<LightVk>(vk_, camera_->getCameraPosition() + glm::vec3(0.0f, -10.0f, 0.0f));
+	light_ = std::make_unique<LightVk>(vk_);
 	light_->init();
 
 	skybox_ = std::make_unique<CubemapVk>(vk_);

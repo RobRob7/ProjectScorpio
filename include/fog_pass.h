@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <memory>
 
-class Shader;
+class ComputeShader;
 struct RenderSettings;
 
 class FogPass
@@ -22,13 +22,12 @@ public:
     void resize(int w, int h);
 
     void render(
-        uint32_t sceneColorTex, 
         uint32_t sceneDepthTex,
         uint32_t shadowMapTex,
         Fog_Constants::FogPassUBO& ubo
     );
 
-    uint32_t getOutputTex() const { return outputTex_; }
+    const uint32_t& getOutputTex() const { return outputTex_; }
 
 private:
     void destroyGL();
@@ -36,11 +35,11 @@ private:
     int width_{};
     int height_{};
 
-    uint32_t fsVao_{};
-    uint32_t fbo_{};
+    uint32_t resFactor_{ Fog_Constants::RES_FACTOR };
+
     uint32_t outputTex_{};
 
-    std::unique_ptr<Shader> shader_;
+    std::unique_ptr<ComputeShader> computeShader_;
 
     UBOGL uboBuffer_{ TO_API_FORM(FogPassBinding::UBO) };
 };

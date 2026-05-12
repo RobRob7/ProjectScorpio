@@ -66,6 +66,11 @@ static void WarmupOpenGLContext()
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
+	// request opengl debug context ONLY in debug mode
+#ifdef _DEBUG
+	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GLFW_TRUE);
+#endif
+
 	GLFWwindow* warmup = glfwCreateWindow(64, 64, "", nullptr, nullptr);
 	if (!warmup)
 	{

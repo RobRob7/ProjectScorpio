@@ -1,8 +1,8 @@
-#include "ray_tracing_shader_vk.h"
+#include "compute_shader_vk.h"
 
+#include <fstream>
 #include <filesystem>
 #include <stdexcept>
-#include <fstream>
 #include <utility>
 
 //--- HELPER ---//
@@ -40,42 +40,27 @@ static std::vector<uint32_t> ReadFile(const std::filesystem::path& pathFile)
 
 
 //--- PUBLIC ---//
-RayTracingShaderModuleVk::RayTracingShaderModuleVk(
+ComputeShaderModuleVk::ComputeShaderModuleVk(
 	vk::Device device,
-	std::string_view rayGenPathFile,
-	std::string_view missPathFile,
-	std::vector<std::string_view> closestHitPathFiles
-)
+	std::string_view compShaderPath
+	)
 	: device_(device)
 {
 	if (!device_)
 	{
-		throw std::runtime_error("RayTracingShaderModuleVk: device is null!");
+		throw std::runtime_error("ComputeShaderModuleVk: device is null!");
 	}
 
-	const auto rayGenFullPath = std::filesystem::path(RESOURCES_PATH) / "shader" / rayGenPathFile;
-	const auto missFullPath = std::filesystem::path(RESOURCES_PATH) / "shader" / missPathFile;
+	const auto compFullPath = std::filesystem::path(RESOURCES_PATH) / "shader" / compShaderPath;
 
-	rayGenShaderModule_ = createShaderModule(ReadFile(rayGenFullPath));
-	missShaderModule_ = createShaderModule(ReadFile(missFullPath));
-
-	closestHitShaderModules_.reserve(closestHitPathFiles.size());
-	for (std::string_view path : closestHitPathFiles)
-	{
-		const auto fullPath =
-			std::filesystem::path(RESOURCES_PATH) / "shader" / path;
-
-		closestHitShaderModules_.push_back(
-			createShaderModule(ReadFile(fullPath))
-		);
-	} // end for
+	compShaderModule_ = createShaderModule(ReadFile(compFullPath));
 } // end of constructor
 
-RayTracingShaderModuleVk::~RayTracingShaderModuleVk() noexcept = default;
+ComputeShaderModuleVk::~ComputeShaderModuleVk() noexcept = default;
 
 
 //--- PRIVATE ---//
-vk::UniqueShaderModule RayTracingShaderModuleVk::createShaderModule(const std::vector<uint32_t>& code)
+vk::UniqueShaderModule ComputeShaderModuleVk::createShaderModule(const std::vector<uint32_t>& code)
 {
 	if (code.empty())
 	{
@@ -89,7 +74,7 @@ vk::UniqueShaderModule RayTracingShaderModuleVk::createShaderModule(const std::v
 	auto rv = device_.createShaderModuleUnique(createInfo);
 	if (rv.result != vk::Result::eSuccess)
 	{
-		throw std::runtime_error("RaytracingShaderModuleVkcreateShaderModuleUnique failed: " + vk::to_string(rv.result));
+		throw std::runtime_error("ComputeShaderModuleVk::createShaderModuleUnique failed: " + vk::to_string(rv.result));
 	}
 
 	return std::move(rv.value);

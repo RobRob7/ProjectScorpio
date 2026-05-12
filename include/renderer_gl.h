@@ -23,6 +23,7 @@ class FXAAPass;
 class PresentPass;
 class WaterPass;
 class FogPass;
+class PostCompositePassGL;
 
 struct RenderInputs;
 struct FrameContext;
@@ -58,16 +59,20 @@ private:
 	std::unique_ptr<ShadowMapPassGL> shadowMapPass_;
 	std::unique_ptr<DebugPass> debugPass_;
 	std::unique_ptr<SSAOPass> ssaoPass_;
-	std::unique_ptr<FXAAPass> fxaaPass_;
-	std::unique_ptr<FogPass> fogPass_;
-	std::unique_ptr<PresentPass> presentPass_;
+
 	std::unique_ptr<WaterPass> waterPass_;
+	std::unique_ptr<ChunkPassGL> chunkPass_;
+
+	std::unique_ptr<PostCompositePassGL> compositePassPost_;
+
+	std::unique_ptr<FogPass> fogPass_;
+	std::unique_ptr<FXAAPass> fxaaPass_;
+
+	std::unique_ptr<PresentPass> presentPass_;
 
 	uint32_t forwardFBO_{};
 	uint32_t forwardColorTex_{};
 	uint32_t forwardDepthTex_{};
-
-	std::unique_ptr<ChunkPassGL> chunkPass_;
 };
 
 #endif

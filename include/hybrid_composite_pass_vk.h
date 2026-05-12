@@ -1,5 +1,5 @@
-#ifndef COMPOSITE_PASS_VK_H
-#define COMPOSITE_PASS_VK_H
+#ifndef HYBRID_COMPOSITE_PASS_VK_H
+#define HYBRID_COMPOSITE_PASS_VK_H
 
 #include "descriptor_set_vk.h"
 #include "graphics_pipeline_vk.h"
@@ -13,11 +13,11 @@ class VulkanMain;
 class ShaderModuleVk;
 struct FrameContext;
 
-class CompositePassVk
+class HybridCompositePassVk
 {
 public:
-	explicit CompositePassVk(VulkanMain& vk);
-	~CompositePassVk();
+	explicit HybridCompositePassVk(VulkanMain& vk);
+	~HybridCompositePassVk();
 
 	void init();
 	void resize();

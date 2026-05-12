@@ -28,28 +28,26 @@ public:
 		const FrameContext* frame,
 		const glm::mat4& view,
 		const glm::mat4& proj,
-		const glm::vec3& position,
 		uint32_t width,
 		uint32_t height
 	)
 	{
 	}
 
-	virtual void updateLightDirection(float time) = 0;
+	virtual void updateLight(
+		float time, 
+		glm::vec3& camPos, 
+		bool paused) = 0;
 
-	virtual float& getSpeed() = 0;
 	virtual const float& getSpeed() const = 0;
-	virtual glm::vec3& getDirection() = 0;
 	virtual const glm::vec3& getDirection() const = 0;
-	virtual glm::vec3& getPosition() = 0;
 	virtual const glm::vec3& getPosition() const = 0;
-	virtual glm::vec3& getColor() = 0;
-	virtual const glm::vec3& getColor() const = 0;
+	virtual const glm::vec3& getLightColor() const = 0;
 
 	virtual void setSpeed(const float speed) = 0;
 	virtual void setDirection(const glm::vec3& dir) = 0;
 	virtual void setPosition(const glm::vec3& pos) = 0;
-	virtual void setColor(const glm::vec3& color) = 0;
+	virtual void setLightColor(const glm::vec3& color) = 0;
 };
 
 #endif

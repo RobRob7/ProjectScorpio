@@ -19,21 +19,11 @@
 using namespace Light_Constants;
 
 //--- PUBLIC ---//
-LightVk::LightVk(
-	VulkanMain& vk,
-	const glm::vec3& pos, 
-	const glm::vec3& dir,
-	const glm::vec3& color
-)
+LightVk::LightVk(VulkanMain& vk)
 	: vk_(vk),
-	vertexBuffer_(vk),
 	pipeline_(vk),
-	pipelineOffscreen_(vk),
-	position_(pos)
+	pipelineOffscreen_(vk)
 {
-	setDirection(dir);
-	setColor(color);
-
 	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
 	uboBuffersOffscreen_.reserve(vk_.getMaxFramesInFlight());
 
@@ -56,7 +46,6 @@ void LightVk::init()
 {
 	shader_ = std::make_unique<ShaderModuleVk>(vk_.getDevice(), "light/light.vert.spv", "light/light.frag.spv");
 
-	createVertexBuffer();
 	createUBOs();
 	createDescriptorSets();
 	createPipeline();
@@ -72,24 +61,20 @@ void LightVk::render(
 
 	if (!descriptorSets_[frame->frameIndex].valid() ||
 		!uboBuffers_[frame->frameIndex].valid() ||
-		!vertexBuffer_.valid() || 
 		!pipeline_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
 
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 
-	vk::Buffer vertBuffer = vertexBuffer_.getBuffer();
-	vk::DeviceSize offset = 0;
-	cmd.bindVertexBuffers(0, 1, &vertBuffer, &offset);
-
-	glm::mat4 model = glm::translate(glm::mat4(1.0f), position_);
-
 	LightUBO ubo{};
-	ubo.model = model;
-	ubo.view = view;
-	ubo.proj = proj;
-	ubo.color = glm::vec4(color_, 1.0f);
+	ubo.u_invViewProj = glm::inverse(proj * view);
+	ubo.u_viewProj = proj * view;
+	ubo.u_camPos = camPos_;
+	ubo.u_sunDistance = SUN_DISTANCE;
+	ubo.u_lightPos = glm::vec4(position_, 1.0f);
+	ubo.u_lightVisualColor = visualColor_;
+	ubo.u_sunRadius = SUN_SCALE / 2.0f;
 
 	uboBuffers_[frame->frameIndex].upload(&ubo, sizeof(LightUBO));
 
@@ -102,14 +87,13 @@ void LightVk::render(
 		0, nullptr
 	);
 
-	cmd.draw(vertexCount_, 1, 0, 0);
+	cmd.draw(3, 1, 0, 0);
 } // end of render()
 
 void LightVk::renderOffscreen(
 	const FrameContext* frame,
 	const glm::mat4& view,
 	const glm::mat4& proj,
-	const glm::vec3& position,
 	uint32_t width,
 	uint32_t height
 )
@@ -118,7 +102,6 @@ void LightVk::renderOffscreen(
 
 	if (!descriptorSetsOffscreen_[frame->frameIndex].valid() ||
 		!uboBuffersOffscreen_[frame->frameIndex].valid() ||
-		!vertexBuffer_.valid() || 
 		!pipelineOffscreen_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
@@ -140,17 +123,17 @@ void LightVk::renderOffscreen(
 
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipelineOffscreen_.getPipeline());
 
-	vk::Buffer vertBuffer = vertexBuffer_.getBuffer();
-	vk::DeviceSize offset = 0;
-	cmd.bindVertexBuffers(0, 1, &vertBuffer, &offset);
-
-	glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), position_);
+	model = glm::scale(model, glm::vec3(SUN_SCALE));
 
 	LightUBO ubo{};
-	ubo.model = model;
-	ubo.view = view;
-	ubo.proj = proj;
-	ubo.color = glm::vec4(color_, 1.0f);
+	ubo.u_invViewProj = glm::inverse(proj * view);
+	ubo.u_viewProj = proj * view;
+	ubo.u_camPos = camPos_;
+	ubo.u_sunDistance = SUN_DISTANCE;
+	ubo.u_lightPos = glm::vec4(position_, 1.0f);
+	ubo.u_lightVisualColor = visualColor_;
+	ubo.u_sunRadius = SUN_SCALE / 2.0f;
 
 	uboBuffersOffscreen_[frame->frameIndex].upload(&ubo, sizeof(LightUBO));
 
@@ -163,18 +146,33 @@ void LightVk::renderOffscreen(
 		0, nullptr
 	);
 
-	cmd.draw(vertexCount_, 1, 0, 0);
+	cmd.draw(3, 1, 0, 0);
 } // end of renderOffscreen()
 
-void LightVk::updateLightDirection(float time)
+void LightVk::updateLight(
+	float time,
+	glm::vec3& camPos,
+	bool paused
+)
 {	
-	if (speed_ <= 0.0f)
+	camPos_ = camPos;
+
+	if (firstUpdate_)
 	{
-		return;
+		lastTime_ = time;
+		firstUpdate_ = false;
 	}
 
-	float t = time * speed_;
-	float cycle = t * glm::two_pi<float>();
+	float dt = time - lastTime_;
+	lastTime_ = time;
+
+	if (!paused)
+	{
+		sunTime_ += dt * speed_;
+	}
+
+	// update direction
+	float cycle = sunTime_ * glm::two_pi<float>();
 
 	float azimuth = cycle;
 	float elevation = glm::sin(cycle) * glm::radians(75.0f);
@@ -184,26 +182,33 @@ void LightVk::updateLightDirection(float time)
 		glm::sin(elevation),
 		glm::cos(elevation) * glm::sin(azimuth)
 	));
-
 	setDirection(sunDir);
-} // end of updateLightDirection()
+
+	// update position
+	glm::vec3 sunVisualPos = camPos - direction_ * SUN_DISTANCE;
+	setPosition(sunVisualPos);
+
+	// update visual color
+	float sunHeight = glm::max(-direction_.y, 0.0f);
+	float tColor = glm::smoothstep(0.0f, 0.35f, sunHeight);
+
+	glm::vec3 sunsetColor = glm::vec3(
+		INIT_VISUAL_COLOR.r,
+		INIT_VISUAL_COLOR.g / 2.0f,
+		INIT_VISUAL_COLOR.b
+	);
+
+	glm::vec3 noonColor = INIT_VISUAL_COLOR;
+
+	visualColor_ = glm::mix(
+		sunsetColor,
+		noonColor,
+		tColor
+	);
+} // end of updateLight()
 
 
 //--- PRIVATE ---//
-void LightVk::createVertexBuffer()
-{
-	vertexCount_ = static_cast<uint32_t>(CUBE_VERTICES.size() / 3);
-
-	const vk::DeviceSize bufferSize = sizeof(float) * CUBE_VERTICES.size();
-	vertexBuffer_.create(
-		bufferSize,
-		vk::BufferUsageFlagBits::eVertexBuffer,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
-	);
-
-	vertexBuffer_.upload(CUBE_VERTICES.data(), bufferSize);
-} // end of createVertexBuffer()
-
 void LightVk::createUBOs()
 {
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
@@ -259,25 +264,11 @@ void LightVk::createDescriptorSets()
 void LightVk::createPipeline()
 {
 	// normal pipeline
-	vk::VertexInputBindingDescription binding{};
-	binding.binding = 0;
-	binding.stride = sizeof(VertexLight);
-	binding.inputRate = vk::VertexInputRate::eVertex;
-
-	vk::VertexInputAttributeDescription attr{};
-	attr.location = 0;
-	attr.binding = 0;
-	attr.format = vk::Format::eR32G32B32Sfloat;
-	attr.offset = offsetof(VertexLight, pos);
-
 	GraphicsPipelineDescVk desc{};
 	desc.vertShader = shader_->vertShader();
 	desc.fragShader = shader_->fragShader();
 
 	desc.setLayouts = { descriptorSets_[0].getLayout()};
-
-	desc.vertexBinding = binding;
-	desc.vertexAttributes = { attr };
 
 	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
 	desc.depthFormat = vk::Format::eD32Sfloat;
