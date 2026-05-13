@@ -15,6 +15,17 @@ GraphicsPipelineVk::GraphicsPipelineVk(VulkanMain& vk)
 
 GraphicsPipelineVk::~GraphicsPipelineVk() = default;
 
+void GraphicsPipelineVk::setDebugName(const std::string& name)
+{
+	if (!pipeline_) return;
+
+	vk_.setDebugName(
+		vk::ObjectType::ePipeline,
+		reinterpret_cast<uint64_t>(static_cast<VkPipeline>(pipeline_.get())),
+		name
+	);
+} // end of setDebugName()
+
 void GraphicsPipelineVk::create(const GraphicsPipelineDescVk& desc)
 {
 	destroy();

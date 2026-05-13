@@ -44,6 +44,8 @@ public:
 	RayTracingPipelineVk(RayTracingPipelineVk&&) noexcept = delete;
 	RayTracingPipelineVk& operator=(RayTracingPipelineVk&&) noexcept = delete;
 
+	void setDebugName(const std::string& name);
+
 	void create(const RayTracingPipelineDescVk& desc);
 
 	bool valid() const { return static_cast<bool>(pipeline_); }

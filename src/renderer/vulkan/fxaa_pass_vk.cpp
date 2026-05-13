@@ -58,6 +58,10 @@ void FXAAPassVk::render(FrameContext& frame)
 		return;
 	}
 
+	vk::CommandBuffer cmd = frame.cmd;
+
+	cmd.beginDebugUtilsLabelEXT({"FXAAPassVk::cmd"});
+
 	DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
 	if (!desc.valid()) return;
 
@@ -69,7 +73,6 @@ void FXAAPassVk::render(FrameContext& frame)
 
 	vk::DescriptorSet set = desc.getSet();
 
-	vk::CommandBuffer cmd = frame.cmd;
 	vk::Extent2D extent = frame.extent;
 	outputImage_.transitionToColorAttachment(cmd);
 
@@ -131,6 +134,8 @@ void FXAAPassVk::render(FrameContext& frame)
 	cmd.endRendering();
 
 	outputImage_.transitionToShaderRead(cmd);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 
@@ -230,7 +235,7 @@ void FXAAPassVk::createDescriptorSets()
 		descriptorSets_[i].allocate();
 
 		descriptorSets_[i].setDebugName(
-			"FXAAPass::descriptorSets_ frame " + std::to_string(i)
+			"FXAAPass::DescriptorSet frame " + std::to_string(i)
 		);
 
 		descriptorSets_[i].writeUniformBuffer(
@@ -257,4 +262,6 @@ void FXAAPassVk::createPipeline()
 	desc.depthWriteEnable = vk::False;
 
 	pipeline_.create(desc);
+
+	pipeline_.setDebugName("FXAAPassVk::Pipeline");
 } // end of createPipeline()

@@ -14,8 +14,6 @@ enum class DebugMode : int
 
 struct FogSettings
 {
-	bool volumetricFog = false;
-
 	float start{ 50.0f };
 	float end{ 175.0f };
 

@@ -87,6 +87,8 @@ void SSAOPassVk::renderOffscreen(
 
 	// SSAO RAW RENDER
 	{
+		cmd.beginDebugUtilsLabelEXT({ "SSAOPassVk-Raw::cmd" });
+
 		ssaoRawImage_.transitionToColorAttachment(cmd);
 
 		vk::ClearValue aoClear{};
@@ -152,10 +154,14 @@ void SSAOPassVk::renderOffscreen(
 		cmd.endRendering();
 
 		ssaoRawImage_.transitionToShaderRead(cmd);
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 
 	// SSAO BLUR RENDER
 	{
+		cmd.beginDebugUtilsLabelEXT({ "SSAOPassVk-Blur::cmd" });
+
 		ssaoBlurImage_.transitionToColorAttachment(cmd);
 
 		vk::ClearValue aoClear{};
@@ -214,6 +220,8 @@ void SSAOPassVk::renderOffscreen(
 		cmd.endRendering();
 
 		ssaoBlurImage_.transitionToShaderRead(cmd);
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 } // end of renderOffscreen()
 
@@ -281,11 +289,7 @@ void SSAOPassVk::createAttachments()
 
 	ssaoBlurImage_.transitionToColorAttachment(cmd);
 
-	vk::ClearValue clear{};
-	clear.color.float32[0] = 1.0f;
-	clear.color.float32[1] = 0.0f;
-	clear.color.float32[2] = 0.0f;
-	clear.color.float32[3] = 0.0f;
+	vk::ClearValue clear{ {1.0f, 0.0f, 0.0f, 0.0f} };
 
 	vk::RenderingAttachmentInfo colorAttachment{};
 	colorAttachment.imageView = ssaoBlurImage_.view();
@@ -395,7 +399,7 @@ void SSAOPassVk::createDescriptorSets()
 			ssaoRawDescriptorSets_[i].allocate();
 
 			ssaoRawDescriptorSets_[i].setDebugName(
-				"SSAOPassVk::ssaoRawDescriptorSets_ frame " + std::to_string(i)
+				"SSAOPassVk-Raw::DescriptorSet frame " + std::to_string(i)
 			);
 
 			ssaoRawDescriptorSets_[i].writeUniformBuffer(
@@ -458,7 +462,7 @@ void SSAOPassVk::createDescriptorSets()
 			ssaoBlurDescriptorSets_[i].allocate();
 
 			ssaoBlurDescriptorSets_[i].setDebugName(
-				"SSAOPassVk::ssaoBlurDescriptorSets_ frame " + std::to_string(i)
+				"SSAOPassVk-Blur::DescriptorSet frame " + std::to_string(i)
 			);
 
 			ssaoBlurDescriptorSets_[i].writeUniformBuffer(
@@ -494,6 +498,8 @@ void SSAOPassVk::createPipelines()
 		desc.depthWriteEnable = false;
 
 		ssaoRawPipeline_.create(desc);
+
+		ssaoRawPipeline_.setDebugName("SSAOPassVk-Raw::Pipeline");
 	}
 
 	// BLUR PIPELINE
@@ -512,6 +518,8 @@ void SSAOPassVk::createPipelines()
 		desc.depthWriteEnable = false;
 
 		ssaoBlurPipeline_.create(desc);
+
+		ssaoBlurPipeline_.setDebugName("SSAOPassVk-Blur::Pipeline");
 	}
 } // end of createPipelines()
 

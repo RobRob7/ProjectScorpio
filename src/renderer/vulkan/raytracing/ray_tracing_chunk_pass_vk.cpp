@@ -114,6 +114,8 @@ void RayTracingWorldPassVk::upload(
 	uint32_t frameIndex
 )
 {
+	cmd.beginDebugUtilsLabelEXT({ "RayTracingWorldPassVk-Upload::cmd" });
+
 	rtSceneReady_ = false;
 
 	std::vector<uint64_t> currentKeys;
@@ -218,6 +220,8 @@ void RayTracingWorldPassVk::upload(
 		frameTLAS.valid() &&
 		(packedRTOpaqueInfoBufferSize_ > 0 ||
 		packedRTWaterInfoBufferSize_ > 0);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of upload()
 
 void RayTracingWorldPassVk::render(
@@ -234,6 +238,8 @@ void RayTracingWorldPassVk::render(
 	}
 
 	vk::CommandBuffer cmd = frame.cmd;
+
+	cmd.beginDebugUtilsLabelEXT({ "RayTracingWorldPassVk::cmd" });
 
 	outColorImage_.transitionToGeneral(cmd);
 	outDepthImage_.transitionToGeneral(cmd);
@@ -331,6 +337,8 @@ void RayTracingWorldPassVk::render(
 		{},
 		barriers
 	);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 void RayTracingWorldPassVk::setSkybox(
@@ -659,7 +667,7 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			rayGenDescriptorSets_[i].allocate();
 
 			rayGenDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk::rayGenDescriptorSets_ frame " + std::to_string(i)
+				"RTChunkPassVk-RayGen::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 
@@ -709,7 +717,7 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			missDescriptorSets_[i].allocate();
 
 			missDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk::missDescriptorSets_ frame " + std::to_string(i)
+				"RTChunkPassVk-Miss::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 
@@ -771,7 +779,7 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			closestHitOpaqueDescriptorSets_[i].allocate();
 
 			closestHitOpaqueDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk::closestHitOpaqueDescriptorSets_ frame " + std::to_string(i)
+				"RTChunkPassVk-ClosestHitOpaque::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 
@@ -845,7 +853,7 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			closestHitWaterDescriptorSets_[i].allocate();
 
 			closestHitWaterDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk::closestHitWaterDescriptorSets_ frame " + std::to_string(i)
+				"RTChunkPassVk-ClosestHitWater::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 	} // end for
@@ -872,6 +880,8 @@ void RayTracingWorldPassVk::createPipeline()
 	desc.maxRecursionDepth = 3;
 
 	pipeline_.create(desc);
+
+	pipeline_.setDebugName("RayTracingWorldPassVk::Pipeline");
 } // end of createPipeline()
 
 void RayTracingWorldPassVk::createSBT()

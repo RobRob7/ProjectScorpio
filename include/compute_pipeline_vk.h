@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <vector>
+#include <string>
 
 class VulkanMain;
 
@@ -30,6 +31,8 @@ public:
 
 	ComputePipelineVk(ComputePipelineVk&&) noexcept = delete;
 	ComputePipelineVk& operator=(ComputePipelineVk&&) noexcept = delete;
+
+	void setDebugName(const std::string& name);
 
 	void create(const ComputePipelineDescVk& desc);
 

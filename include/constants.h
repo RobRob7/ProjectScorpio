@@ -380,7 +380,7 @@ namespace FXAA_Constants
 
 namespace Fog_Constants
 {
-	const uint32_t RES_FACTOR = 2;
+	const uint32_t RES_FACTOR = 3;
 
 	struct FogPassUBO
 	{
@@ -392,8 +392,7 @@ namespace Fog_Constants
 		glm::vec2 u_nearFar;
 		glm::vec2 u_fogStartEnd;
 
-		glm::vec3 u_fogColor;
-		int u_useVolFog;
+		glm::vec4 u_fogColor;
 
 		glm::vec3 u_lightDir;
 		float u_maxDistance;

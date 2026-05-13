@@ -53,6 +53,12 @@ public:
     explicit VulkanMain(GLFWwindow* window);
     ~VulkanMain();
 
+    void setDebugName(
+        const vk::ObjectType type,
+        const uint64_t handle,
+        const std::string_view& name
+    ) const;
+
     void init();
     void waitIdle() const;
 

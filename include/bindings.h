@@ -74,10 +74,9 @@ enum class ShadowMapPassBinding : uint32_t
 enum class FogPassBinding : uint32_t
 {
     UBO = 0,
-    ForwardColorTex = 1,
-    ForwardDepthTex = 2,
-    ShadowMapTex = 3,
-    OutColorTex = 4
+    ForwardDepthTex = 1,
+    ShadowMapTex = 2,
+    OutColorTex = 3
 };
 
 enum class GbufferBinding : uint32_t

@@ -41,6 +41,8 @@ void GBufferPassVk::render(
 {
 	vk::CommandBuffer cmd = frame.cmd;
 
+	cmd.beginDebugUtilsLabelEXT({ "GBufferPassVk::cmd" });
+
 	vk::Extent2D extent = vk_.getSwapChainExtent();
 
 	gNormalImage_.transitionToColorAttachment(cmd);
@@ -106,6 +108,8 @@ void GBufferPassVk::render(
 	
 	gNormalImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
 	gDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 

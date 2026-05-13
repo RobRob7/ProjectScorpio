@@ -89,6 +89,8 @@ void HybridCompositePassVk::render(
 
     vk::CommandBuffer cmd = frame.cmd;
 
+    cmd.beginDebugUtilsLabelEXT({ "HybridCompositePassVk::cmd" });
+
     hybridColorImage_.transitionToColorAttachment(cmd);
     hybridDepthImage_.transitionToDepthAttachment(cmd);
 
@@ -149,6 +151,8 @@ void HybridCompositePassVk::render(
 
     hybridColorImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
     hybridDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+
+    cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 
@@ -307,7 +311,7 @@ void HybridCompositePassVk::createDescriptorSet()
         descriptorSets_[i].allocate();
 
         descriptorSets_[i].setDebugName(
-            "HybridCompositePassVk::descriptorSets_ frame " + std::to_string(i)
+            "HybridCompositePassVk::DescriptorSet frame " + std::to_string(i)
         );
     } // end for
 } // end of createDescriptorSet()
@@ -329,4 +333,6 @@ void HybridCompositePassVk::createPipeline()
     desc.depthWriteEnable = true;
 
     pipeline_.create(desc);
+
+    pipeline_.setDebugName("HybridCompositePassVk::Pipeline");
 } // end of createPipeline()

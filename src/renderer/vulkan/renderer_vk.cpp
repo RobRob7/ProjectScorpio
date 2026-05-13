@@ -215,7 +215,10 @@ void RendererVk::renderFrame(
 
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), &frame);
-	in.world->buildRTDrawList(view, proj);
+	if (renderSettings_->useRT)
+	{
+		in.world->buildRTDrawList(view, proj);
+	}
 
 	// ----------------- PASSES ----------------- //
 	// RT upload
@@ -293,6 +296,8 @@ void RendererVk::renderFrame(
 
 
 	// ----------------- FORWARD RENDER ----------------- //
+	cmd.beginDebugUtilsLabelEXT({ "RendererVk-ForwardRaster::cmd" });
+
 	// scene color + depth transition to attachment
 	sceneColor_.transitionToColorAttachment(cmd);
 	sceneDepth_.transitionToDepthAttachment(cmd);
@@ -385,6 +390,8 @@ void RendererVk::renderFrame(
 	}
 	cmd.endRendering();
 
+	cmd.endDebugUtilsLabelEXT();
+
 	// RT render
 	if (vk_.supportsRayTracing() && renderSettings_->useRT && rtWorldPass_)
 	{
@@ -459,13 +466,12 @@ void RendererVk::renderFrame(
 		);
 		
 		Fog_Constants::FogPassUBO fogUBO{};
-		fogUBO.u_useVolFog = renderSettings_->fogSettings.volumetricFog;
 		fogUBO.u_invViewProj = glm::inverse(proj * view);
 		fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
 		fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
 		fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
 		fogUBO.u_fogStartEnd = { renderSettings_->fogSettings.start, renderSettings_->fogSettings.end };
-		fogUBO.u_fogColor = in.light->getLightColor();
+		fogUBO.u_fogColor = glm::vec4(in.light->getLightColor(), 1.0f);
 		fogUBO.u_lightDir = in.light->getDirection();
 		fogUBO.u_maxDistance = renderSettings_->fogSettings.maxDistance;
 		fogUBO.u_ambStr = in.world->getAmbientStrength();

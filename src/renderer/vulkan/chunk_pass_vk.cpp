@@ -135,6 +135,8 @@ void ChunkPassVk::renderOpaque(
 	{
 		vk::Extent2D extent = frame.extent;
 
+		cmd.beginDebugUtilsLabelEXT({ "ChunkPassVk-Default::cmd" });
+
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
 
 		vk::DescriptorSet set = opaqueDescriptorSets_[frame.frameIndex].getSet();
@@ -182,10 +184,14 @@ void ChunkPassVk::renderOpaque(
 
 			item.gpu->drawOpaque(cmd);
 		} // end for
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 	// reflection
 	else if (renderTarget == RenderTargetVk::WaterReflection)
 	{
+		cmd.beginDebugUtilsLabelEXT({ "ChunkPassVk-Reflection::cmd" });
+
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
 
 		vk::DescriptorSet set = reflectionDescriptorSets_[frame.frameIndex].getSet();
@@ -244,10 +250,14 @@ void ChunkPassVk::renderOpaque(
 
 			item.gpu->drawOpaque(cmd);
 		} // end for
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 	// refraction
 	else if (renderTarget == RenderTargetVk::WaterRefraction)
 	{
+		cmd.beginDebugUtilsLabelEXT({ "ChunkPassVk-Refraction::cmd" });
+
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaquePipeline_.getPipeline());
 
 		vk::DescriptorSet set = refractionDescriptorSets_[frame.frameIndex].getSet();
@@ -300,10 +310,14 @@ void ChunkPassVk::renderOpaque(
 
 			item.gpu->drawOpaque(cmd);
 		} // end for
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 	// gbuffer
 	else if (renderTarget == RenderTargetVk::GBuffer)
 	{
+		cmd.beginDebugUtilsLabelEXT({ "ChunkPassVk-GBuffer::cmd" });
+
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaqueGBufferPipeline_.getPipeline());
 
 		vk::DescriptorSet set = opaqueGBufferDescriptorSets_[frame.frameIndex].getSet();
@@ -339,10 +353,14 @@ void ChunkPassVk::renderOpaque(
 
 			item.gpu->drawOpaque(cmd);
 		} // end for
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 	// shadow
 	else if (renderTarget == RenderTargetVk::Shadow)
 	{
+		cmd.beginDebugUtilsLabelEXT({ "ChunkPassVk-Shadow::cmd" });
+
 		cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaqueShadowPipeline_.getPipeline());
 
 		vk::DescriptorSet set = opaqueShadowDescriptorSets_[frame.frameIndex].getSet();
@@ -377,6 +395,8 @@ void ChunkPassVk::renderOpaque(
 
 			item.gpu->drawOpaque(cmd);
 		} // end for
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 } // end of renderOpaque()
 
@@ -531,7 +551,7 @@ void ChunkPassVk::createDescriptorSets()
 			opaqueDescriptorSets_[i].allocate();
 
 			opaqueDescriptorSets_[i].setDebugName(
-				"ChunkPassVK::opaqueDescriptorSets_ frame " + std::to_string(i)
+				"ChunkPassVK-Opaque::DescriptorSet frame " + std::to_string(i)
 			);
 
 			opaqueDescriptorSets_[i].writeUniformBuffer(
@@ -605,7 +625,7 @@ void ChunkPassVk::createDescriptorSets()
 			reflectionDescriptorSets_[i].allocate();
 
 			reflectionDescriptorSets_[i].setDebugName(
-				"ChunkPassVK::reflectionDescriptorSets_ frame " + std::to_string(i)
+				"ChunkPassVK-Reflection::DescriptorSet frame " + std::to_string(i)
 			);
 
 			reflectionDescriptorSets_[i].writeUniformBuffer(
@@ -679,7 +699,7 @@ void ChunkPassVk::createDescriptorSets()
 			refractionDescriptorSets_[i].allocate();
 
 			refractionDescriptorSets_[i].setDebugName(
-				"ChunkPassVK::refractionDescriptorSets_ frame " + std::to_string(i)
+				"ChunkPassVK-Refraction::DescriptorSet frame " + std::to_string(i)
 			);
 
 			refractionDescriptorSets_[i].writeUniformBuffer(
@@ -713,7 +733,7 @@ void ChunkPassVk::createDescriptorSets()
 			opaqueGBufferDescriptorSets_[i].allocate();
 
 			opaqueGBufferDescriptorSets_[i].setDebugName(
-				"ChunkPassVK::opaqueGBufferDescriptorSets_ frame " + std::to_string(i)
+				"ChunkPassVK-GBuffer::DescriptorSet frame " + std::to_string(i)
 			);
 
 			opaqueGBufferDescriptorSets_[i].writeUniformBuffer(
@@ -746,7 +766,7 @@ void ChunkPassVk::createDescriptorSets()
 			opaqueShadowDescriptorSets_[i].allocate();
 
 			opaqueShadowDescriptorSets_[i].setDebugName(
-				"ChunkPassVK::opaqueShadowDescriptorSets_ frame " + std::to_string(i)
+				"ChunkPassVK-Shadow::DescriptorSet frame " + std::to_string(i)
 			);
 
 			opaqueShadowDescriptorSets_[i].writeUniformBuffer(
@@ -802,6 +822,8 @@ void ChunkPassVk::createPipelines(
 		desc.vertexAttributes = { attr };
 
 		opaquePipeline_.create(desc);
+
+		opaquePipeline_.setDebugName("ChunkPassVk-Opaque::Pipeline");
 	}
 	
 	// gbuffer
@@ -842,6 +864,8 @@ void ChunkPassVk::createPipelines(
 		desc.vertexAttributes = { attr };
 
 		opaqueGBufferPipeline_.create(desc);
+
+		opaqueGBufferPipeline_.setDebugName("ChunkPassVk-GBuffer::Pipeline");
 	}
 
 	// shadow
@@ -881,5 +905,7 @@ void ChunkPassVk::createPipelines(
 		desc.frontFace = vk::FrontFace::eClockwise;
 
 		opaqueShadowPipeline_.create(desc);
+
+		opaqueShadowPipeline_.setDebugName("ChunkPassVk-Shadow::Pipeline");
 	}
 } // end of createPipelines()

@@ -93,6 +93,29 @@ VulkanMain::~VulkanMain()
 	}
 } // end of destructor
 
+void VulkanMain::setDebugName(
+	const vk::ObjectType type,
+	const uint64_t handle,
+	const std::string_view& name
+) const
+{
+	vk::DebugUtilsObjectNameInfoEXT info{};
+	info.objectType = type;
+	info.objectHandle = handle;
+	info.pObjectName = name.data();
+
+	{
+		vk::Result result = getDevice().setDebugUtilsObjectNameEXT(info);
+		if (result != vk::Result::eSuccess)
+		{
+			std::string_view errorMsg =
+				name.data() +
+				std::string("::setDebugUtilsObjectNameEXT failed to set debug name!");
+			throw std::runtime_error(errorMsg.data());
+		}
+	}
+} // end of setDebugName()
+
 void VulkanMain::init()
 {
 	if (initialized_) return;
@@ -1124,10 +1147,7 @@ std::vector<const char*> VulkanMain::getRequiredExtensions()
 
 	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
-	if (enableValidationLayers_)
-	{
-		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-	}
+	extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
 	return extensions;
 } // end of getRequiredExtensions()

@@ -85,6 +85,8 @@ void CubemapVk::render(
 
 	vk::CommandBuffer cmd = frame->cmd;
 
+	cmd.beginDebugUtilsLabelEXT({ "CubemapVk-Default::cmd" });
+
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 
 	vk::Buffer vertBuffer = vertexBuffer_.getBuffer();
@@ -120,6 +122,8 @@ void CubemapVk::render(
 	);
 
 	cmd.draw(vertexCount_, 1, 0, 0);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 void CubemapVk::renderOffscreen(
@@ -140,6 +144,8 @@ void CubemapVk::renderOffscreen(
 		!pipelineOffscreen_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
+
+	cmd.beginDebugUtilsLabelEXT({ "CubemapVk-Offscreen::cmd" });
 
 	vk::Viewport viewport{};
 	viewport.x = 0.0f;
@@ -191,6 +197,8 @@ void CubemapVk::renderOffscreen(
 	);
 
 	cmd.draw(vertexCount_, 1, 0, 0);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of renderOffscreen()
 
 
@@ -276,7 +284,7 @@ void CubemapVk::createDescriptorSets()
 		descriptorSets_[i].allocate();
 
 		descriptorSets_[i].setDebugName(
-			"CubemapVk::descriptorSets_ frame " + std::to_string(i)
+			"CubemapVk-Default::DescriptorSet frame " + std::to_string(i)
 		);
 
 		descriptorSets_[i].writeUniformBuffer(
@@ -312,7 +320,7 @@ void CubemapVk::createDescriptorSets()
 		descriptorSetsOffscreen_[i].allocate();
 
 		descriptorSetsOffscreen_[i].setDebugName(
-			"CubemapVk::descriptorSetsOffscreen_ frame " + std::to_string(i)
+			"CubemapVk-Offscreen::DescriptorSet frame " + std::to_string(i)
 		);
 
 		descriptorSetsOffscreen_[i].writeUniformBuffer(
@@ -369,9 +377,13 @@ void CubemapVk::createPipeline()
 
 	pipeline_.create(desc);
 
+	pipeline_.setDebugName("CubemapVk-Default::Pipeline");
+
 	// offscreen pipeline
 	desc.colorFormat = vk::Format::eR16G16B16A16Sfloat;
 	desc.depthFormat = vk::Format::eD32Sfloat;
 
 	pipelineOffscreen_.create(desc);
+
+	pipelineOffscreen_.setDebugName("CubemapVk-Offscreen::Pipeline");
 } // end of createPipeline()

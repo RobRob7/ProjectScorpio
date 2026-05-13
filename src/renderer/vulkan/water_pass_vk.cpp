@@ -112,6 +112,8 @@ void WaterPassVk::renderWater(
 
 	vk::CommandBuffer cmd = frame.cmd;
 
+	cmd.beginDebugUtilsLabelEXT({ "WaterPassVk::cmd" });
+
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 
 	vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
@@ -161,6 +163,8 @@ void WaterPassVk::renderWater(
 
 		item.gpu->drawWater(cmd);
 	} // end for
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of renderWater()
 
 
@@ -384,7 +388,7 @@ void WaterPassVk::createDescriptorSet()
 		descriptorSets_[i].allocate();
 
 		descriptorSets_[i].setDebugName(
-			"WaterPassVK::descriptorSets frame " + std::to_string(i)
+			"WaterPassVK::DescriptorSet frame " + std::to_string(i)
 		);
 
 		descriptorSets_[i].writeUniformBuffer(
@@ -469,6 +473,8 @@ void WaterPassVk::createPipeline()
 	desc.vertexAttributes = { attr };
 
 	pipeline_.create(desc);
+
+	pipeline_.setDebugName("WaterPassVk::Pipeline");
 } // end of createPipeline()
 
 void WaterPassVk::waterPass(
@@ -482,6 +488,7 @@ void WaterPassVk::waterPass(
 	vk::CommandBuffer cmd = frame.cmd;
 
 	// REFLECTION
+	cmd.beginDebugUtilsLabelEXT({ "WaterPassVk-Reflection::cmd" });
 	reflColorImage_.transitionToColorAttachment(cmd);
 	reflDepthImage_.transitionToDepthAttachment(cmd);
 
@@ -489,9 +496,10 @@ void WaterPassVk::waterPass(
 
 	reflColorImage_.transitionToShaderRead(cmd);
 	reflDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
-
+	cmd.endDebugUtilsLabelEXT();
 
 	// REFRACTION
+	cmd.beginDebugUtilsLabelEXT({ "WaterPassVk-Refraction::cmd" });
 	refrColorImage_.transitionToColorAttachment(cmd);
 	refrDepthImage_.transitionToDepthAttachment(cmd);
 
@@ -499,6 +507,7 @@ void WaterPassVk::waterPass(
 
 	refrColorImage_.transitionToShaderRead(cmd);
 	refrDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+	cmd.endDebugUtilsLabelEXT();
 } // end of waterPass()
 
 void WaterPassVk::waterReflectionPass(
