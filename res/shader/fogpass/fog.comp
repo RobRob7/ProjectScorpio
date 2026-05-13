@@ -2,7 +2,7 @@
 
 #include "../helper.glsl"
 
-layout(local_size_x = 8, local_size_y = 8) in;
+layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std140, set = 0, binding = 0) uniform UBO
 {
@@ -14,8 +14,7 @@ layout(std140, set = 0, binding = 0) uniform UBO
     vec2 u_nearFar;
     vec2 u_fogStartEnd;
 
-    vec3 u_fogColor;
-    int u_useVolFog;
+    vec4 u_fogColor;
 
     vec3 u_lightDir;
     float u_maxDistance;
@@ -26,10 +25,10 @@ layout(std140, set = 0, binding = 0) uniform UBO
     float u_absorptionDensity;
 } ubo;
 
-layout(binding = 2) uniform sampler2D ForwardDepthTex;
-layout(binding = 3) uniform sampler2D ShadowMapTex;
+layout(binding = 1) uniform sampler2D ForwardDepthTex;
+layout(binding = 2) uniform sampler2D ShadowMapTex;
 
-layout(binding = 4, rgba16f) writeonly uniform image2D FogImage;
+layout(binding = 3, rgba16f) writeonly uniform image2D FogImage;
 
 float SampleShadowMap(vec3 worldPos)
 {
@@ -89,12 +88,12 @@ void main()
 
         float visibility = SampleShadowMap(marchPos);
 
-        vec3 ambientFog = ubo.u_fogColor
+        vec3 ambientFog = ubo.u_fogColor.rgb
                         * ubo.u_ambStr
                         * ambientFogStrength
                         * ubo.u_scatteringDensity;
 
-        vec3 sunScatter = ubo.u_fogColor
+        vec3 sunScatter = ubo.u_fogColor.rgb
                         * visibility
                         * sunAmount
                         * ubo.u_scatteringDensity;

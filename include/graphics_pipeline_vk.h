@@ -4,6 +4,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <vector>
+#include <string>
 
 class VulkanMain;
 
@@ -71,6 +72,8 @@ public:
 
 	GraphicsPipelineVk(GraphicsPipelineVk&&) noexcept = default;
 	GraphicsPipelineVk& operator=(GraphicsPipelineVk&&) noexcept = default;
+
+	void setDebugName(const std::string& name);
 
 	void create(const GraphicsPipelineDescVk& desc);
 

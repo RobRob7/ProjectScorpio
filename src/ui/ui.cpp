@@ -211,6 +211,8 @@ void UI::renderVk(FrameContext& frame)
 	{
 		vk::CommandBuffer cmd = frame.cmd;
 
+		cmd.beginDebugUtilsLabelEXT({ "UI::cmd" });
+
 		vk::RenderingAttachmentInfo uiColorAttach{};
 		uiColorAttach.imageView = frame.colorImageView;
 		uiColorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
@@ -232,6 +234,8 @@ void UI::renderVk(FrameContext& frame)
 			);
 		}
 		cmd.endRendering();
+
+		cmd.endDebugUtilsLabelEXT();
 	}
 } // end of renderVk()
 
@@ -494,15 +498,8 @@ void UI::drawMenuBar(IScene& scene)
 			if (ImGui::Checkbox("FXAA##graphics", &renderSettings_.useFXAA))
 			{
 			}
-			if (ImGui::TreeNodeEx("Fog##graphics", ImGuiTreeNodeFlags_SpanAvailWidth))
+			if (ImGui::Checkbox("Volumetric Fog##graphics", &renderSettings_.useFog))
 			{
-				ImGui::Checkbox("Enable Fog", &renderSettings_.useFog);
-
-				ImGui::BeginDisabled(!renderSettings_.useFog);
-				ImGui::Checkbox("Volumetric Fog", &renderSettings_.fogSettings.volumetricFog);
-				ImGui::EndDisabled();
-
-				ImGui::TreePop();
 			}
 			ImGui::EndMenu();
 		}
@@ -807,6 +804,7 @@ void UI::drawInspector(IScene& scene)
 	}
 
 	// ------- fog -------
+	ImGui::BeginDisabled(!renderSettings_.useFog);
 	if (ImGui::CollapsingHeader("Fog", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		bool changed = false;
@@ -858,6 +856,7 @@ void UI::drawInspector(IScene& scene)
 		}
 		ImGui::Separator();
 	}
+	ImGui::EndDisabled();
 
 	ImGui::End();
 } // end of drawInspector()

@@ -65,6 +65,8 @@ void LightVk::render(
 
 	vk::CommandBuffer cmd = frame->cmd;
 
+	cmd.beginDebugUtilsLabelEXT({ "LightVk-Default::cmd" });
+
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 
 	LightUBO ubo{};
@@ -88,6 +90,8 @@ void LightVk::render(
 	);
 
 	cmd.draw(3, 1, 0, 0);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 void LightVk::renderOffscreen(
@@ -105,6 +109,8 @@ void LightVk::renderOffscreen(
 		!pipelineOffscreen_.valid()) return;
 
 	vk::CommandBuffer cmd = frame->cmd;
+
+	cmd.beginDebugUtilsLabelEXT({ "LightVk-Offscreen::cmd" });
 
 	vk::Viewport viewport{};
 	viewport.x = 0.0f;
@@ -147,6 +153,8 @@ void LightVk::renderOffscreen(
 	);
 
 	cmd.draw(3, 1, 0, 0);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of renderOffscreen()
 
 void LightVk::updateLight(
@@ -245,7 +253,7 @@ void LightVk::createDescriptorSets()
 		);
 
 		descriptorSets_[i].setDebugName(
-			"LightVk::descriptorSets_ frame " + std::to_string(i)
+			"LightVk-Default::DescriptorSet frame " + std::to_string(i)
 		);
 
 		descriptorSetsOffscreen_[i].createSingleUniformBuffer(
@@ -256,7 +264,7 @@ void LightVk::createDescriptorSets()
 		);
 
 		descriptorSetsOffscreen_[i].setDebugName(
-			"LightVk::descriptorSetsOffscreen_ frame " + std::to_string(i)
+			"LightVk-Offscreen::DescriptorSet frame " + std::to_string(i)
 		);
 	} // end for
 } // end of createDescriptorSets()
@@ -281,7 +289,10 @@ void LightVk::createPipeline()
 
 	pipeline_.create(desc);
 
+	pipeline_.setDebugName("LightVk-Default::Pipeline");
 
 	// offscreen pipeline
 	pipelineOffscreen_.create(desc);
+
+	pipelineOffscreen_.setDebugName("LightVk-Offscreen::Pipeline");
 } // end of createPipeline()

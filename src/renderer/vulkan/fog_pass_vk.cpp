@@ -54,7 +54,6 @@ void FogPassVk::render(
 )
 {
 	if (!inputShadowMapImage_ ||
-		//!inputColorImage_ || 
 		!inputDepthImage_ ||
 		!outputImage_.valid() ||
 		!computePipeline_.valid())
@@ -65,14 +64,10 @@ void FogPassVk::render(
 	vk::CommandBuffer cmd = frame.cmd;
 	vk::Extent2D extent = frame.extent;
 
+	cmd.beginDebugUtilsLabelEXT({ "FogPassVk::cmd" });
+
 	DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
 	if (!desc.valid()) return;
-
-	//desc.writeCombinedImageSampler(
-	//	TO_API_FORM(FogPassBinding::ForwardColorTex),
-	//	inputColorImage_->view(),
-	//	inputColorImage_->sampler()
-	//);
 
 	desc.writeCombinedImageSampler(
 		TO_API_FORM(FogPassBinding::ForwardDepthTex),
@@ -110,12 +105,14 @@ void FogPassVk::render(
 	uint32_t fogWidth = (extent.width + 1) / resFactor_;
 	uint32_t fogHeight = (extent.height + 1) / resFactor_;
 
-	uint32_t groupX = (fogWidth + 7) / 8;
-	uint32_t groupY = (fogHeight + 7) / 8;
+	uint32_t groupX = (fogWidth + 15) / 16;
+	uint32_t groupY = (fogHeight + 15) / 16;
 
 	cmd.dispatch(groupX, groupY, 1);
 
 	outputImage_.transitionToShaderRead(cmd);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 
@@ -127,12 +124,6 @@ void FogPassVk::refreshInput()
 
 	for (auto& set : descriptorSets_)
 	{
-		//set.writeCombinedImageSampler(
-		//	TO_API_FORM(FogPassBinding::ForwardColorTex),
-		//	inputColorImage_->view(),
-		//	inputColorImage_->sampler()
-		//);
-
 		set.writeCombinedImageSampler(
 			TO_API_FORM(FogPassBinding::ForwardDepthTex),
 			inputDepthImage_->view(),
@@ -214,13 +205,6 @@ void FogPassVk::createDescriptorSet()
 			vk::ShaderStageFlagBits::eFragment |
 			vk::ShaderStageFlagBits::eCompute;
 
-		//vk::DescriptorSetLayoutBinding inputColorBinding{};
-		//inputColorBinding.binding = TO_API_FORM(FogPassBinding::ForwardColorTex);
-		//inputColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-		//inputColorBinding.descriptorCount = 1;
-		//inputColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment |
-		//	vk::ShaderStageFlagBits::eCompute;
-
 		vk::DescriptorSetLayoutBinding inputDepthBinding{};
 		inputDepthBinding.binding = TO_API_FORM(FogPassBinding::ForwardDepthTex);
 		inputDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
@@ -241,7 +225,6 @@ void FogPassVk::createDescriptorSet()
 
 		descriptorSets_[i].createLayout({
 			uboBinding, 
-			//inputColorBinding, 
 			inputDepthBinding,
 			inputShadowBinding,
 			outputColorBinding
@@ -250,10 +233,6 @@ void FogPassVk::createDescriptorSet()
 		vk::DescriptorPoolSize uboPool;
 		uboPool.type = vk::DescriptorType::eUniformBuffer;
 		uboPool.descriptorCount = 1;
-
-		//vk::DescriptorPoolSize inputColorPool;
-		//inputColorPool.type = vk::DescriptorType::eCombinedImageSampler;
-		//inputColorPool.descriptorCount = 1;
 
 		vk::DescriptorPoolSize inputDepthPool;
 		inputDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
@@ -269,21 +248,20 @@ void FogPassVk::createDescriptorSet()
 
 		descriptorSets_[i].createPool({
 			uboPool, 
-			//inputColorPool, 
 			inputDepthPool,
 			inputShadowPool,
 			outputColorPool
 			});
 		descriptorSets_[i].allocate();
 
-		descriptorSets_[i].setDebugName(
-			"FogPassVk::descriptorSets_ frame " + std::to_string(i)
-		);
-
 		descriptorSets_[i].writeUniformBuffer(
 			TO_API_FORM(FogPassBinding::UBO),
 			uboBuffers_[i].getBuffer(),
 			sizeof(FogPassUBO)
+		);
+
+		descriptorSets_[i].setDebugName(
+			"FogPassVk::DescriptorSet frame " + std::to_string(i)
 		);
 	} // end for
 } // end of createDescriptorSet()
@@ -295,4 +273,6 @@ void FogPassVk::createPipeline()
 	compDesc.setLayouts = { descriptorSets_[0].getLayout() };
 
 	computePipeline_.create(compDesc);
+
+	computePipeline_.setDebugName("FogPassVk::Pipeline");
 } // end of createPipeline()

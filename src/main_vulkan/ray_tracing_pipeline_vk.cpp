@@ -12,6 +12,17 @@ RayTracingPipelineVk::RayTracingPipelineVk(VulkanMain& vk)
 
 RayTracingPipelineVk::~RayTracingPipelineVk() = default;
 
+void RayTracingPipelineVk::setDebugName(const std::string& name)
+{
+	if (!pipeline_) return;
+
+	vk_.setDebugName(
+		vk::ObjectType::ePipeline,
+		reinterpret_cast<uint64_t>(static_cast<VkPipeline>(pipeline_.get())),
+		name
+	);
+} // end of setDebugName()
+
 void RayTracingPipelineVk::create(const RayTracingPipelineDescVk& desc)
 {
 	destroy();

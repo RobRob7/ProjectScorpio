@@ -73,6 +73,8 @@ void PostCompositePassVk::render(FrameContext& frame)
 
     vk::CommandBuffer cmd = frame.cmd;
 
+    cmd.beginDebugUtilsLabelEXT({ "PostCompositePassVk::cmd" });
+
     postColorImage_.transitionToColorAttachment(cmd);
 
     vk::ClearValue colorClear{ {0.0f, 0.0f, 0.0f, 1.0f} };
@@ -121,6 +123,8 @@ void PostCompositePassVk::render(FrameContext& frame)
     cmd.endRendering();
 
     postColorImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
+
+    cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 
@@ -216,7 +220,7 @@ void PostCompositePassVk::createDescriptorSet()
         descriptorSets_[i].allocate();
 
         descriptorSets_[i].setDebugName(
-            "PostCompositePassVk::descriptorSets_ frame " + std::to_string(i)
+            "PostCompositePassVk::DescriptorSet frame " + std::to_string(i)
         );
     } // end for
 } // end of createDescriptorSet()
@@ -237,4 +241,6 @@ void PostCompositePassVk::createPipeline()
     desc.depthWriteEnable = true;
 
     pipeline_.create(desc);
+
+    pipeline_.setDebugName("PostCompositePassVk::Pipeline");
 } // end of createPipeline()

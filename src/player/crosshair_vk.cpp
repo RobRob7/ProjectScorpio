@@ -45,6 +45,8 @@ void CrosshairVk::render(const FrameContext* frame)
 
 	vk::CommandBuffer cmd = frame->cmd;
 
+	cmd.beginDebugUtilsLabelEXT({ "CrosshairVk::cmd" });
+
 	vk::RenderingAttachmentInfo colorAttach{};
 	colorAttach.imageView = frame->colorImageView;
 	colorAttach.imageLayout = vk::ImageLayout::eColorAttachmentOptimal;
@@ -84,6 +86,8 @@ void CrosshairVk::render(const FrameContext* frame)
 		cmd.draw(4, 1, 0, 0);
 	}
 	cmd.endRendering();
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 //--- PRIVATE ---//
@@ -151,4 +155,6 @@ void CrosshairVk::createPipeline()
 	desc.depthWriteEnable = false;
 
 	pipeline_.create(desc);
+
+	pipeline_.setDebugName("CrosshairVk::Pipeline");
 } // end of createPipeline()

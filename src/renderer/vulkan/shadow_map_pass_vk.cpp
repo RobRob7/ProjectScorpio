@@ -38,6 +38,8 @@ void ShadowMapPassVk::render(
 	vk::CommandBuffer cmd = frame.cmd;
 	vk::Extent2D extent = vk::Extent2D{ width_, height_ };
 
+	cmd.beginDebugUtilsLabelEXT({ "ShadowMapPassVk::cmd" });
+
 	depthImage_.transitionToDepthAttachment(cmd);
 
 	vk::RenderingAttachmentInfo depthAttachment{};
@@ -93,6 +95,8 @@ void ShadowMapPassVk::render(
 	cmd.endRendering();
 
 	depthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+
+	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 

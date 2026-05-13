@@ -62,6 +62,8 @@ void PresentPassVk::render(FrameContext& frame)
 
     vk::CommandBuffer cmd = frame.cmd;
 
+    cmd.beginDebugUtilsLabelEXT({ "PresentPassVk::cmd" });
+
     vk::ClearValue clear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
     vk::RenderingAttachmentInfo colorAttach{};
@@ -107,6 +109,8 @@ void PresentPassVk::render(FrameContext& frame)
         cmd.draw(3, 1, 0, 0);
     }
     cmd.endRendering();
+
+    cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
 
@@ -171,4 +175,6 @@ void PresentPassVk::createPipeline()
     desc.depthWriteEnable = false;
 
     pipeline_.create(desc);
+
+    pipeline_.setDebugName("PresentPassVk::Pipeline");
 } // end of createPipeline()
