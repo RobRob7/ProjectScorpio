@@ -70,7 +70,7 @@ private:
 	float lastTime_{ 0.0f };
 	bool firstUpdate_{ true };
 
-	float speed_{ 0.1f };
+	float speed_{ INIT_LIGHT_SPEED };
 	glm::vec3 visualColor_{ INIT_VISUAL_COLOR };
 	glm::vec3 direction_{};
 	glm::vec3 position_{};

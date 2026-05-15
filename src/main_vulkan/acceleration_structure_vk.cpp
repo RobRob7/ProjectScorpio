@@ -65,7 +65,7 @@ void AccelerationStructureVk::buildBLASOnCmd(
 
 	vk::AccelerationStructureGeometryKHR geometry{};
 	geometry.geometryType = vk::GeometryTypeKHR::eTriangles;
-	geometry.flags = vk::GeometryFlagBitsKHR::eOpaque;
+	geometry.flags = {};
 	geometry.geometry.triangles = triangles;
 
 	const uint32_t primitiveCount = indexCount / 3;

@@ -73,9 +73,15 @@ void RayTracingWorldPassVk::init()
 		vk_.getDevice(),
 		"raytracing/raygen.rgen.spv",
 		"raytracing/miss.rmiss.spv",
-		std::vector<std::string_view>{
-			"raytracing/closesthit_opaque.rchit.spv",
-			"raytracing/closesthit_water.rchit.spv",
+		std::vector<HitGroupFilePath>{
+			{
+				"raytracing/closesthit_opaque.rchit.spv",
+				"raytracing/anyhit_alpha_mask.rahit.spv"
+			},
+			{
+				"raytracing/closesthit_water.rchit.spv",
+				""
+			}
 		}
 	);
 
@@ -539,8 +545,8 @@ void RayTracingWorldPassVk::createOutputImages()
 	);
 
 	outColorImage_.createSampler(
-		vk::Filter::eNearest,
-		vk::Filter::eNearest,
+		vk::Filter::eLinear,
+		vk::Filter::eLinear,
 		vk::SamplerMipmapMode::eNearest,
 		vk::SamplerAddressMode::eClampToEdge,
 		false
@@ -733,7 +739,8 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			chunkInfoBinding.binding = TO_API_FORM(RTOpaqueClosestHitBinding::ChunkInfo);
 			chunkInfoBinding.descriptorType = vk::DescriptorType::eStorageBuffer;
 			chunkInfoBinding.descriptorCount = 1;
-			chunkInfoBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR;
+			chunkInfoBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR |
+				vk::ShaderStageFlagBits::eAnyHitKHR;
 
 			vk::DescriptorSetLayoutBinding uboBinding{};
 			uboBinding.binding = TO_API_FORM(RTOpaqueClosestHitBinding::UBO);
@@ -745,7 +752,8 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			atlasBinding.binding = TO_API_FORM(RTOpaqueClosestHitBinding::AtlasTex);
 			atlasBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
 			atlasBinding.descriptorCount = 1;
-			atlasBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR;
+			atlasBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR |
+				vk::ShaderStageFlagBits::eAnyHitKHR;
 
 			closestHitOpaqueDescriptorSets_[i].createLayout({
 				tlasBinding,
@@ -864,10 +872,16 @@ void RayTracingWorldPassVk::createPipeline()
 	RayTracingPipelineDescVk desc{};
 	desc.rayGenShader = shader_->rayGenShader();
 	desc.missShader = shader_->missShader();
-	desc.closestHitShaders = {
-		shader_->closestHitShaders()[0].get(),
-		shader_->closestHitShaders()[1].get()
-	};
+
+	const std::vector<HitGroupShaderModules>& hitGroupShaderModules = shader_->hitGroupShaders();
+	desc.hitGroups.reserve(hitGroupShaderModules.size());
+	for (const HitGroupShaderModules& hg : hitGroupShaderModules)
+	{
+		desc.hitGroups.push_back({
+			hg.closestHitShaderModule.get(),
+			hg.anyHitShaderModule.get()
+			});
+	} // end for
 	
 	desc.setLayouts =
 	{

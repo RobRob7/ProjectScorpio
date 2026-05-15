@@ -127,7 +127,7 @@ void main()
 
     // allow textures to be see-through
     // (like tree canopy texture)
-    if (texColor.a < 0.1)
+    if (texColor.a < 0.5)
     {
         discard;
     }

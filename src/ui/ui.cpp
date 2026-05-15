@@ -783,10 +783,10 @@ void UI::drawInspector(IScene& scene)
 
 		bool changed = false;
 
-		changed |= ImGui::DragFloat("Direction Speed##sun", &speed, 0.01f);
+		changed |= ImGui::DragFloat("Direction Speed##sun", &speed, 0.005f);
 		if (ImGui::Button("Reset##dirSpeed"))
 		{
-			light.setSpeed(0.1f);
+			light.setSpeed(0.05f);
 		}
 		changed |= ImGui::ColorEdit3("Color##sun", glm::value_ptr(color));
 		if (ImGui::Button("Reset##Color"))
@@ -826,7 +826,7 @@ void UI::drawInspector(IScene& scene)
 		changed |= ImGui::DragFloat("Step Size##fog", &renderSettings_.fogSettings.stepSize, 0.01f, 0.01f, 1.5f);
 		if (ImGui::Button("Reset##fog_stepsize"))
 		{
-			renderSettings_.fogSettings.stepSize = 0.5f;
+			renderSettings_.fogSettings.stepSize = 0.150f;
 		}
 		changed |= ImGui::DragFloat("Scattering Density##fog", &renderSettings_.fogSettings.scatteringDensity, 0.005f, 0.0f, 0.03f);
 		if (ImGui::Button("Reset##fog_scatteringdensity"))

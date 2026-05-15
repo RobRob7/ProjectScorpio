@@ -20,7 +20,7 @@ struct FogSettings
 	float rayZLimit{ 75.0f };
 
 	float maxDistance{ 100.0f };
-	float stepSize{ 0.5f };
+	float stepSize{ 0.150f };
 
 	float scatteringDensity{ 0.015f };
 	float absorptionDensity{ 0.003f };

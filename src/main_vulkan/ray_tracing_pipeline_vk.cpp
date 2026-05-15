@@ -29,17 +29,22 @@ void RayTracingPipelineVk::create(const RayTracingPipelineDescVk& desc)
 
 	vk::Device device = vk_.getDevice();
 
-	if (!desc.rayGenShader || !desc.missShader || desc.closestHitShaders.empty())
+	if (!desc.rayGenShader || 
+		!desc.missShader || 
+		desc.hitGroups.empty())
 	{
-		throw std::runtime_error("RayTracingPipelineVk::create - need at least (raygen, miss, hit) shaders!");
+		throw std::runtime_error("RayTracingPipelineVk::create - need at least (raygen + miss + one hit group) shaders!");
 	}
 
 
-	for (vk::ShaderModule hitShader : desc.closestHitShaders)
+	for (HitGroupDescVk hitGroup : desc.hitGroups)
 	{
-		if (!hitShader)
+		if (!hitGroup.closestHitShader &&
+			!hitGroup.anyHitShader)
 		{
-			throw std::runtime_error("RayTracingPipelineVk::create - closest hit shader is null!");
+			throw std::runtime_error(
+				"RayTracingPipelineVk::create - hit group has no shaders!"
+			);
 		}
 	} // end for
 
@@ -48,9 +53,18 @@ void RayTracingPipelineVk::create(const RayTracingPipelineDescVk& desc)
 		throw std::runtime_error("RayTracingPipelineVk::create - maxRecursionDepth must be at least 1!");
 	}
 
+	// get total number of shaders
+	size_t totalStages = 2;
+
+	for (const HitGroupDescVk& hg : desc.hitGroups)
+	{
+		if (hg.closestHitShader) totalStages++;
+		if (hg.anyHitShader) totalStages++;
+	} // end for
+
 	// shader stages
 	std::vector<vk::PipelineShaderStageCreateInfo> stages;
-	stages.reserve(2 + desc.closestHitShaders.size());
+	stages.reserve(totalStages);
 
 	// 0 - raygen
 	vk::PipelineShaderStageCreateInfo rayGenStage{};
@@ -66,19 +80,9 @@ void RayTracingPipelineVk::create(const RayTracingPipelineDescVk& desc)
 	missStage.pName = "main";
 	stages.push_back(missStage);
 
-	// 2+ - closest-hit shaders
-	for (vk::ShaderModule hitShader : desc.closestHitShaders)
-	{
-		vk::PipelineShaderStageCreateInfo hitStage{};
-		hitStage.stage = vk::ShaderStageFlagBits::eClosestHitKHR;
-		hitStage.module = hitShader;
-		hitStage.pName = "main";
-		stages.push_back(hitStage);
-	} // end for
-
 	// shader groups
 	std::vector<vk::RayTracingShaderGroupCreateInfoKHR> groups;
-	groups.reserve(2 + desc.closestHitShaders.size());
+	groups.reserve(totalStages);
 
 	// 0 - raygen
 	vk::RayTracingShaderGroupCreateInfoKHR rayGenGroup{};
@@ -98,17 +102,42 @@ void RayTracingPipelineVk::create(const RayTracingPipelineDescVk& desc)
 	missGroup.intersectionShader = vk::ShaderUnusedKHR;
 	groups.push_back(missGroup);
 
-	// 2+ - closest-hit
-	for (uint32_t i = 0; i < static_cast<uint32_t>(desc.closestHitShaders.size()); ++i)
+	for (const HitGroupDescVk& hitGroup : desc.hitGroups)
 	{
-		vk::RayTracingShaderGroupCreateInfoKHR hitGroup{};
-		hitGroup.type = vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup;
-		hitGroup.generalShader = vk::ShaderUnusedKHR;
-		hitGroup.closestHitShader = 2 + i;
-		hitGroup.anyHitShader = vk::ShaderUnusedKHR;
-		hitGroup.intersectionShader = vk::ShaderUnusedKHR;
-		groups.push_back(hitGroup);
-	}
+		uint32_t closestIndex = vk::ShaderUnusedKHR;
+		uint32_t anyHitIndex = vk::ShaderUnusedKHR;
+
+		if (hitGroup.closestHitShader)
+		{
+			closestIndex = static_cast<uint32_t>(stages.size());
+
+			vk::PipelineShaderStageCreateInfo closestHitStage{};
+			closestHitStage.stage = vk::ShaderStageFlagBits::eClosestHitKHR;
+			closestHitStage.module = hitGroup.closestHitShader;
+			closestHitStage.pName = "main";
+			stages.push_back(closestHitStage);
+		}
+
+		if (hitGroup.anyHitShader)
+		{
+			anyHitIndex = static_cast<uint32_t>(stages.size());
+
+			vk::PipelineShaderStageCreateInfo anyHitStage{};
+			anyHitStage.stage = vk::ShaderStageFlagBits::eAnyHitKHR;
+			anyHitStage.module = hitGroup.anyHitShader;
+			anyHitStage.pName = "main";
+			stages.push_back(anyHitStage);
+		}
+
+		vk::RayTracingShaderGroupCreateInfoKHR group{};
+		group.type = vk::RayTracingShaderGroupTypeKHR::eTrianglesHitGroup;
+		group.generalShader = vk::ShaderUnusedKHR;
+		group.closestHitShader = closestIndex;
+		group.anyHitShader = anyHitIndex;
+		group.intersectionShader = vk::ShaderUnusedKHR;
+
+		groups.push_back(group);
+	} // end for
 
 	// pipeline layout
 	std::vector<vk::DescriptorSetLayout> ordered;

@@ -7,6 +7,18 @@
 #include <vector>
 #include <cstdint>
 
+struct HitGroupFilePath
+{
+	std::string_view closestHitPath;
+	std::string_view anyHitPath;
+};
+
+struct HitGroupShaderModules
+{
+	vk::UniqueShaderModule closestHitShaderModule;
+	vk::UniqueShaderModule anyHitShaderModule;
+};
+
 class RayTracingShaderModuleVk
 {
 public:
@@ -14,7 +26,7 @@ public:
 		vk::Device device, 
 		std::string_view rayGenPathFile, 
 		std::string_view missPathFile,
-		std::vector<std::string_view> closestHitPathFiles
+		std::vector<HitGroupFilePath> hitGroupPathFiles
 	);
 	~RayTracingShaderModuleVk() noexcept;
 
@@ -26,7 +38,7 @@ public:
 
 	vk::ShaderModule rayGenShader() const noexcept { return rayGenShaderModule_.get(); }
 	vk::ShaderModule missShader() const noexcept { return missShaderModule_.get(); }
-	const std::vector<vk::UniqueShaderModule>& closestHitShaders() const noexcept { return closestHitShaderModules_; }
+	const std::vector<HitGroupShaderModules>& hitGroupShaders() const noexcept { return hitGroupShaderModules_; }
 
 private:
 	vk::UniqueShaderModule createShaderModule(const std::vector<uint32_t>& code);
@@ -34,7 +46,7 @@ private:
 	vk::Device device_{};
 	vk::UniqueShaderModule rayGenShaderModule_{};
 	vk::UniqueShaderModule missShaderModule_{};
-	std::vector<vk::UniqueShaderModule> closestHitShaderModules_{};
+	std::vector<HitGroupShaderModules> hitGroupShaderModules_{};
 };
 
 #endif
