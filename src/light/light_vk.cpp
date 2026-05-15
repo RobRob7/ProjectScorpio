@@ -159,7 +159,7 @@ void LightVk::renderOffscreen(
 
 void LightVk::updateLight(
 	float time,
-	glm::vec3& camPos,
+	const glm::vec3& camPos,
 	bool paused
 )
 {	

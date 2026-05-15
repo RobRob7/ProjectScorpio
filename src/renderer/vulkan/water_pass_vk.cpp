@@ -88,13 +88,21 @@ void WaterPassVk::resize()
 void WaterPassVk::renderOffscreen(
 	const RenderSettings& rs,
 	const FrameContext& frame,
+	const glm::mat4& proj,
 	ChunkPassVk& chunk,
 	const RenderInputs& in,
 	const glm::mat4& lightSpaceMatrix
 )
 {
 	// refl + refr passes
-	waterPass(rs, frame, chunk, in, lightSpaceMatrix);
+	waterPass(
+		rs, 
+		frame, 
+		proj,
+		chunk, 
+		in, 
+		lightSpaceMatrix
+	);
 } // end of renderOffscreen()
 
 void WaterPassVk::renderWater(
@@ -480,6 +488,7 @@ void WaterPassVk::createPipeline()
 void WaterPassVk::waterPass(
 	const RenderSettings& rs,
 	const FrameContext& frame,
+	const glm::mat4& proj,
 	ChunkPassVk& chunk, 
 	const RenderInputs& in,
 	const glm::mat4& lightSpaceMatrix
@@ -492,7 +501,14 @@ void WaterPassVk::waterPass(
 	reflColorImage_.transitionToColorAttachment(cmd);
 	reflDepthImage_.transitionToDepthAttachment(cmd);
 
-	waterReflectionPass(rs, frame, chunk, in, lightSpaceMatrix);
+	waterReflectionPass(
+		rs, 
+		frame, 
+		proj, 
+		chunk, 
+		in, 
+		lightSpaceMatrix
+	);
 
 	reflColorImage_.transitionToShaderRead(cmd);
 	reflDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
@@ -503,7 +519,14 @@ void WaterPassVk::waterPass(
 	refrColorImage_.transitionToColorAttachment(cmd);
 	refrDepthImage_.transitionToDepthAttachment(cmd);
 
-	waterRefractionPass(rs, frame, chunk, in, lightSpaceMatrix);
+	waterRefractionPass(
+		rs, 
+		frame, 
+		proj, 
+		chunk, 
+		in, 
+		lightSpaceMatrix
+	);
 
 	refrColorImage_.transitionToShaderRead(cmd);
 	refrDepthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
@@ -513,6 +536,7 @@ void WaterPassVk::waterPass(
 void WaterPassVk::waterReflectionPass(
 	const RenderSettings& rs,
 	const FrameContext& frame,
+	const glm::mat4& proj,
 	ChunkPassVk& chunk, 
 	const RenderInputs& in,
 	const glm::mat4& lightSpaceMatrix
@@ -578,14 +602,10 @@ void WaterPassVk::waterReflectionPass(
 
 		const glm::mat4 reflView = camera.getViewMatrix();
 
-		// set clip plane (clip everything below water)
-		glm::vec4 clipPlane{ 0, 1, 0, -waterHeight };
-
 		const float aspect = (height_ > 0)
 			? (static_cast<float>(width_) / static_cast<float>(height_))
 			: 1.0f;
 		glm::mat4 proj = camera.getProjectionMatrixVk(aspect);
-		proj[1][1] *= -1.0f;
 
 		// render world
 		chunk.renderOpaque(
@@ -627,6 +647,7 @@ void WaterPassVk::waterReflectionPass(
 void WaterPassVk::waterRefractionPass(
 	const RenderSettings& rs,
 	const FrameContext& frame,
+	const glm::mat4& proj,
 	ChunkPassVk& chunk, 
 	const RenderInputs& in,
 	const glm::mat4& lightSpaceMatrix
@@ -682,16 +703,11 @@ void WaterPassVk::waterRefractionPass(
 		};
 		cmd.setScissor(0, 1, &scissor);
 
-		// set clip plane (clip everything above water)
-		float waterHeight = static_cast<float>(World::SEA_LEVEL) + 0.9f;
-		glm::vec4 clipPlane{ 0, -1, 0, waterHeight };
-
 		const glm::mat4 view = in.camera->getViewMatrix();
 		const float aspect = (height_ > 0)
 			? (static_cast<float>(width_) / static_cast<float>(height_))
 			: 1.0f;
 		glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
-		proj[1][1] *= -1.0f;
 
 		// render world
 		chunk.renderOpaque(

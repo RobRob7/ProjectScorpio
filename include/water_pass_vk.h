@@ -37,6 +37,7 @@ public:
 	void renderOffscreen(
 		const RenderSettings& rs,
 		const FrameContext& frame,
+		const glm::mat4& proj,
 		ChunkPassVk& chunk,
 		const RenderInputs& in,
 		const glm::mat4& lightSpaceMatrix
@@ -66,6 +67,7 @@ private:
 	void waterPass(
 		const RenderSettings& rs,
 		const FrameContext& frame,
+		const glm::mat4& proj,
 		ChunkPassVk& chunk, 
 		const RenderInputs& in,
 		const glm::mat4& lightSpaceMatrix
@@ -73,6 +75,7 @@ private:
 	void waterReflectionPass(
 		const RenderSettings& rs,
 		const FrameContext& frame,
+		const glm::mat4& proj,
 		ChunkPassVk& chunk, 
 		const RenderInputs& in,
 		const glm::mat4& lightSpaceMatrix
@@ -80,6 +83,7 @@ private:
 	void waterRefractionPass(
 		const RenderSettings& rs,
 		const FrameContext& frame,
+		const glm::mat4& proj,
 		ChunkPassVk& chunk, 
 		const RenderInputs& in,
 		const glm::mat4& lightSpaceMatrix

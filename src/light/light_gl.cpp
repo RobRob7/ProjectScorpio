@@ -56,7 +56,7 @@ void LightGL::render(
 
 void LightGL::updateLight(
 	float time, 
-	glm::vec3& camPos,
+	const glm::vec3& camPos,
 	bool paused
 )
 {

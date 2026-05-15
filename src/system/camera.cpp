@@ -187,22 +187,31 @@ bool Camera::isEnabled() const
 	return isEnabled_;
 } // end of isEnabled()
 
-glm::mat4 Camera::getProjectionMatrix(float aspectRatio) const
+const glm::mat4 Camera::getProjectionMatrix(float aspectRatio) const
 {
 	return glm::perspectiveRH_NO(glm::radians(zoom_), aspectRatio, nearPlane_, farPlane_);
 } // end of getProjectionMatrix()
 
-glm::mat4 Camera::getProjectionMatrixVk(float aspectRatio) const
+const glm::mat4 Camera::getProjectionMatrixVk(float aspectRatio) const
 {
-	return glm::perspectiveRH_ZO(glm::radians(zoom_), aspectRatio, nearPlane_, farPlane_);
+	glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(zoom_), aspectRatio, nearPlane_, farPlane_);
+	proj[1][1] *= -1.0f;
+
+	return proj;
 } // end of getProjectionMatrixVk()
 
-glm::vec3 Camera::getCameraPosition() const
+const glm::mat4 Camera::getJitterProjectionMatrixVk(float aspectRatio, const glm::vec2& jitter) const
 {
-	return position_;
-} // end of getCameraPosition()
+	glm::mat4 jitterProj = glm::perspectiveRH_ZO(glm::radians(zoom_), aspectRatio, nearPlane_, farPlane_);
+	jitterProj[2][0] += jitter.x;
+	jitterProj[2][1] += jitter.y;
 
-glm::vec3& Camera::getCameraPosition()
+	jitterProj[1][1] *= -1.0f;
+
+	return jitterProj;
+} // end of getJitterProjectionMatrixVk()
+
+const glm::vec3& Camera::getCameraPosition() const
 {
 	return position_;
 } // end of getCameraPosition()

@@ -17,6 +17,10 @@ struct FrameContext
     uint32_t frameIndex = 0;
     uint32_t imageIndex = 0;
 
+    vk::Image historyImage{};
+    vk::ImageView historyImageView{};
+    vk::ImageLayout* historyLayout{ nullptr };
+
     vk::Image colorImage{};
     vk::ImageView colorImageView{};
     vk::ImageLayout* colorLayout{ nullptr };
@@ -25,6 +29,7 @@ struct FrameContext
     vk::ImageView depthImageView{};
     vk::ImageLayout* depthLayout{ nullptr };
 
+    vk::Format* historyFormat{ nullptr };
     vk::Format* colorFormat{ nullptr };
     vk::Format* depthFormat{ nullptr };
 
@@ -54,6 +59,5 @@ struct FrameContext
         );
     } // end of transitionColorImageToPresent()
 };
-
 
 #endif

@@ -202,7 +202,6 @@ void RendererVk::renderFrame(
 		? (static_cast<float>(width_) / static_cast<float>(height_))
 		: 1.0f;
 	glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
-	proj[1][1] *= -1.0f;
 
 	vk::CommandBuffer cmd = frame.cmd;
 
@@ -258,7 +257,10 @@ void RendererVk::renderFrame(
 	// ssao pass
 	if (!renderSettings_->useRT && renderSettings_->useSSAO)
 	{
-		ssaoPass_->renderOffscreen(frame, proj);
+		ssaoPass_->renderOffscreen(
+			frame, 
+			proj
+		);
 	}
 
 	// water refl + refr pass
@@ -267,6 +269,7 @@ void RendererVk::renderFrame(
 		waterPass_->renderOffscreen(
 			*renderSettings_,
 			frame,
+			proj,
 			*chunkPass_,
 			in,
 			shadowMapPass_->getLightSpaceMatrix()

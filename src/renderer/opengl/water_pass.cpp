@@ -304,9 +304,10 @@ void WaterPass::waterReflectionPass(
 
     // build reflected view matrix
     float waterHeight = static_cast<float>(World::SEA_LEVEL) + 0.9f;
-    Camera& camera = *in.camera;
-    float distance = 2.0f * (camera.getCameraPosition().y - waterHeight);
-    camera.getCameraPosition().y -= distance;
+    Camera camera = *in.camera;
+    glm::vec3 reflectedPos = camera.getCameraPosition();
+    reflectedPos.y = 2.0f * waterHeight - reflectedPos.y;
+    camera.setCameraPosition(reflectedPos);
     camera.invertPitch();
     glm::mat4 reflView = camera.getViewMatrix();
 
@@ -353,10 +354,6 @@ void WaterPass::waterReflectionPass(
         reflView,
         proj
     );
-
-    // restore camera
-    camera.getCameraPosition().y += distance;
-    camera.invertPitch();
 
     // restore opaque UBO
     chunkOpaqueUBO = chunkOpaqueUBOCopy;

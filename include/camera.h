@@ -71,11 +71,12 @@ public:
 	void setEnabled(bool enabled);
 	bool isEnabled() const;
 
-	glm::mat4 getProjectionMatrix(float aspectRatio) const;
-	glm::mat4 getProjectionMatrixVk(float aspectRatio) const;
+	const glm::mat4 getProjectionMatrix(float aspectRatio) const;
+	const glm::mat4 getProjectionMatrixVk(float aspectRatio) const;
 
-	glm::vec3 getCameraPosition() const;
-	glm::vec3& getCameraPosition();
+	const glm::mat4 getJitterProjectionMatrixVk(float aspectRatio, const glm::vec2& jitter) const;
+
+	const glm::vec3& getCameraPosition() const;
 	void setCameraPosition(const glm::vec3& pos);
 
 	glm::vec3 getCameraDirection() const;

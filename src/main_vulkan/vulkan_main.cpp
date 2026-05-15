@@ -108,10 +108,10 @@ void VulkanMain::setDebugName(
 		vk::Result result = getDevice().setDebugUtilsObjectNameEXT(info);
 		if (result != vk::Result::eSuccess)
 		{
-			std::string_view errorMsg =
-				name.data() +
+			std::string errorMsg =
+				std::string(name) +
 				std::string("::setDebugUtilsObjectNameEXT failed to set debug name!");
-			throw std::runtime_error(errorMsg.data());
+			throw std::runtime_error(errorMsg);
 		}
 	}
 } // end of setDebugName()
