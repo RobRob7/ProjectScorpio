@@ -14,13 +14,21 @@ struct NamedSetLayoutVk
 	vk::DescriptorSetLayout layout{};
 };
 
+struct HitGroupDescVk
+{
+	vk::ShaderModule closestHitShader{};
+	// optional
+	vk::ShaderModule anyHitShader{};
+};
+
 
 struct RayTracingPipelineDescVk
 {
 	// shaders
 	vk::ShaderModule rayGenShader{};
 	vk::ShaderModule missShader{};
-	std::vector<vk::ShaderModule> closestHitShaders{};
+	
+	std::vector<HitGroupDescVk> hitGroups{};
 
 	// push contant
 	std::vector<vk::PushConstantRange> pushConstantRanges;

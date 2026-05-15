@@ -199,7 +199,7 @@ void main()
 
     traceRayEXT(
         topLevelAS,
-        gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+        gl_RayFlagsTerminateOnFirstHitEXT,
         0xFF,
         0, 0, 0,
         shadowOrigin,
@@ -237,7 +237,7 @@ void main()
 
         traceRayEXT(
             topLevelAS,
-            gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
+            gl_RayFlagsTerminateOnFirstHitEXT,
             0x01, // opaque chunks only
             0, 0, 0,
             aoOrigin,

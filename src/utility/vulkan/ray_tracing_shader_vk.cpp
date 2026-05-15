@@ -44,7 +44,7 @@ RayTracingShaderModuleVk::RayTracingShaderModuleVk(
 	vk::Device device,
 	std::string_view rayGenPathFile,
 	std::string_view missPathFile,
-	std::vector<std::string_view> closestHitPathFiles
+	std::vector<HitGroupFilePath> hitGroupPathFiles
 )
 	: device_(device)
 {
@@ -59,15 +59,38 @@ RayTracingShaderModuleVk::RayTracingShaderModuleVk(
 	rayGenShaderModule_ = createShaderModule(ReadFile(rayGenFullPath));
 	missShaderModule_ = createShaderModule(ReadFile(missFullPath));
 
-	closestHitShaderModules_.reserve(closestHitPathFiles.size());
-	for (std::string_view path : closestHitPathFiles)
+	hitGroupShaderModules_.reserve(hitGroupPathFiles.size());
+	for (uint32_t i = 0; i < hitGroupPathFiles.size(); ++i)
 	{
-		const auto fullPath =
-			std::filesystem::path(RESOURCES_PATH) / "shader" / path;
+		if (hitGroupPathFiles[i].closestHitPath.empty() &&
+			hitGroupPathFiles[i].anyHitPath.empty())
+		{
+			throw std::runtime_error(
+				"RayTracingShaderModuleVk: hit group has no closest-hit or any-hit shader path!"
+			);
+		}
 
-		closestHitShaderModules_.push_back(
-			createShaderModule(ReadFile(fullPath))
-		);
+		HitGroupShaderModules modules{};
+
+		if (!hitGroupPathFiles[i].closestHitPath.empty())
+		{
+			const auto closestHitFullPath =
+				std::filesystem::path(RESOURCES_PATH) / "shader" / hitGroupPathFiles[i].closestHitPath;
+
+			modules.closestHitShaderModule =
+				createShaderModule(ReadFile(closestHitFullPath));
+		}
+
+		if (!hitGroupPathFiles[i].anyHitPath.empty())
+		{
+			const auto anyHitFullPath =
+				std::filesystem::path(RESOURCES_PATH) / "shader" / hitGroupPathFiles[i].anyHitPath;
+
+			modules.anyHitShaderModule =
+				createShaderModule(ReadFile(anyHitFullPath));
+		}
+
+		hitGroupShaderModules_.push_back(std::move(modules));
 	} // end for
 } // end of constructor
 
