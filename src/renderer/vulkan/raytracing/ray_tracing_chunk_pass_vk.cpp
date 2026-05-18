@@ -30,10 +30,16 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 	outColorImage_(vk),
 	outDepthImage_(vk),
 	pipeline_(vk),
-	sbt_(vk),
-	packedRTOpaqueInfoBuffer_(vk),
-	packedRTWaterInfoBuffer_(vk)
+	sbt_(vk)
 {
+	packedRTOpaqueInfoBuffer_.reserve(vk_.getMaxFramesInFlight());
+	packedRTOpaqueInfoBufferSize_.resize(vk_.getMaxFramesInFlight());
+	packedRTOpaqueInfoBufferCapacity_.resize(vk_.getMaxFramesInFlight());
+
+	packedRTWaterInfoBuffer_.reserve(vk_.getMaxFramesInFlight());
+	packedRTWaterInfoBufferSize_.resize(vk_.getMaxFramesInFlight());
+	packedRTWaterInfoBufferCapacity_.resize(vk_.getMaxFramesInFlight());
+
 	rayGenUBOs_.reserve(vk_.getMaxFramesInFlight());
 	missUBOs_.reserve(vk_.getMaxFramesInFlight());
 	closestHitUBOs_.reserve(vk_.getMaxFramesInFlight());
@@ -48,6 +54,9 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(VulkanMain& vk)
 
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
 	{
+		packedRTOpaqueInfoBuffer_.emplace_back(vk_);
+		packedRTWaterInfoBuffer_.emplace_back(vk_);
+
 		rayGenUBOs_.emplace_back(vk_);
 		missUBOs_.emplace_back(vk_);
 		closestHitUBOs_.emplace_back(vk_);
@@ -149,12 +158,12 @@ void RayTracingWorldPassVk::upload(
 
 		if (chunkCPUScene.opaqueChunkInfos.empty())
 		{
-			packedRTOpaqueInfoBufferSize_ = 0;
+			packedRTOpaqueInfoBufferSize_[frameIndex] = 0;
 		}
 
 		if (chunkCPUScene.waterChunkInfos.empty())
 		{
-			packedRTWaterInfoBufferSize_ = 0;
+			packedRTWaterInfoBufferSize_[frameIndex] = 0;
 		}
 
 		if (chunkCPUScene.opaqueChunkInfos.empty() &&
@@ -180,8 +189,8 @@ void RayTracingWorldPassVk::upload(
 
 		if (instances.empty())
 		{
-			packedRTOpaqueInfoBufferSize_ = 0;
-			packedRTWaterInfoBufferSize_ = 0;
+			packedRTOpaqueInfoBufferSize_[frameIndex] = 0;
+			packedRTWaterInfoBufferSize_[frameIndex] = 0;
 			rtSceneReady_ = false;
 			return;
 		}
@@ -224,8 +233,8 @@ void RayTracingWorldPassVk::upload(
 
 	rtSceneReady_ =
 		frameTLAS.valid() &&
-		(packedRTOpaqueInfoBufferSize_ > 0 ||
-		packedRTWaterInfoBufferSize_ > 0);
+		(packedRTOpaqueInfoBufferSize_[frameIndex] > 0 ||
+		packedRTWaterInfoBufferSize_[frameIndex] > 0);
 
 	cmd.endDebugUtilsLabelEXT();
 } // end of upload()
@@ -238,7 +247,10 @@ void RayTracingWorldPassVk::render(
 	const glm::vec3& sunDir
 )
 {
-	if (!valid() || !rtSceneReady_ || !rtDescriptorsValid_[frame.frameIndex])
+	if (!outColorImage_.valid() ||
+		!outDepthImage_.valid() ||
+		!rtSceneReady_ ||
+		!rtDescriptorsValid_[frame.frameIndex])
 	{
 		return;
 	}
@@ -304,45 +316,8 @@ void RayTracingWorldPassVk::render(
 		1
 	);
 
-	vk::ImageMemoryBarrier barriers[2]{};
-
-	// color
-	barriers[0].srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-	barriers[0].dstAccessMask = vk::AccessFlagBits::eShaderRead;
-	barriers[0].oldLayout = vk::ImageLayout::eGeneral;
-	barriers[0].newLayout = vk::ImageLayout::eGeneral;
-	barriers[0].srcQueueFamilyIndex = vk::QueueFamilyIgnored;
-	barriers[0].dstQueueFamilyIndex = vk::QueueFamilyIgnored;
-	barriers[0].image = outColorImage_.image();
-	barriers[0].subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-	barriers[0].subresourceRange.baseMipLevel = 0;
-	barriers[0].subresourceRange.levelCount = 1;
-	barriers[0].subresourceRange.baseArrayLayer = 0;
-	barriers[0].subresourceRange.layerCount = 1;
-
-	// depth
-	barriers[1].srcAccessMask = vk::AccessFlagBits::eShaderWrite;
-	barriers[1].dstAccessMask = vk::AccessFlagBits::eShaderRead;
-	barriers[1].oldLayout = vk::ImageLayout::eGeneral;
-	barriers[1].newLayout = vk::ImageLayout::eGeneral;
-	barriers[1].srcQueueFamilyIndex = vk::QueueFamilyIgnored;
-	barriers[1].dstQueueFamilyIndex = vk::QueueFamilyIgnored;
-	barriers[1].image = outDepthImage_.image();
-	barriers[1].subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
-	barriers[1].subresourceRange.baseMipLevel = 0;
-	barriers[1].subresourceRange.levelCount = 1;
-	barriers[1].subresourceRange.baseArrayLayer = 0;
-	barriers[1].subresourceRange.layerCount = 1;
-
-	cmd.pipelineBarrier(
-		vk::PipelineStageFlagBits::eRayTracingShaderKHR,
-		vk::PipelineStageFlagBits::eFragmentShader |
-		vk::PipelineStageFlagBits::eTransfer,
-		{},
-		{},
-		{},
-		barriers
-	);
+	outColorImage_.transitionToShaderRead(cmd);
+	outDepthImage_.transitionToShaderRead(cmd);
 
 	cmd.endDebugUtilsLabelEXT();
 } // end of render()
@@ -440,13 +415,13 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 			);
 		}
 
-		if (packedRTOpaqueInfoBufferSize_ > 0 &&
-			packedRTOpaqueInfoBuffer_.getBuffer())
+		if (packedRTOpaqueInfoBufferSize_[frameIndex] > 0 &&
+			packedRTOpaqueInfoBuffer_[frameIndex].getBuffer())
 		{
 			set.writeStorageBuffer(
 				TO_API_FORM(RTOpaqueClosestHitBinding::ChunkInfo),
-				packedRTOpaqueInfoBuffer_.getBuffer(),
-				packedRTOpaqueInfoBufferSize_
+				packedRTOpaqueInfoBuffer_[frameIndex].getBuffer(),
+				packedRTOpaqueInfoBufferSize_[frameIndex]
 			);
 		}
 
@@ -482,13 +457,13 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 			);
 		}
 
-		if (packedRTWaterInfoBufferSize_ > 0 &&
-			packedRTWaterInfoBuffer_.getBuffer())
+		if (packedRTWaterInfoBufferSize_[frameIndex] > 0 &&
+			packedRTWaterInfoBuffer_[frameIndex].getBuffer())
 		{
 			set.writeStorageBuffer(
 				TO_API_FORM(RTWaterClosestHitBinding::WaterInfo),
-				packedRTWaterInfoBuffer_.getBuffer(),
-				packedRTWaterInfoBufferSize_
+				packedRTWaterInfoBuffer_[frameIndex].getBuffer(),
+				packedRTWaterInfoBufferSize_[frameIndex]
 			);
 		}
 
@@ -925,7 +900,7 @@ void RayTracingWorldPassVk::buildOpaqueRTInstancesFromDrawList(
 		if (!chunkGpuVk)
 			continue;
 
-		if (!chunkGpuVk->hasOpaqueBLAS())
+		if (!chunkGpuVk->getOpaqueBLAS().valid())
 			continue;
 
 		const auto& chunkVerts = chunkGpuVk->getOpaqueRTVerticesCPU();
@@ -955,7 +930,7 @@ void RayTracingWorldPassVk::buildOpaqueRTInstancesFromDrawList(
 		inst.mask = 0x01;
 		inst.instanceShaderBindingTableRecordOffset = 0;
 		inst.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-		inst.accelerationStructureReference = chunkGpuVk->getOpaqueBLASAddress();
+		inst.accelerationStructureReference = chunkGpuVk->getOpaqueBLAS().deviceAddress();
 
 		out.push_back(inst);
 	} // end for
@@ -977,7 +952,7 @@ void RayTracingWorldPassVk::buildWaterRTInstancesFromDrawList(
 		if (!chunkGpuVk)
 			continue;
 
-		if (!chunkGpuVk->hasWaterBLAS())
+		if (!chunkGpuVk->getWaterBLAS().valid())
 			continue;
 
 		const auto& waterVerts = chunkGpuVk->getWaterRTVerticesCPU();
@@ -1007,7 +982,7 @@ void RayTracingWorldPassVk::buildWaterRTInstancesFromDrawList(
 		inst.mask = 0x02;
 		inst.instanceShaderBindingTableRecordOffset = 1;
 		inst.flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR;
-		inst.accelerationStructureReference = chunkGpuVk->getWaterBLASAddress();
+		inst.accelerationStructureReference = chunkGpuVk->getWaterBLAS().deviceAddress();
 
 		out.push_back(inst);
 	} // end for
@@ -1029,7 +1004,7 @@ void RayTracingWorldPassVk::buildPackedOpaqueRTSceneFromDrawList(
 		if (!chunkGpuVk)
 			continue;
 
-		if (!chunkGpuVk->hasOpaqueBLAS())
+		if (!chunkGpuVk->getOpaqueBLAS().valid())
 			continue;
 
 		const std::vector<World::RTVertex>& chunkVerts = chunkGpuVk->getOpaqueRTVerticesCPU();
@@ -1065,7 +1040,7 @@ void RayTracingWorldPassVk::buildPackedWaterRTSceneFromDrawList(
 		if (!chunkGpuVk)
 			continue;
 
-		if (!chunkGpuVk->hasWaterBLAS())
+		if (!chunkGpuVk->getWaterBLAS().valid())
 			continue;
 
 		const std::vector<World::RTVertex>& chunkVerts = chunkGpuVk->getWaterRTVerticesCPU();
@@ -1094,18 +1069,18 @@ void RayTracingWorldPassVk::uploadPackedRTScene(
 	std::vector<BufferVk> stagingBuffers;
 	stagingBuffers.reserve(2);
 
-	packedRTOpaqueInfoBufferSize_ =
+	packedRTOpaqueInfoBufferSize_[frameIndex] =
 		sizeof(World::RTChunkInfo) * cpuScene.opaqueChunkInfos.size();
 
-	packedRTWaterInfoBufferSize_ =
+	packedRTWaterInfoBufferSize_[frameIndex] =
 		sizeof(World::RTChunkInfo) * cpuScene.waterChunkInfos.size();
 
 	// packed opaque info buffer
-	if (packedRTOpaqueInfoBufferSize_ > 0)
+	if (packedRTOpaqueInfoBufferSize_[frameIndex] > 0)
 	{
 		BufferVk staging(vk_);
 		staging.create(
-			packedRTOpaqueInfoBufferSize_,
+			packedRTOpaqueInfoBufferSize_[frameIndex],
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible |
 			vk::MemoryPropertyFlagBits::eHostCoherent
@@ -1113,26 +1088,26 @@ void RayTracingWorldPassVk::uploadPackedRTScene(
 
 		staging.upload(
 			cpuScene.opaqueChunkInfos.data(),
-			packedRTOpaqueInfoBufferSize_
+			packedRTOpaqueInfoBufferSize_[frameIndex]
 		);
 
-		if (!packedRTOpaqueInfoBuffer_.getBuffer() ||
-			packedRTOpaqueInfoBufferSize_ > packedRTOpaqueInfoBufferCapacity_)
+		if (!packedRTOpaqueInfoBuffer_[frameIndex].getBuffer() ||
+			packedRTOpaqueInfoBufferSize_[frameIndex] > packedRTOpaqueInfoBufferCapacity_[frameIndex])
 		{
-			if (packedRTOpaqueInfoBuffer_.valid())
+			if (packedRTOpaqueInfoBuffer_[frameIndex].valid())
 			{
-				vk_.retireBuffer(frameIndex, std::move(packedRTOpaqueInfoBuffer_));
+				vk_.retireBuffer(frameIndex, std::move(packedRTOpaqueInfoBuffer_[frameIndex]));
 			}
 
-			packedRTOpaqueInfoBuffer_ = BufferVk(vk_);
-			packedRTOpaqueInfoBuffer_.create(
-				packedRTOpaqueInfoBufferSize_,
+			packedRTOpaqueInfoBuffer_[frameIndex] = BufferVk(vk_);
+			packedRTOpaqueInfoBuffer_[frameIndex].create(
+				packedRTOpaqueInfoBufferSize_[frameIndex],
 				vk::BufferUsageFlagBits::eTransferDst |
 				vk::BufferUsageFlagBits::eStorageBuffer,
 				vk::MemoryPropertyFlagBits::eDeviceLocal
 			);
 
-			packedRTOpaqueInfoBufferCapacity_ = packedRTOpaqueInfoBufferSize_;
+			packedRTOpaqueInfoBufferCapacity_[frameIndex] = packedRTOpaqueInfoBufferSize_[frameIndex];
 		}
 
 		stagingBuffers.push_back(std::move(staging));
@@ -1140,17 +1115,17 @@ void RayTracingWorldPassVk::uploadPackedRTScene(
 		vk_.recordCopyBuffer(
 			cmd,
 			stagingBuffers.back().getBuffer(),
-			packedRTOpaqueInfoBuffer_.getBuffer(),
-			packedRTOpaqueInfoBufferSize_
+			packedRTOpaqueInfoBuffer_[frameIndex].getBuffer(),
+			packedRTOpaqueInfoBufferSize_[frameIndex]
 		);
 	}
 
 	// packed water info buffer
-	if (packedRTWaterInfoBufferSize_ > 0)
+	if (packedRTWaterInfoBufferSize_[frameIndex] > 0)
 	{
 		BufferVk staging(vk_);
 		staging.create(
-			packedRTWaterInfoBufferSize_,
+			packedRTWaterInfoBufferSize_[frameIndex],
 			vk::BufferUsageFlagBits::eTransferSrc,
 			vk::MemoryPropertyFlagBits::eHostVisible |
 			vk::MemoryPropertyFlagBits::eHostCoherent
@@ -1158,26 +1133,26 @@ void RayTracingWorldPassVk::uploadPackedRTScene(
 
 		staging.upload(
 			cpuScene.waterChunkInfos.data(),
-			packedRTWaterInfoBufferSize_
+			packedRTWaterInfoBufferSize_[frameIndex]
 		);
 
-		if (!packedRTWaterInfoBuffer_.getBuffer() ||
-			packedRTWaterInfoBufferSize_ > packedRTWaterInfoBufferCapacity_)
+		if (!packedRTWaterInfoBuffer_[frameIndex].getBuffer() ||
+			packedRTWaterInfoBufferSize_[frameIndex] > packedRTWaterInfoBufferCapacity_[frameIndex])
 		{
-			if (packedRTWaterInfoBuffer_.valid())
+			if (packedRTWaterInfoBuffer_[frameIndex].valid())
 			{
-				vk_.retireBuffer(frameIndex, std::move(packedRTWaterInfoBuffer_));
+				vk_.retireBuffer(frameIndex, std::move(packedRTWaterInfoBuffer_[frameIndex]));
 			}
 
-			packedRTWaterInfoBuffer_ = BufferVk(vk_);
-			packedRTWaterInfoBuffer_.create(
-				packedRTWaterInfoBufferSize_,
+			packedRTWaterInfoBuffer_[frameIndex] = BufferVk(vk_);
+			packedRTWaterInfoBuffer_[frameIndex].create(
+				packedRTWaterInfoBufferSize_[frameIndex],
 				vk::BufferUsageFlagBits::eTransferDst |
 				vk::BufferUsageFlagBits::eStorageBuffer,
 				vk::MemoryPropertyFlagBits::eDeviceLocal
 			);
 
-			packedRTWaterInfoBufferCapacity_ = packedRTWaterInfoBufferSize_;
+			packedRTWaterInfoBufferCapacity_[frameIndex] = packedRTWaterInfoBufferSize_[frameIndex];
 		}
 
 		stagingBuffers.push_back(std::move(staging));
@@ -1185,8 +1160,8 @@ void RayTracingWorldPassVk::uploadPackedRTScene(
 		vk_.recordCopyBuffer(
 			cmd,
 			stagingBuffers.back().getBuffer(),
-			packedRTWaterInfoBuffer_.getBuffer(),
-			packedRTWaterInfoBufferSize_
+			packedRTWaterInfoBuffer_[frameIndex].getBuffer(),
+			packedRTWaterInfoBufferSize_[frameIndex]
 		);
 	}
 
@@ -1214,8 +1189,8 @@ void RayTracingWorldPassVk::uploadPackedRTScene(
 			barriers.push_back(b);
 		};
 
-	addBarrier(packedRTOpaqueInfoBuffer_, packedRTOpaqueInfoBufferSize_);
-	addBarrier(packedRTWaterInfoBuffer_, packedRTWaterInfoBufferSize_);
+	addBarrier(packedRTOpaqueInfoBuffer_[frameIndex], packedRTOpaqueInfoBufferSize_[frameIndex]);
+	addBarrier(packedRTWaterInfoBuffer_[frameIndex], packedRTWaterInfoBufferSize_[frameIndex]);
 
 	if (!barriers.empty())
 	{
@@ -1248,12 +1223,12 @@ void RayTracingWorldPassVk::buildRTSceneKeys(
 			continue;
 
 		bool hasOpaque =
-			chunkGpuVk->hasOpaqueBLAS() &&
+			chunkGpuVk->getOpaqueBLAS().valid() &&
 			!chunkGpuVk->getOpaqueRTVerticesCPU().empty() &&
 			!chunkGpuVk->getOpaqueRTIndicesCPU().empty();
 
 		bool hasWater =
-			chunkGpuVk->hasWaterBLAS() &&
+			chunkGpuVk->getOpaqueBLAS().valid() &&
 			!chunkGpuVk->getWaterRTVerticesCPU().empty() &&
 			!chunkGpuVk->getWaterRTIndicesCPU().empty();
 

@@ -65,11 +65,6 @@ public:
 
 	void updateDescriptorSet(uint32_t frameIndex);
 
-	bool valid() const { return outColorImage_.valid() && outDepthImage_.valid(); }
-
-	int getFactor() const { return factor_; }
-	const vk::Extent2D getExtent() const { return vk::Extent2D{ width_, height_ }; }
-
 	const ImageVk& getOutColorImage() const { return outColorImage_; }
 	ImageVk& getOutColorImage() { return outColorImage_; }
 	const ImageVk& getOutDepthImage() const { return outDepthImage_; }
@@ -142,13 +137,13 @@ private:
 	std::vector<BufferVk> closestHitUBOs_;
 	RT_Chunk_Constants::ClosestHitUBO closestHitData_{};
 
-	BufferVk packedRTOpaqueInfoBuffer_;
-	vk::DeviceSize packedRTOpaqueInfoBufferSize_{ 0 };
-	vk::DeviceSize packedRTOpaqueInfoBufferCapacity_{ 0 };
+	std::vector<BufferVk> packedRTOpaqueInfoBuffer_;
+	std::vector<vk::DeviceSize> packedRTOpaqueInfoBufferSize_;
+	std::vector<vk::DeviceSize> packedRTOpaqueInfoBufferCapacity_;
 
-	BufferVk packedRTWaterInfoBuffer_;
-	vk::DeviceSize packedRTWaterInfoBufferSize_{ 0 };
-	vk::DeviceSize packedRTWaterInfoBufferCapacity_{ 0 };
+	std::vector<BufferVk> packedRTWaterInfoBuffer_;
+	std::vector<vk::DeviceSize> packedRTWaterInfoBufferSize_;
+	std::vector<vk::DeviceSize> packedRTWaterInfoBufferCapacity_;
 
 	std::vector<DescriptorSetVk> rayGenDescriptorSets_;
 	std::vector<DescriptorSetVk> missDescriptorSets_;

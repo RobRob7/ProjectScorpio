@@ -31,33 +31,16 @@ public:
 
 	const std::vector<World::RTVertex>& getOpaqueRTVerticesCPU() const { return opaqueRTVerticesCPU_; }
 	const std::vector<uint32_t>& getOpaqueRTIndicesCPU() const { return opaqueRTIndicesCPU_; }
-
-	vk::Buffer getOpaqueRTVertexBuffer() const { return opaqueRTVB_.getBuffer(); }
-	vk::Buffer getOpaqueRTIndexBuffer() const { return opaqueRTIB_.getBuffer(); }
 	vk::DeviceAddress getOpaqueRTVertexAddress() const { return opaqueRTVB_.getDeviceAddress(); }
 	vk::DeviceAddress getOpaqueRTIndexAddress() const { return opaqueRTIB_.getDeviceAddress(); }
-	uint32_t getOpaqueRTIndexCount() const { return opaqueRTIndexCount_; }
-	uint32_t getOpaqueRTVertexCount() const { return opaqueRTVertexCount_; }
 
 	const std::vector<World::RTVertex>& getWaterRTVerticesCPU() const { return waterRTVerticesCPU_; }
 	const std::vector<uint32_t>& getWaterRTIndicesCPU() const { return waterRTIndicesCPU_; }
-
-	vk::Buffer getWaterRTVertexBuffer() const { return waterRTVB_.getBuffer(); }
-	vk::Buffer getWaterRTIndexBuffer() const { return waterRTIB_.getBuffer(); }
 	vk::DeviceAddress getWaterRTVertexAddress() const { return waterRTVB_.getDeviceAddress(); }
 	vk::DeviceAddress getWaterRTIndexAddress() const { return waterRTIB_.getDeviceAddress(); }
-	uint32_t getWaterRTIndexCount() const { return waterRTIndexCount_; }
-	uint32_t getWaterRTVertexCount() const { return waterRTVertexCount_; }
 
-	// Opaque BLAS
-	vk::AccelerationStructureKHR getOpaqueBLAS() const { return opaqueBLAS_.handle(); }
-	vk::DeviceAddress getOpaqueBLASAddress() const { return opaqueBLAS_.deviceAddress(); }
-	bool hasOpaqueBLAS() const { return opaqueBLAS_.valid(); }
-
-	// Water BLAS
-	vk::AccelerationStructureKHR getWaterBLAS() const { return waterBLAS_.handle(); }
-	vk::DeviceAddress getWaterBLASAddress() const { return waterBLAS_.deviceAddress(); }
-	bool hasWaterBLAS() const { return waterBLAS_.valid(); }
+	const AccelerationStructureVk& getOpaqueBLAS() const { return opaqueBLAS_; }
+	const AccelerationStructureVk& getWaterBLAS() const { return waterBLAS_; }
 
 private:
 	void retireCurrentBuffers(uint32_t frameIndex);

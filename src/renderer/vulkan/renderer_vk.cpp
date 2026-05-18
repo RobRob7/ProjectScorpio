@@ -371,7 +371,7 @@ void RendererVk::renderFrame(
 			);
 		}
 
-		if (in.skybox) 
+		if (in.skybox && !renderSettings_->useRT) 
 		{
 			in.skybox->render(
 				&frame,

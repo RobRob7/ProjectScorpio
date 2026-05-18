@@ -44,7 +44,11 @@ LightVk::~LightVk() = default;
 
 void LightVk::init()
 {
-	shader_ = std::make_unique<ShaderModuleVk>(vk_.getDevice(), "light/light.vert.spv", "light/light.frag.spv");
+	shader_ = std::make_unique<ShaderModuleVk>(
+		vk_.getDevice(), 
+		"light/light.vert.spv", 
+		"light/light.frag.spv"
+	);
 
 	createUBOs();
 	createDescriptorSets();
