@@ -8,8 +8,6 @@
 #include <memory>
 #include <stdexcept>
 
-using namespace Fog_Constants;
-
 //--- PUBLIC ---//
 FogPass::FogPass() = default;
 
@@ -26,7 +24,7 @@ void FogPass::init()
 		"fogpass/fog.comp"
 	);
 
-	uboBuffer_.init<sizeof(FogPassUBO)>();
+	uboBuffer_.init<sizeof(Fog_Constants::FogPassUBO)>();
 } // end of init()
 
 void FogPass::resize(int w, int h)
@@ -41,6 +39,9 @@ void FogPass::resize(int w, int h)
 
 	width_ = newWidth;
 	height_ = newHeight;
+
+	workGroupX_ = (width_ + (numWorkGroups_ - 1)) / numWorkGroups_;
+	workGroupY_ = (height_ + (numWorkGroups_ - 1)) / numWorkGroups_;
 
 	if (outputTex_)
 	{
@@ -59,18 +60,17 @@ void FogPass::resize(int w, int h)
 void FogPass::render(
 	uint32_t sceneDepthTex,
 	uint32_t shadowMapTex,
-	FogPassUBO& ubo
+	Fog_Constants::FogPassUBO& ubo
 )
 {
 	if (!computeShader_ || 
 		!sceneDepthTex ||
+		!shadowMapTex ||
 		!outputTex_)
 		return;
 
 	computeShader_->use();
-	uboBuffer_.bind();
 
-	// bind textures
 	glBindTextureUnit(TO_API_FORM(FogPassBinding::ForwardDepthTex), sceneDepthTex);
 	glBindTextureUnit(TO_API_FORM(FogPassBinding::ShadowMapTex), shadowMapTex);
 	glBindImageTexture(
@@ -84,13 +84,11 @@ void FogPass::render(
 	);
 	
 	uboBuffer_.update(&ubo, sizeof(ubo));
-	
-	uint32_t groupX = (width_ + 7) / 8;
-	uint32_t groupY = (height_ + 7) / 8;
+	uboBuffer_.bind();
 
 	glDispatchCompute(
-		groupX,
-		groupY,
+		workGroupX_,
+		workGroupY_,
 		1
 	);
 

@@ -11,8 +11,6 @@
 
 #include <cstdint>
 
-using namespace Fog_Constants;
-
 //--- PUBLIC ---//
 FogPassVk::FogPassVk(VulkanMain& vk)
 	: vk_(vk),
@@ -37,7 +35,6 @@ void FogPassVk::init()
 		"fogpass/fog.comp.spv"
 	);
 
-	createAttachment();
 	createResources();
 	createDescriptorSet();
 	createPipeline();
@@ -45,7 +42,22 @@ void FogPassVk::init()
 
 void FogPassVk::resize()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+	if (extent.width <= 0 || extent.height <= 0) return;
+
+	uint32_t newWidth = (extent.width + resFactor_ - 1) / resFactor_;
+	uint32_t newHeight = (extent.height + resFactor_ - 1) / resFactor_;
+
+	if (newWidth == width_ && newHeight == height_) return;
+
+	width_ = newWidth;
+	height_ = newHeight;
+
+	workGroupX_ = (width_ + (numWorkGroups_ - 1)) / numWorkGroups_;
+	workGroupY_ = (height_ + (numWorkGroups_ - 1)) / numWorkGroups_;
+
 	createAttachment();
+	refreshInput();
 } // end of resize()
 
 void FogPassVk::render(
@@ -62,7 +74,6 @@ void FogPassVk::render(
 	}
 
 	vk::CommandBuffer cmd = frame.cmd;
-	vk::Extent2D extent = frame.extent;
 
 	cmd.beginDebugUtilsLabelEXT({ "FogPassVk::cmd" });
 
@@ -102,13 +113,11 @@ void FogPassVk::render(
 		0, nullptr
 	);
 
-	uint32_t fogWidth = (extent.width + 1) / resFactor_;
-	uint32_t fogHeight = (extent.height + 1) / resFactor_;
-
-	uint32_t groupX = (fogWidth + 15) / 16;
-	uint32_t groupY = (fogHeight + 15) / 16;
-
-	cmd.dispatch(groupX, groupY, 1);
+	cmd.dispatch(
+		workGroupX_, 
+		workGroupY_, 
+		1
+	);
 
 	outputImage_.transitionToShaderRead(cmd);
 
@@ -119,7 +128,8 @@ void FogPassVk::render(
 //--- PRIVATE ---//
 void FogPassVk::refreshInput()
 {
-	if (!inputDepthImage_ || !inputShadowMapImage_)
+	if (!inputDepthImage_ || 
+		!inputShadowMapImage_)
 		return;
 
 	for (auto& set : descriptorSets_)
@@ -146,20 +156,14 @@ void FogPassVk::refreshInput()
 
 void FogPassVk::createAttachment()
 {
-	vk::Extent2D extent = vk_.getSwapChainExtent();
-
-	uint32_t fogWidth = (extent.width + 1) / resFactor_;
-	uint32_t fogHeight = (extent.height + 1) / resFactor_;
-
 	outputImage_.createImage(
-		fogWidth,
-		fogHeight,
+		width_,
+		height_,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
 		outputFormat_,
 		vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eColorAttachment | 
 		vk::ImageUsageFlagBits::eSampled |
 		vk::ImageUsageFlagBits::eStorage,
 		vk::MemoryPropertyFlagBits::eDeviceLocal
@@ -186,7 +190,7 @@ void FogPassVk::createResources()
 	for (auto& buffer : uboBuffers_)
 	{
 		buffer.create(
-			sizeof(FogPassUBO),
+			sizeof(Fog_Constants::FogPassUBO),
 			vk::BufferUsageFlagBits::eUniformBuffer,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 		);
@@ -257,7 +261,7 @@ void FogPassVk::createDescriptorSet()
 		descriptorSets_[i].writeUniformBuffer(
 			TO_API_FORM(FogPassBinding::UBO),
 			uboBuffers_[i].getBuffer(),
-			sizeof(FogPassUBO)
+			sizeof(Fog_Constants::FogPassUBO)
 		);
 
 		descriptorSets_[i].setDebugName(

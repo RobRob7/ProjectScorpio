@@ -413,6 +413,7 @@ namespace FXAA_Constants
 namespace Fog_Constants
 {
 	const uint32_t RES_FACTOR = 2;
+	const uint32_t WORK_GROUPS = 16;
 
 	struct FogPassUBO
 	{

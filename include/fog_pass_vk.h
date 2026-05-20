@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <vector>
+#include <cstdint>
 
 class VulkanMain;
 class ComputeShaderModuleVk;
@@ -32,11 +33,6 @@ public:
 		Fog_Constants::FogPassUBO& fogUBO
 	);
 
-	//void setInputShadowMap(ImageVk& inputShadowMap)
-	//{
-	//	inputShadowMapImage_ = &inputShadowMap;
-	//} // end of setInputShadowMap()
-
 	void setInput(ImageVk& inputDepth, ImageVk& inputShadowMap)
 	{
 		inputDepthImage_ = &inputDepth;
@@ -54,7 +50,14 @@ private:
 private:
 	VulkanMain& vk_;
 
+	uint32_t width_{};
+	uint32_t height_{};
+
 	uint32_t resFactor_{ Fog_Constants::RES_FACTOR };
+
+	uint32_t numWorkGroups_{Fog_Constants::WORK_GROUPS};
+	uint32_t workGroupX_{};
+	uint32_t workGroupY_{};
 
 	ImageVk* inputDepthImage_{ nullptr };
 	ImageVk* inputShadowMapImage_{ nullptr };

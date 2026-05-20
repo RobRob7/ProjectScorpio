@@ -48,13 +48,14 @@ void FXAAPass::resize(int w, int h)
 
 void FXAAPass::render(uint32_t sceneColorTex)
 {
-	if (!shader_ || !sceneColorTex || width_ <= 0 || height_ <= 0 || fsVao_ == 0 || fxaaFBO_ == 0)
+	if (!shader_ || 
+		!sceneColorTex || 
+		width_ <= 0 || 
+		height_ <= 0 || 
+		fsVao_ == 0 || 
+		fxaaFBO_ == 0)
 		return;
 
-	// bind ubo
-	ubo_.bind();
-
-	// bind textures
 	glBindTextureUnit(TO_API_FORM(FXAAPassBinding::ForwardColorTex), sceneColorTex);
 
 	const GLboolean prevDepth = glIsEnabled(GL_DEPTH_TEST);
@@ -71,6 +72,7 @@ void FXAAPass::render(uint32_t sceneColorTex)
 	fxaaPassUBO_.u_edgeThresholdMax = EDGE_THRESH_MAX;
 	fxaaPassUBO_.u_edgeThresholdMin = EDGE_THRESH_MIN;
 	ubo_.update(&fxaaPassUBO_, sizeof(fxaaPassUBO_));
+	ubo_.bind();
 
 	glDrawArrays(GL_TRIANGLES, 0, 3);
 
@@ -91,7 +93,7 @@ void FXAAPass::createTargets()
 	glCreateFramebuffers(1, &fxaaFBO_);
 	glCreateTextures(GL_TEXTURE_2D, 1, &fxaaColorTex_);
 
-	glTextureStorage2D(fxaaColorTex_, 1, GL_RGBA8, width_, height_);
+	glTextureStorage2D(fxaaColorTex_, 1, GL_RGBA16F, width_, height_);
 	glTextureParameteri(fxaaColorTex_, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTextureParameteri(fxaaColorTex_, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glTextureParameteri(fxaaColorTex_, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
