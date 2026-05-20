@@ -836,12 +836,12 @@ void UI::drawInspector(IScene& scene)
 		{
 			renderSettings_.fogSettings.stepSize = 0.150f;
 		}
-		changed |= ImGui::DragFloat("Scattering Density##fog", &renderSettings_.fogSettings.scatteringDensity, 0.005f, 0.0f, 0.03f);
+		changed |= ImGui::DragFloat("Scattering Density##fog", &renderSettings_.fogSettings.scatteringDensity, 0.005f, 0.005f, 0.03f);
 		if (ImGui::Button("Reset##fog_scatteringdensity"))
 		{
 			renderSettings_.fogSettings.scatteringDensity = 0.015f;
 		}
-		changed |= ImGui::DragFloat("Absorption Density##fog", &renderSettings_.fogSettings.absorptionDensity, 0.001f, 0.0f, 0.01f);
+		changed |= ImGui::DragFloat("Absorption Density##fog", &renderSettings_.fogSettings.absorptionDensity, 0.001f, 0.001f, 0.01f);
 		if (ImGui::Button("Reset##fog_absorptiondensity"))
 		{
 			renderSettings_.fogSettings.absorptionDensity = 0.003f;

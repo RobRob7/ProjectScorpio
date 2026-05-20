@@ -37,6 +37,10 @@ private:
 
     uint32_t resFactor_{ Fog_Constants::RES_FACTOR };
 
+    uint32_t numWorkGroups_{ Fog_Constants::WORK_GROUPS };
+    uint32_t workGroupX_{};
+    uint32_t workGroupY_{};
+
     uint32_t outputTex_{};
 
     std::unique_ptr<ComputeShader> computeShader_;
