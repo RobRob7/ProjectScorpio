@@ -92,8 +92,13 @@ void RayTracingWorldPassVk::init()
 	);
 
 	atlas_.loadFromFile("blocks_padded.png", true);
+	atlas_.setDebugName("RayTracingWorldPassVk-AtlasTexture");
+
 	dudvTex_.loadFromFile("dudv.png", true);
+	dudvTex_.setDebugName("RayTracingWorldPassVk-DuDvTexture");
+
 	normalTex_.loadFromFile("waternormal.png", true);
+	normalTex_.setDebugName("RayTracingWorldPassVk-NormalTexture");
 
 	createOutputImages();
 	createResources();
@@ -419,6 +424,8 @@ void RayTracingWorldPassVk::createOutputImages()
 		false
 	);
 
+	outColorImage_.setDebugName("RayTracingWorldPassVk-ColorImage");
+
 	// output depth image
 	outDepthImage_.createImage(
 		width_,
@@ -449,6 +456,8 @@ void RayTracingWorldPassVk::createOutputImages()
 		vk::SamplerAddressMode::eClampToEdge,
 		false
 	);
+
+	outDepthImage_.setDebugName("RayTracingWorldPassVk-DepthImage");
 } // end of createOutputImages()
 
 void RayTracingWorldPassVk::createResources()

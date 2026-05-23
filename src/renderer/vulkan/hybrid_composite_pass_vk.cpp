@@ -221,6 +221,8 @@ void HybridCompositePassVk::createAttachment()
         false
     );
 
+    hybridColorImage_.setDebugName("HybridCompositePassVk-ColorImage");
+
     // depth
     hybridDepthImage_.createImage(
         extent.width,
@@ -249,6 +251,8 @@ void HybridCompositePassVk::createAttachment()
         vk::SamplerAddressMode::eClampToEdge,
         false
     );
+
+    hybridDepthImage_.setDebugName("HybridCompositePassVk-DepthImage");
 } // end of createAttachment()
 
 void HybridCompositePassVk::createDescriptorSet()

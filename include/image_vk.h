@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <cstdint>
+#include <string>
 
 class VulkanMain;
 
@@ -20,6 +21,8 @@ public:
 
     ImageVk(ImageVk&&) noexcept = default;
     ImageVk& operator=(ImageVk&&) noexcept = default;
+
+    void setDebugName(const std::string& name);
 
     void createImage(
         uint32_t width,

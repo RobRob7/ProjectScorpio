@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <cstdint>
+#include <string>
 
 class VulkanMain;
 
@@ -21,6 +22,8 @@ public:
 
     TextureCubemapVk(TextureCubemapVk&&) noexcept = default;
     TextureCubemapVk& operator=(TextureCubemapVk&&) noexcept = default;
+
+    void setDebugName(const std::string& name);
 
     void loadFromFiles(const std::array<std::string_view, 6>& faces, const bool needToFlip = false);
 

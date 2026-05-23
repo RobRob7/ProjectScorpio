@@ -484,14 +484,6 @@ void RendererVk::renderFrame(
 	sceneColor_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
 	sceneDepth_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
 
-	if (renderSettings_->useRT)
-	{
-		// RT color + depth transition to shader read
-		rtWorldPass_->getOutColorImage().transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
-		rtWorldPass_->getOutDepthImage().transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
-
-	}
-
 	// ----------------- HYBRID COMPOSITE PASS ----------------- //
 	if (vk_.supportsRayTracing() && renderSettings_->useRT)
 	{
@@ -639,6 +631,8 @@ void RendererVk::createSceneAttachments()
 		vk::False
 	);
 
+	sceneColor_.setDebugName("RendererVk-SceneColor");
+
 
 	// SCENE DEPTH
 	sceneDepth_.createImage(
@@ -668,4 +662,6 @@ void RendererVk::createSceneAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	sceneDepth_.setDebugName("RendererVk-SceneDepth");
 } // end of createSceneAttachments()

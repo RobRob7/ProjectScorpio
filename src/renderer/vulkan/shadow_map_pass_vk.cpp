@@ -217,4 +217,6 @@ void ShadowMapPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToBorder,
 		false
 	);
+
+	depthImage_.setDebugName("ShadowMapPassVk-DepthImage");
 } // end of createAttachments()

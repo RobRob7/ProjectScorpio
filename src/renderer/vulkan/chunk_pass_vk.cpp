@@ -100,6 +100,7 @@ void ChunkPassVk::init(
 	);
 
 	atlas_.loadFromFile("blocks_padded.png", true);
+	atlas_.setDebugName("ChunkPassVk-AtlasTexture");
 
 	createResources();
 	createDescriptorSets();

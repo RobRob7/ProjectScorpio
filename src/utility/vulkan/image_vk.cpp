@@ -16,6 +16,22 @@ ImageVk::ImageVk(VulkanMain& vk)
 
 ImageVk::~ImageVk() = default;
 
+void ImageVk::setDebugName(const std::string& name)
+{
+    if (!image_) return;
+
+    vk_.setDebugName(
+        vk::ObjectType::eImage,
+        reinterpret_cast<uint64_t>(static_cast<VkImage>(image_.get())),
+        name + "::Image"
+    );
+    vk_.setDebugName(
+        vk::ObjectType::eImageView,
+        reinterpret_cast<uint64_t>(static_cast<VkImageView>(view_.get())),
+        name + "::ImageView"
+    );
+} // end of setDebugName()
+
 void ImageVk::createImage(
     uint32_t width,
     uint32_t height,

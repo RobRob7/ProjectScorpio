@@ -182,6 +182,8 @@ void PostCompositePassVk::createAttachment()
         vk::SamplerAddressMode::eClampToEdge,
         false
     );
+
+    postColorImage_.setDebugName("PostCompositePassVk-ColorImage");
 } // end of createAttachment()
 
 void PostCompositePassVk::createDescriptorSet()
