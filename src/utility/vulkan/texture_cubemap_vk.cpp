@@ -22,6 +22,11 @@ TextureCubemapVk::TextureCubemapVk(VulkanMain& vk)
 
 TextureCubemapVk::~TextureCubemapVk() = default;
 
+void TextureCubemapVk::setDebugName(const std::string& name)
+{
+	image_.setDebugName(name);
+} // end of setDebugName()
+
 void TextureCubemapVk::loadFromFiles(const std::array<std::string_view, 6>& faces, const bool needToFlip)
 {
 	stbi_set_flip_vertically_on_load(needToFlip);

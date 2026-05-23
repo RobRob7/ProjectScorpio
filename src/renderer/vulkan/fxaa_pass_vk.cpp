@@ -185,6 +185,8 @@ void FXAAPassVk::createAttachment()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	outputImage_.setDebugName("FXAAPassVk-OutputImage");
 } // end of createAttachment()
 
 void FXAAPassVk::createResources()

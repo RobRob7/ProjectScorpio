@@ -250,6 +250,8 @@ void SSAOPassVk::createAttachments()
 		vk::False
 	);
 
+	ssaoRawImage_.setDebugName("SSAOPassVk-RawImage");
+
 
 	// BLUR
 	ssaoBlurImage_.createImage(
@@ -276,6 +278,8 @@ void SSAOPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	ssaoBlurImage_.setDebugName("SSAOPassVk-BlurImage");
 
 	// default ssaoblur texture (for when SSAO is disabled)
 	vk::CommandBuffer cmd = vk_.beginSingleTimeCommands();
@@ -588,6 +592,8 @@ void SSAOPassVk::createNoiseTexture()
 		vk::SamplerAddressMode::eRepeat,
 		false
 	);
+
+	ssaoNoiseImage_.setDebugName("SSAOPassVk-NoiseImage");
 
 	// staging upload
 	vk::DeviceSize size = static_cast<vk::DeviceSize>(noise.size() * sizeof(glm::vec4));

@@ -144,6 +144,8 @@ void GBufferPassVk::createAttachments()
 		vk::False
 	);
 
+	gNormalImage_.setDebugName("GBufferPassVk::NormalImage");
+
 
 	// DEPTH
 	gDepthImage_.createImage(
@@ -170,4 +172,6 @@ void GBufferPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	gDepthImage_.setDebugName("GBufferPassVk::DepthImage");
 } // end of createAttachments()

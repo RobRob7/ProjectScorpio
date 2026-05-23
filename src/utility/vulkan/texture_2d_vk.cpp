@@ -19,6 +19,11 @@ Texture2DVk::Texture2DVk(VulkanMain& vk)
 
 Texture2DVk::~Texture2DVk() = default;
 
+void Texture2DVk::setDebugName(const std::string& name)
+{
+	image_.setDebugName(name);
+} // end of setDebugName()
+
 void Texture2DVk::loadFromFile(std::string_view path, const bool needToFlip)
 {
 	stbi_set_flip_vertically_on_load(needToFlip);

@@ -232,6 +232,8 @@ void RTAOPassVk::createOutputImage()
 		vk::SamplerAddressMode::eClampToEdge,
 		false
 	);
+
+	outColorImage_.setDebugName("RTAOPassVk-ColorImage");
 } // end of createOutputImage()
 
 void RTAOPassVk::createResources()

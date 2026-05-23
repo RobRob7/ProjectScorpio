@@ -183,6 +183,8 @@ void FogPassVk::createAttachment()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	outputImage_.setDebugName("FogPassVk-OutputImage");
 } // end of createAttachment()
 
 void FogPassVk::createResources()

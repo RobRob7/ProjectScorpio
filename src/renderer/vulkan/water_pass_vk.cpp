@@ -66,7 +66,10 @@ void WaterPassVk::init()
 	height_ = std::max(1u, extent.height / factor_);
 
 	dudvTex_.loadFromFile("dudv.png", true);
+	dudvTex_.setDebugName("WaterPassVk-DuDvTexture");
+
 	normalTex_.loadFromFile("waternormal.png", true);
+	normalTex_.setDebugName("WaterPassVk-NormalTexture");
 
 	createAttachments();
 	createResources();
@@ -206,6 +209,8 @@ void WaterPassVk::createAttachments()
 		vk::False
 	);
 
+	reflColorImage_.setDebugName("WaterPassVk-ReflColorImage");
+
 	// REFLECTION DEPTH
 	reflDepthImage_.createImage(
 		width_,
@@ -231,6 +236,8 @@ void WaterPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	reflDepthImage_.setDebugName("WaterPassVk-ReflDepthImage");
 	/////////////////////////////////
 
 	/////////////////////////////////
@@ -260,6 +267,8 @@ void WaterPassVk::createAttachments()
 		vk::False
 	);
 
+	refrColorImage_.setDebugName("WaterPassVk-RefrColorImage");
+
 	// REFRACTION DEPTH
 	refrDepthImage_.createImage(
 		width_,
@@ -285,6 +294,8 @@ void WaterPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
+
+	refrDepthImage_.setDebugName("WaterPassVk-RefrDepthImage");
 	/////////////////////////////////
 } // end of createAttachments()
 

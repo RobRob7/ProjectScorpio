@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <cstdint>
+#include <string>
 
 class VulkanMain;
 
@@ -21,6 +22,8 @@ public:
 
     Texture2DVk(Texture2DVk&&) noexcept = default;
     Texture2DVk& operator=(Texture2DVk&&) noexcept = default;
+
+    void setDebugName(const std::string& name);
 
     void loadFromFile(std::string_view path, const bool needToFlip = false);
 
