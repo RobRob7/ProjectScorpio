@@ -5,7 +5,7 @@ C++17 voxel rendering engine built for Windows featuring a dual backend architec
 Features:
 </h3>
 
-- Ray-traced rendering including ray-traced ambient occlusion (RTAO), RT shadows, and RT reflections
+- Ray-Traced Ambient Occlusion (RTAO), RT Shadows, and RT Reflections
 - Ray-Tracing Shader Support (Raygen, Miss, Closest-Hit, Any-Hit)
 - Compute Shader Support
 - Volumetric Fog + God Rays (Compute Shaders)
