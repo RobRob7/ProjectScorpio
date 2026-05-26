@@ -1,13 +1,16 @@
 # Project Atlas
-C++17 voxel rendering engine built for Windows featuring a modular, interchangeable backend architecture supporting Vulkan 1.4 (hpp + Unique, Dynamic Rendering) and OpenGL 4.6 Core. Uses custom rendering pipelines in Vulkan to support traditional rasterization, ray-tracing, and compute pipelines.
+C++17 voxel rendering engine built for Windows featuring a dual backend architecture supporting Vulkan 1.4 (hpp + Unique, Dynamic Rendering) and OpenGL 4.6 Core. Uses custom rendering pipelines in Vulkan to support traditional rasterization, ray-tracing, and compute pipelines.
 
 <h3>
 Features:
 </h3>
 
+- Ray-traced rendering including ray-traced ambient occlusion (RTAO), RT shadows, and RT reflections
+- Ray-Tracing Shader Support (Raygen, Miss, Closest-Hit, Any-Hit)
+- Compute Shader Support
+- Volumetric Fog + God Rays (Compute Shaders)
 - Directional Shadow Mapping with Percentage-Closer Filtering (PCF)
 - Physically-Inspired Surface Water Rendering
-- Post-Processing Fog
 - Screen-Space Ambient Occlusion (SSAO)
 - Fast Approximate Anti-Aliasing (FXAA)
 - Camera View Frustum Culling
@@ -36,16 +39,19 @@ Features:
 Preview
 </h2>
 
-![Shadow Mapping](./milestones/demo/shadow_maps.gif)
+![Volumetric Fog](./milestones/demo/volumetric_fog.gif)
 
-![Project Demo](./milestones/demo/demo4.gif)
+![Volumetric Fog 2](./milestones/demo/volumetric_fog_2.gif)
+
+![RT Shadows](./milestones/demo/rt_shadows.gif)
 
 <!--  -->
 <h2>
 Debugging & Validation
 </h2>
 
-- Vulkan: Implemented system to assign debug names (for command buffers, descriptor sets, pipelines) to help identify critical passes of engine inside of RenderDoc and NVIDIA Nsight Graphics, and validation layers.
+- Vulkan: Implemented system to assign debug names (for command buffers, descriptor sets, pipelines, and textures loaded from disk or created for color/depth attachments) to help identify critical passes of engine inside of RenderDoc and NVIDIA Nsight Graphics, and validation layers.
+- OpenGL: Enabled debug context for immediate feedback relating to improper use of API, performance warnings, and undefined behavior.
 - Used RenderDoc and NVIDIA Nsight Graphics to capture and analyze GPU frames across both Vulkan and OpenGL backends, verifying correctness of multi-pass rendering.
 - Developed a custom in-engine debug system to visualize pass output textures, enabling real-time validation outside of frame captures.
 
@@ -58,17 +64,37 @@ Rendering & Engine Techniques
 This project focuses on implementing real-time rendering techniques that are commonly used in modern game engines. The techniques were implemented from scratch with explicit control over GPU resources and pipeline state.
 
 ### Rendering Pipeline Overview
-> Vulkan backend utilizes dynamic rendering, and hybrid approach to support raster + RT rendering.
+> Vulkan backend utilizes dynamic rendering, and hybrid rendering approach combining rasterization and ray tracing.
 
+Vulkan:
+1. G-buffer pass (normals + depth)
+2. RT pass (TLAS/BLAS build/rebuild)
+3. RTAO pass (using TLAS)
+4. Shadow Map pass (shadow map depth)
+5. SSAO pass
+6. Water pass (reflection/refraction)
+7. Debug pass (visualize pass outputs)
+8. Forward render (rasterization)
+9. Ray-Tracing Pass
+10. Hybrid Composite Pass (rasterization + RT components combined)
+11. Volumetric Fog + God Rays
+12. Post Composite Pass (fog + scene combined)
+13. FXAA
+14. Present Pass (render to frame)
+15. UI Elements (render to frame)
+
+OpenGL:
 1. G-buffer pass (normals + depth)
 2. Shadow Map pass (shadow map depth)
-3. Debug pass (visualize - gNormal, gDepth, shadow map depth)
-4. SSAO pass + blur
-5. Water reflection & refraction passes
-6. Forward render
-7. Post-Processing Fog
-8. FXAA
-9. UI Elements
+3. SSAO pass
+4. Water pass (reflection/refraction)
+5. Debug pass (visualize pass outputs)
+6. Forward render (rasterization)
+7. Volumetric Fog + God Rays
+8. Post Composite Pass (fog + scene combined)
+9. FXAA
+10. Present Pass (render to frame)
+11. UI Elements (render to frame)
 
 <!--  -->
 ---
@@ -87,12 +113,13 @@ Previous versions of this engine showcased flat and boring water blocks. Water i
 <!--  -->
 ---
 <h4>
-Post-Processing Fog
+Screen-Space Volumetric Fog + God Rays
 </h4>
 
 - Screen-space, depth-based fog applied as a post-processing pass.
-- Configurable fog color and start/end distances.
-- Integrates seamlessly with SSAO, FXAA, and lighting passes.
+- Ray marching is performed from the camera through the depth-reconstructed scene to accumulate volumetric lighting and fog density.
+- Utilizes shadow map to generate god rays.
+- Integrates seamlessly with other post-processing effects like FXAA.
 
 **Importance:**  
 Demonstrates the ability to implement additional post-processing effects that integrate cleanly into an existing post-processing pipeline.
@@ -218,7 +245,34 @@ Directional Shadow Mapping
 Adds depth cues and spatial realism while demonstrating understanding of multi-pass rendering, and real-time lighting techniques.
 
 ---
+
 <!--  -->
+<h4>
+Custom Compute Pipeline
+</h4>
+
+- Implemented custom pipeline for compute work with compute shaders.
+- Volumetric fog and god rays were implemented using compute shaders with workgroup-based parallel execution.
+
+**Importance:**  
+Demonstrates understanding of compute-driven rendering workflows and how compute pipelines differ from traditional rasterization.
+
+---
+
+<!--  -->
+<h4>
+Custom Ray-Tracing Pipeline
+</h4>
+
+- Implemented systems for creation of bottom/top layer acceleration structure (BLAS/TLAS) for world.
+- Helper class for shader binding table (SBT) to group RT shaders (raygen, miss, closest-hit, any-hit) together.
+- Ray-traced world pipeline supports RTAO, RT shadows, and RT reflections using Vulkan acceleration structures (TLAS/BLAS).
+
+**Importance:**  
+Demonstrates understanding of the three major GPU rendering pipelines: rasterization, compute, and ray tracing.
+
+---
+
 <!--  -->
 <h2>
 Milestones
@@ -288,10 +342,24 @@ Milestones
 |----------------------------|--------------------------------|
 | ![](milestones/12a_Shadows_OFF.gif) | ![](milestones/12b_Shadows_ON.gif) |
 
+| Rasterized Shadow Mapping | RT Shadows |
+|----------------------------|--------------------------------|
+| ![](milestones/13a_RasterShadows.png) | ![](milestones/13b_RTShadows.png) |
+
+| Volumetric Fog + God Rays (Off) | Volumetric Fog + God Rays (On) |
+|----------------------------|--------------------------------|
+| ![](milestones/14a_VolumetricFog_OFF.png) | ![](milestones/14b_VolumetricFog_ON.png) |
+
+| Traditional Rasterization | Ray-Tracing |
+|----------------------------|--------------------------------|
+| *Scene rendered with SSAO, shadow mapping, reflection/refraction textures for water.* | *Scene rendered with RTAO, RT shadows, RT reflections.* |
+| ![](milestones/15a_Rasterization.png) | ![](milestones/15b_RT.png) |
+
 <h2>
 Requirements
 </h2>
 
+> - [Download](https://www.python.org/downloads/) and install latest version of Python.
 > - [Download](https://git-scm.com/install/) and install Git.
 > - [Download](https://vulkan.lunarg.com/sdk/home) and install latest Vulkan SDK.
 > - [Download](https://visualstudio.microsoft.com/vs/community/) Visual Studio 2022 Community Edition or newer.
@@ -371,9 +439,13 @@ Project layout:
     - **main_opengl/**
         - opengl_main.cpp → opengl main instance
     - **main_vulkan/**
+        - acceleration_structure_vk.cpp → TLAS/BLAS creation
         - buffer_vk.cpp → buffer helper class
+        - compute_pipeline_vk.cpp → compute pipeline helper class
         - descriptor_set_vk.cpp → descriptor set helper class
-        - graphics_pipeline_vk.cpp → pipeline helper class
+        - graphics_pipeline_vk.cpp → rasterization pipeline helper class
+        - ray_tracing_pipeline_vk.cpp → ray-tracing pipeline helper class
+        - shader_binding_table_vk.cpp → SBT creation helper class
         - vulkan_main.cpp → vulkan main instance
     - **player/**
         - crosshair.cpp → crosshair UI icon opengl
@@ -385,19 +457,26 @@ Project layout:
             - fog_pass.cpp → fog pass
             - fxaa_pass.cpp → FXAA pass
             - gbuffer_pass.cpp → G-buffer pass
+            - post_composite_pass_gl.cpp → fog + scene combine pass
             - present_pass.cpp → final image pass
-            - renderer_gl.cpp → render pipeline
+            - renderer_gl.cpp → main render loop
             - shadow_map_pass_gl.cpp → shadow map pass
             - ssao_pass.cpp → SSAO pass
             - water_pass.cpp → water pass
         - **vulkan/**
+            - **raytracing/**
+                - ray_tracing_world_pass_vk.cpp → opaque + water RT render
+                - ray_tracing_world_vk.cpp → opaque + water RT TLAS/BLAS build
+                - rtao_pass_vk.cpp → RTAO pass
             - chunk_pass_vk.cpp → opaque chunk render
             - debug_pass_vk.cpp → G-buffer normal + depth view
             - fog_pass_vk.cpp → fog pass
             - fxaa_pass_vk.cpp → FXAA pass
-            - gbuffer_pass_vk.cpp → G-buffer pass
+            - gbuffer_pass_vk.cpp → G-buffer 
+            - hybrid_composite_pass_vk.cpp → Rasterization + RT combine pass 
+            - post_composite_pass_vk.cpp → fog + scene combine pass
             - present_pass_vk.cpp → final image pass
-            - renderer_vk.cpp → render pipeline
+            - renderer_vk.cpp → main render loop
             - shadow_map_pass_vk.cpp → shadow map pass
             - ssao_pass_vk.cpp → SSAO pass
             - water_pass_vk.cpp → water pass
@@ -409,14 +488,16 @@ Project layout:
         - ui.cpp → UI system
     - **utility/**
         - **opengl/**
+            - compute_shader_gl.cpp → compute shader helper
             - cubemap_gl.cpp → setup + render cubemap
-            - shader.cpp → shader helper class
+            - shader.cpp → rasterization shader helper
             - texture.cpp → setup texture
-            - ubo_gl.cpp → UBO upload
+            - ubo_gl.cpp → UBO buffer
         - **vulkan/**
+            - compute_shader_vk.cpp → compute shader helper
             - cubemap_vk.cpp → setup + render cubemap
             - image_vk.cpp → texture base
-            - shader_vk.cpp → shader helper
+            - shader_vk.cpp → rasterization shader helper
             - texture_2d_vk.cpp → load texture from file
             - texture_cubemap_vk.cpp → load multiple textures from file
             - utils_vk.cpp → transition image helpers
