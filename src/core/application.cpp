@@ -391,7 +391,7 @@ void Application::initWindowGL()
 	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 	// WINDOW CREATION + CHECK
-	window_ = glfwCreateWindow(width_, height_, "Atlas", nullptr, nullptr);
+	window_ = glfwCreateWindow(width_, height_, "Scorpio", nullptr, nullptr);
 	if (!window_)
 	{
 		glfwTerminate();
@@ -417,7 +417,7 @@ void Application::initWindowVk()
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	// WINDOW CREATION + CHECK
-	window_ = glfwCreateWindow(width_, height_, "Atlas", nullptr, nullptr);
+	window_ = glfwCreateWindow(width_, height_, "Scorpio", nullptr, nullptr);
 	if (!window_)
 	{
 		glfwTerminate();

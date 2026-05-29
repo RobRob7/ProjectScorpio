@@ -320,7 +320,7 @@ void UI::drawTitleBar()
 	ImGui::SameLine();
 
 	// ----- title -----
-	std::string title = "Project Atlas - " + std::string(backendToString(activeBackend_));
+	std::string title = "Project Scorpio - " + std::string(backendToString(activeBackend_));
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextUnformatted(title.c_str());
 

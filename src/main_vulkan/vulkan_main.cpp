@@ -528,9 +528,9 @@ void VulkanMain::createInstance()
 	}
 
 	vk::ApplicationInfo appInfo{};
-	appInfo.pApplicationName = "Project Atlas";
+	appInfo.pApplicationName = "Project Scorpio";
 	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.pEngineName = "Atlas";
+	appInfo.pEngineName = "Scorpio";
 	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
 	appInfo.apiVersion = VK_API_VERSION_1_4;
 
