@@ -498,6 +498,9 @@ void UI::drawMenuBar(IScene& scene)
 			}
 			if (enabledRT)
 			{
+				if (ImGui::Checkbox("RT Shadows##graphics", &renderSettings_.useRTShadow))
+				{
+				}
 				if (ImGui::Checkbox("RTAO##graphics", &renderSettings_.useRTAO))
 				{
 				}

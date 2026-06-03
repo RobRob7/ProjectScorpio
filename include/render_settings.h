@@ -44,10 +44,11 @@ struct RenderSettings
 
 	// graphics options
 	bool useRT = false;
+	bool useRTAO = true;
+	bool useRTShadow = true;
 
 	bool useShadowMap = true;
 	bool useSSAO = true;
-	bool useRTAO = false;
 	bool useFXAA = false;
 	bool useFog = true;
 

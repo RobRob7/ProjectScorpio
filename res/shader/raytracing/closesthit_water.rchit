@@ -35,7 +35,7 @@ layout(buffer_reference, scalar) readonly buffer IndexBufferRef
     uint indices[];
 };
 
-layout(set = 3, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 3, binding = 0) uniform accelerationStructureEXT TopLevelAS;
 
 layout(set = 3, binding = 1, scalar) readonly buffer ChunkInfoBuffer
 {
@@ -50,18 +50,12 @@ layout(set = 3, binding = 2) uniform UBO
     float u_time;
 } ubo;
 
-layout(set = 3, binding = 3) uniform sampler2D u_dudvTex;
-layout(set = 3, binding = 4) uniform sampler2D u_normalTex;
+layout(set = 3, binding = 3) uniform sampler2D DuDvTex;
+layout(set = 3, binding = 4) uniform sampler2D NormalTex;
+layout(set = 3, binding = 5) uniform sampler2D RTShadowTex;
 
 void main()
 {
-	// shadow ray
-    if (payload.rayType == 1)
-    {
-        payload.shadowed = 1;
-        return;
-    }
-
     payload.depth = gl_HitTEXT;
 
     uint chunkIndex = gl_InstanceCustomIndexEXT;
@@ -124,8 +118,8 @@ void main()
     vec2 dudvUV1 = fract(baseUV + vec2(time * waveSpeed, time * waveSpeed * 0.5));
     vec2 dudvUV2 = fract(baseUV * 1.73 + vec2(-time * waveSpeed * 0.6, time * waveSpeed * 0.9));
 
-    vec2 distortion1 = texture(u_dudvTex, dudvUV1).rg * 2.0 - 1.0;
-    vec2 distortion2 = texture(u_dudvTex, dudvUV2).rg * 2.0 - 1.0;
+    vec2 distortion1 = texture(DuDvTex, dudvUV1).rg * 2.0 - 1.0;
+    vec2 distortion2 = texture(DuDvTex, dudvUV2).rg * 2.0 - 1.0;
 
     float mixFactor = 0.7;
     vec2 dudv = mix(distortion1, distortion2, mixFactor);
@@ -133,8 +127,8 @@ void main()
     vec2 nUV1 = fract(dudvUV1 + dudv * 0.05);
     vec2 nUV2 = fract(dudvUV2 + dudv * 0.05);
 
-    vec3 n1 = texture(u_normalTex, nUV1).rgb;
-    vec3 n2 = texture(u_normalTex, nUV2).rgb;
+    vec3 n1 = texture(NormalTex, nUV1).rgb;
+    vec3 n2 = texture(NormalTex, nUV2).rgb;
     vec3 nTex = mix(n1, n2, mixFactor);
 
     vec3 N = vec3(
@@ -201,7 +195,7 @@ void main()
     payload.depth = 1e30;
 
     traceRayEXT(
-        topLevelAS,
+        TopLevelAS,
         gl_RayFlagsOpaqueEXT,
         0x01,        // opaque terrain/chunks only
         0, 0, 0,
@@ -227,7 +221,7 @@ void main()
     payload.depth = 1e30;
 
     traceRayEXT(
-        topLevelAS,
+        TopLevelAS,
         gl_RayFlagsOpaqueEXT,
         0x01,
         0, 0, 0,
@@ -249,25 +243,9 @@ void main()
     vec3 lightDir = normalize(-ubo.u_lightDir.xyz);
     float ndotl = max(dot(Nuse, lightDir), 0.0);
 
-    vec3 shadowOrigin = worldHitPos + Nuse * 0.03;
-    ///////////
-
-    payload.shadowed = 0;
-    payload.rayType = 1;
-
-    traceRayEXT(
-        topLevelAS,
-        gl_RayFlagsOpaqueEXT | gl_RayFlagsTerminateOnFirstHitEXT,
-        0x01,
-        0, 0, 0,
-        shadowOrigin,
-        0.001,
-        lightDir,
-        10000.0,
-        0
-    );
-
-    float shadow = (payload.shadowed != 0) ? 0.25 : 1.0;
+    vec2 screenUV = (vec2(gl_LaunchIDEXT.xy) + 0.5) / vec2(gl_LaunchSizeEXT.xy);
+    // shadow
+    float shadow = texture(RTShadowTex, screenUV).r;
 
     payload.rayType = 0;
 

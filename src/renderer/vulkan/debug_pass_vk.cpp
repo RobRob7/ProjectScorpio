@@ -21,18 +21,8 @@
 using namespace Debug_Constants;
 
 //--- PUBLIC ---//
-DebugPassVk::DebugPassVk(
-	VulkanMain& vk, 
-	const ImageVk& normalImage, 
-	const ImageVk& depthImage,
-	const ImageVk& shadowMapImage,
-	const ImageVk& rtDepthImage
-)
+DebugPassVk::DebugPassVk(VulkanMain& vk)
 	: vk_(vk),
-	normalImage_(normalImage),
-	depthImage_(depthImage),
-	shadowMapImage_(shadowMapImage),
-	rtDepthImage_(rtDepthImage),
 	pipeline_(vk)
 {
 	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
@@ -58,12 +48,11 @@ void DebugPassVk::init()
 	createResources();
 	createDescriptorSets();
 	createPipeline();
-	refreshInputs();
 } // end of init()
 
 void DebugPassVk::resize()
 {
-	refreshInputs();
+	//refreshInputs();
 } // end of resize()
 
 void DebugPassVk::render(
@@ -138,6 +127,33 @@ void DebugPassVk::render(
 	frame.transitionColorImageToPresent(cmd);
 } // end of render()
 
+void DebugPassVk::updateDescriptorSet(uint32_t frameIndex)
+{
+	descriptorSets_[frameIndex].writeCombinedImageSampler(
+		TO_API_FORM(DebugBinding::GNormalTex),
+		normalImage_->view(),
+		normalImage_->sampler()
+	);
+
+	descriptorSets_[frameIndex].writeCombinedImageSampler(
+		TO_API_FORM(DebugBinding::GDepthTex),
+		depthImage_->view(),
+		depthImage_->sampler()
+	);
+
+	descriptorSets_[frameIndex].writeCombinedImageSampler(
+		TO_API_FORM(DebugBinding::ShadowMapTex),
+		shadowMapImage_->view(),
+		shadowMapImage_->sampler()
+	);
+
+	descriptorSets_[frameIndex].writeCombinedImageSampler(
+		TO_API_FORM(DebugBinding::RTDepthTex),
+		rtDepthImage_->view(),
+		rtDepthImage_->sampler()
+	);
+} // end of updateDescriptorSet()
+
 
 //--- PRIVATE ---//
 void DebugPassVk::refreshInputs()
@@ -146,26 +162,26 @@ void DebugPassVk::refreshInputs()
 	{
 		descriptorSets_[i].writeCombinedImageSampler(
 			TO_API_FORM(DebugBinding::GNormalTex),
-			normalImage_.view(),
-			normalImage_.sampler()
+			normalImage_->view(),
+			normalImage_->sampler()
 		);
 
 		descriptorSets_[i].writeCombinedImageSampler(
 			TO_API_FORM(DebugBinding::GDepthTex),
-			depthImage_.view(),
-			depthImage_.sampler()
+			depthImage_->view(),
+			depthImage_->sampler()
 		);
 
 		descriptorSets_[i].writeCombinedImageSampler(
 			TO_API_FORM(DebugBinding::ShadowMapTex),
-			shadowMapImage_.view(),
-			shadowMapImage_.sampler()
+			shadowMapImage_->view(),
+			shadowMapImage_->sampler()
 		);
 
 		descriptorSets_[i].writeCombinedImageSampler(
 			TO_API_FORM(DebugBinding::RTDepthTex),
-			rtDepthImage_.view(),
-			rtDepthImage_.sampler()
+			rtDepthImage_->view(),
+			rtDepthImage_->sampler()
 		);
 	} // end for
 } // end of refreshInputs()
@@ -263,29 +279,29 @@ void DebugPassVk::createDescriptorSets()
 			sizeof(DebugPassUBO)
 		);
 
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(DebugBinding::GNormalTex),
-			normalImage_.view(),
-			normalImage_.sampler()
-		);
+		//descriptorSets_[i].writeCombinedImageSampler(
+		//	TO_API_FORM(DebugBinding::GNormalTex),
+		//	normalImage_.view(),
+		//	normalImage_.sampler()
+		//);
 
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(DebugBinding::GDepthTex),
-			depthImage_.view(),
-			depthImage_.sampler()
-		);
+		//descriptorSets_[i].writeCombinedImageSampler(
+		//	TO_API_FORM(DebugBinding::GDepthTex),
+		//	depthImage_.view(),
+		//	depthImage_.sampler()
+		//);
 
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(DebugBinding::ShadowMapTex),
-			shadowMapImage_.view(),
-			shadowMapImage_.sampler()
-		);
+		//descriptorSets_[i].writeCombinedImageSampler(
+		//	TO_API_FORM(DebugBinding::ShadowMapTex),
+		//	shadowMapImage_.view(),
+		//	shadowMapImage_.sampler()
+		//);
 
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(DebugBinding::RTDepthTex),
-			rtDepthImage_.view(),
-			rtDepthImage_.sampler()
-		);
+		//descriptorSets_[i].writeCombinedImageSampler(
+		//	TO_API_FORM(DebugBinding::RTDepthTex),
+		//	rtDepthImage_.view(),
+		//	rtDepthImage_.sampler()
+		//);
 	} 
 } // end of createDescriptorSets()
 

@@ -38,9 +38,8 @@ void main()
     vec3 origin = ubo.u_cameraPos.xyz;
 
     payload.color    = vec3(0.0);
-    payload.depth    = 1e30;
-    payload.shadowed = 0;
-    payload.rayType  = 0; // primary
+    payload.depth    = 0;
+    payload.rayType  = PRIMARY_RAY;
     
     traceRayEXT(
         topLevelAS,

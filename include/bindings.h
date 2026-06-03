@@ -18,6 +18,15 @@ enum class RTAORayGenBinding : uint32_t
     DepthTex = 4,
 };
 
+enum class RTShadowRayGenBinding : uint32_t
+{
+    OutColorImage = 0,
+    TLAS = 1,
+    UBO = 2,
+    NormalTex = 3,
+    DepthTex = 4,
+};
+
 enum class RTChunkRayGenBinding : uint32_t
 {
     OutColorImage = 0,
@@ -38,6 +47,7 @@ enum class RTOpaqueClosestHitBinding : uint32_t
     UBO = 2,
     AtlasTex = 3,
     RTAOTex = 4,
+    RTShadowTex = 5,
 };
 enum class RTWaterClosestHitBinding : uint32_t
 {
@@ -46,6 +56,7 @@ enum class RTWaterClosestHitBinding : uint32_t
     UBO = 2,
     DudvTex = 3,
     NormalTex = 4,
+    RTShadowTex = 5,
 };
 
 enum class ChunkBinding : uint32_t

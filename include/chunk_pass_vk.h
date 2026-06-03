@@ -23,6 +23,13 @@ struct RenderSettings;
 struct DrawContext;
 struct FrameContext;
 
+struct ChunkPassUBOs
+{
+	Chunk_Constants::ChunkOpaqueUBO chunkUBOData{};
+	Gbuffer_Constants::GbufferUBO gbufferUBOData{};
+	Shadow_Map_Constants::ShadowMapPassUBO shadowUBOData{};
+};
+
 class ChunkPassVk
 {
 public:

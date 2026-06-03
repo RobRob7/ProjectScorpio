@@ -35,7 +35,7 @@ layout(buffer_reference, scalar) readonly buffer IndexBufferRef
     uint indices[];
 };
 
-layout(set = 2, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 2, binding = 0) uniform accelerationStructureEXT TopLevelAS;
 
 layout(set = 2, binding = 1, scalar) readonly buffer ChunkInfoBuffer
 {
@@ -50,8 +50,9 @@ layout(set = 2, binding = 2) uniform UBO
     float u_ambStr;
 } ubo;
 
-layout(set = 2, binding = 3) uniform sampler2D u_atlasTex;
+layout(set = 2, binding = 3) uniform sampler2D AtlasTex;
 layout(set = 2, binding = 4) uniform sampler2D RTAOTex;
+layout(set = 2, binding = 5) uniform sampler2D RTShadowTex;
 
 // ------------------------------------------------------------
 // Constants
@@ -89,12 +90,12 @@ vec2 atlasUV(uvec2 tile, vec2 local01)
 
 void main()
 {
-    // shadow ray
-    if (payload.rayType == 1)
-    {
-        payload.shadowed = 1;
-        return;
-    }
+//    // shadow ray
+//    if (payload.rayType == 1)
+//    {
+//        payload.shadowed = 1;
+//        return;
+//    }
 
     payload.depth = gl_HitTEXT;
 
@@ -146,6 +147,9 @@ void main()
         v1.normal.xyz * bary.y +
         v2.normal.xyz * bary.z
     );
+    
+//    payload.color = normal * 0.5 + 0.5;
+//    return;
 
     vec2 tiled;
     if (abs(normal.x) > 0.9)
@@ -160,33 +164,17 @@ void main()
     uvec2 tile = uvec2(v0.tileData.xy);
     vec2 uv = atlasUV(tile, local);
 
-    vec4 texColor = texture(u_atlasTex, uv);
+    vec4 texColor = texture(AtlasTex, uv);
 
-    vec3 lightDir = normalize(-ubo.u_lightDir.xyz);
-    float ndotl = max(dot(normal, lightDir) , 0.0);
-
-    vec3 shadowOrigin = worldHitPos + normal * 0.01;
-
-    payload.shadowed = 0;
-    payload.rayType = 1;
-
-    traceRayEXT(
-        topLevelAS,
-        gl_RayFlagsTerminateOnFirstHitEXT,
-        0xFF,
-        0, 0, 0,
-        shadowOrigin,
-        0.001,
-        lightDir,
-        10000.0,
-        0
-    );
-
-    float shadow = (payload.shadowed != 0) ? 0.0 : 1.0;
+    vec3 lightdir = normalize(-ubo.u_lightDir.xyz);
+    float ndotl = max(dot(normal, lightdir) , 0.0);
 
     vec2 screenUV = (vec2(gl_LaunchIDEXT.xy) + 0.5) / vec2(gl_LaunchSizeEXT.xy);
+    // AO
     float ao = texture(RTAOTex, screenUV).r;
     float aoDirect = mix(1.0, ao, 0.5);
+    // shadow
+    float shadow = texture(RTShadowTex, screenUV).r;
 
     payload.rayType = 0;
 
