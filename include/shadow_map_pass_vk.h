@@ -23,6 +23,13 @@ public:
 
 	void init();
 
+	void renderBegin(
+		const RenderInputs& in,
+		const FrameContext& frame
+	);
+
+	void renderEnd(const FrameContext& frame);
+
 	void render(
 		ChunkPassVk& chunk,
 		const RenderInputs& in,

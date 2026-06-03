@@ -14,8 +14,6 @@
 #include "ray_tracing_pipeline_vk.h"
 #include "acceleration_structure_vk.h"
 
-#include <glm/glm.hpp>
-
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -25,6 +23,14 @@ class RayTracingShaderModuleVk;
 struct FrameContext;
 struct RenderInputs;
 struct ChunkDrawList;
+
+struct RayTracingWorldPassUBOs
+{
+	RT_Chunk_Constants::RayGenUBO rayGenData{};
+	RT_Chunk_Constants::MissUBO missData{};
+	RT_Chunk_Constants::ClosestHitUBO closestHitOpaqueData{};
+	RT_Water_Constants::ClosestHitUBO closestHitWaterData{};
+};
 
 class RayTracingWorldPassVk
 {
@@ -43,11 +49,8 @@ public:
 	void resize();
 
 	void render(
-		const RenderInputs& in, 
 		const FrameContext& frame,
-		const glm::mat4& view,
-		const glm::mat4& proj,
-		const glm::vec3& sunDir
+		const RayTracingWorldPassUBOs& ubo
 	);
 
 	void setSkybox(
@@ -61,6 +64,11 @@ public:
 	void setRTAOTexture(ImageVk& rtaoTex)
 	{
 		rtaoTex_ = &rtaoTex;
+	} // end of setRTAOTexture()
+
+	void setRTShadowTexture(ImageVk& rtShadowTex)
+	{
+		rtShadowTex_ = &rtShadowTex;
 	} // end of setRTAOTexture()
 
 	const ImageVk& getOutColorImage() const { return outColorImage_; }
@@ -85,6 +93,7 @@ private:
 	const std::vector<vk::DeviceSize>& packedRTWaterInfoBufferSize_;
 
 	ImageVk* rtaoTex_{ nullptr };
+	ImageVk* rtShadowTex_{ nullptr };
 
 	int factor_{ 1 };
 	uint32_t width_{};
@@ -101,15 +110,10 @@ private:
 
 	std::unique_ptr<RayTracingShaderModuleVk> shader_;
 
-	// UBOs
 	std::vector<BufferVk> rayGenUBOs_;
-	RT_Chunk_Constants::RayGenUBO rayGenData_{};
 	std::vector<BufferVk> missUBOs_;
-	RT_Chunk_Constants::MissUBO missData_{};
 	std::vector<BufferVk> closestHitOpaqueUBOs_;
-	RT_Chunk_Constants::ClosestHitUBO closestHitOpaqueData_{};
 	std::vector<BufferVk> closestHitWaterUBOs_;
-	RT_Water_Constants::ClosestHitUBO closestHitWaterData_{};
 
 	std::vector<DescriptorSetVk> rayGenDescriptorSets_;
 	std::vector<DescriptorSetVk> missDescriptorSets_;

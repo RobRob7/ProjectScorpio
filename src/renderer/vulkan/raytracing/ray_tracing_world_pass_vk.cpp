@@ -7,15 +7,10 @@
 #include "chunk_draw_list.h"
 #include "chunk_mesh_gpu_vk.h"
 
-#include "camera.h"
-#include "light_vk.h"
-
 #include "vulkan_main.h"
 #include "frame_context_vk.h"
 
 #include "ray_tracing_shader_vk.h"
-
-#include <glm/glm.hpp>
 
 #include <vector>
 #include <algorithm>
@@ -124,16 +119,14 @@ void RayTracingWorldPassVk::resize()
 } // end of resize()
 
 void RayTracingWorldPassVk::render(
-	const RenderInputs& in,
 	const FrameContext& frame,
-	const glm::mat4& view,
-	const glm::mat4& proj,
-	const glm::vec3& sunDir
+	const RayTracingWorldPassUBOs& ubos
 )
 {
 	if (!outColorImage_.valid() ||
 		!outDepthImage_.valid() ||
-		!rtaoTex_->valid()
+		!rtaoTex_ || !rtaoTex_->valid() ||
+		!tlas_[frame.frameIndex].valid()
 		)
 	{
 		return;
@@ -168,30 +161,10 @@ void RayTracingWorldPassVk::render(
 		nullptr
 	);
 
-	rayGenData_.u_invView = glm::inverse(view);
-	rayGenData_.u_invProj = glm::inverse(proj);
-	rayGenData_.u_view = view;
-	rayGenData_.u_proj = proj;
-	rayGenData_.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
-	rayGenUBOs_[frame.frameIndex].upload(&rayGenData_, sizeof(rayGenData_));
-
-	missData_.u_mix = glm::vec4(
-			glm::clamp((sunDir.y + 0.15f) / 0.30f, 0.0f, 1.0f),
-			0.0f,
-			0.0f,
-			0.0f
-		);
-	missUBOs_[frame.frameIndex].upload(&missData_, sizeof(missData_));
-
-	closestHitOpaqueData_.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f);
-	closestHitOpaqueData_.u_lightColor = glm::vec4(in.light->getLightColor(), 0.0f);
-	closestHitOpaqueData_.u_ambStr = in.world->getAmbientStrength();
-	closestHitOpaqueUBOs_[frame.frameIndex].upload(&closestHitOpaqueData_, sizeof(closestHitOpaqueData_));
-	
-	closestHitWaterData_.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f);
-	closestHitWaterData_.u_lightColor = glm::vec4(in.light->getLightColor(), 0.0f);
-	closestHitWaterData_.u_time = in.time;
-	closestHitWaterUBOs_[frame.frameIndex].upload(&closestHitWaterData_, sizeof(closestHitWaterData_));
+	rayGenUBOs_[frame.frameIndex].upload(&ubos.rayGenData, sizeof(ubos.rayGenData));
+	missUBOs_[frame.frameIndex].upload(&ubos.missData, sizeof(ubos.missData));
+	closestHitOpaqueUBOs_[frame.frameIndex].upload(&ubos.closestHitOpaqueData, sizeof(ubos.closestHitOpaqueData));
+	closestHitWaterUBOs_[frame.frameIndex].upload(&ubos.closestHitWaterData, sizeof(ubos.closestHitWaterData));
 
 	cmd.traceRaysKHR(
 		&sbt_.rayGenRegion(),
@@ -338,6 +311,15 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 				rtaoTex_->sampler()
 			);
 		}
+
+		if (rtShadowTex_ && rtShadowTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(RTOpaqueClosestHitBinding::RTShadowTex),
+				rtShadowTex_->view(),
+				rtShadowTex_->sampler()
+			);
+		}
 	}
 
 	// CLOSEST HIT SET (WATER)
@@ -386,6 +368,15 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 			normalTex_.view(),
 			normalTex_.sampler()
 		);
+
+		if (rtShadowTex_ && rtShadowTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(RTWaterClosestHitBinding::RTShadowTex),
+				rtShadowTex_->view(),
+				rtShadowTex_->sampler()
+			);
+		}
 	}
 } // end of updateDescriptorSet()
 
@@ -556,7 +547,7 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			rayGenDescriptorSets_[i].allocate();
 
 			rayGenDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk-RayGen::DescriptorSet frame " + std::to_string(i)
+				"RayTracingWorldPassVk-RayGen::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 
@@ -606,7 +597,7 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			missDescriptorSets_[i].allocate();
 
 			missDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk-Miss::DescriptorSet frame " + std::to_string(i)
+				"RayTracingWorldPassVk-Miss::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 
@@ -644,12 +635,19 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			rtaoTexBinding.descriptorCount = 1;
 			rtaoTexBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR;
 
+			vk::DescriptorSetLayoutBinding rtShadowTexBinding{};
+			rtShadowTexBinding.binding = TO_API_FORM(RTOpaqueClosestHitBinding::RTShadowTex);
+			rtShadowTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+			rtShadowTexBinding.descriptorCount = 1;
+			rtShadowTexBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR;
+
 			closestHitOpaqueDescriptorSets_[i].createLayout({
 				tlasBinding,
 				chunkInfoBinding,
 				uboBinding,
 				atlasBinding,
-				rtaoTexBinding
+				rtaoTexBinding,
+				rtShadowTexBinding
 			});
 
 			vk::DescriptorPoolSize tlasPool{};
@@ -672,17 +670,22 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			rtaoTexPool.type = vk::DescriptorType::eCombinedImageSampler;
 			rtaoTexPool.descriptorCount = 1;
 
+			vk::DescriptorPoolSize rtShadowTexPool{};
+			rtShadowTexPool.type = vk::DescriptorType::eCombinedImageSampler;
+			rtShadowTexPool.descriptorCount = 1;
+
 			closestHitOpaqueDescriptorSets_[i].createPool({
 				tlasPool,
 				chunkInfoPool,
 				uboPool,
 				atlasPool,
-				rtaoTexPool
+				rtaoTexPool,
+				rtShadowTexPool
 			});
 			closestHitOpaqueDescriptorSets_[i].allocate();
 
 			closestHitOpaqueDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk-ClosestHitOpaque::DescriptorSet frame " + std::to_string(i)
+				"RayTracingWorldPassVk-ClosestHitOpaque::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 
@@ -718,12 +721,19 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			normalBinding.descriptorCount = 1;
 			normalBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR;
 
+			vk::DescriptorSetLayoutBinding rtShadowTexBinding{};
+			rtShadowTexBinding.binding = TO_API_FORM(RTWaterClosestHitBinding::RTShadowTex);
+			rtShadowTexBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+			rtShadowTexBinding.descriptorCount = 1;
+			rtShadowTexBinding.stageFlags = vk::ShaderStageFlagBits::eClosestHitKHR;
+
 			closestHitWaterDescriptorSets_[i].createLayout({
 				tlasBinding,
 				waterInfoBinding,
 				uboBinding,
 				dudvBinding,
-				normalBinding
+				normalBinding,
+				rtShadowTexBinding
 			});
 
 			vk::DescriptorPoolSize tlasPool{};
@@ -746,17 +756,22 @@ void RayTracingWorldPassVk::createDescriptorSet()
 			normalPool.type = vk::DescriptorType::eCombinedImageSampler;
 			normalPool.descriptorCount = 1;
 
+			vk::DescriptorPoolSize rtShadowTexPool{};
+			rtShadowTexPool.type = vk::DescriptorType::eCombinedImageSampler;
+			rtShadowTexPool.descriptorCount = 1;
+
 			closestHitWaterDescriptorSets_[i].createPool({
 				tlasPool,
 				waterInfoPool,
 				uboPool,
 				dudvPool,
-				normalPool
+				normalPool,
+				rtShadowTexPool
 			});
 			closestHitWaterDescriptorSets_[i].allocate();
 
 			closestHitWaterDescriptorSets_[i].setDebugName(
-				"RTChunkPassVk-ClosestHitWater::DescriptorSet frame " + std::to_string(i)
+				"RayTracingWorldPassVk-ClosestHitWater::DescriptorSet frame " + std::to_string(i)
 			);
 		}
 	} // end for

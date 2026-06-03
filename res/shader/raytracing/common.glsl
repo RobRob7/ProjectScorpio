@@ -12,12 +12,15 @@ struct RayPayload
     int rayType;
     vec3 color;
     float depth;
-    int shadowed;
 };
 
 struct RTAOPayload
 {
     bool occluded;
+};
+struct RTShadowPayload
+{
+    bool shadowed;
 };
 
 #endif

@@ -22,6 +22,7 @@
 
 #include "ray_tracing_world_vk.h"
 #include "rtao_pass_vk.h"
+#include "rt_shadow_pass_vk.h"
 #include "ray_tracing_world_pass_vk.h"
 
 #include "gbuffer_pass_vk.h"
@@ -69,6 +70,13 @@ void RendererVk::init()
 				rtWorld_->getTLAS()
 			);
 		}
+		if (!rtShadowPass_)
+		{
+			rtShadowPass_ = std::make_unique<RTShadowPassVk>(
+				vk_,
+				rtWorld_->getTLAS()
+			);
+		}
 
 		if (!rtWorldPass_)
 		{
@@ -94,12 +102,12 @@ void RendererVk::init()
 	if (!debugPass_)
 	{
 		debugPass_ = std::make_unique<DebugPassVk>(
-			vk_,
-			gbufferPass_->getNormalImage(),
-			gbufferPass_->getDepthImage(),
-			shadowMapPass_->getDepthImage(),
-			shadowMapPass_->getDepthImage()
-			//rtWorldPass_->getOutDepthImage()
+			vk_
+			//gbufferPass_->getNormalImage(),
+			//gbufferPass_->getDepthImage(),
+			//shadowMapPass_->getDepthImage(),
+			//shadowMapPass_->getDepthImage()
+			////rtWorldPass_->getOutDepthImage()
 		);
 	}
 	if (!ssaoPass_)
@@ -156,6 +164,10 @@ void RendererVk::init()
 	{
 		rtaoPass_->init();
 	}
+	if (rtShadowPass_)
+	{
+		rtShadowPass_->init();
+	}
 	if (rtWorldPass_)
 	{
 		rtWorldPass_->init();
@@ -194,6 +206,7 @@ void RendererVk::resize(int w, int h)
 	height_ = h;
 
 	if (rtaoPass_)		rtaoPass_->resize();
+	if (rtShadowPass_)	rtShadowPass_->resize();
 	if (rtWorldPass_)	rtWorldPass_->resize();
 
 	if (gbufferPass_)	gbufferPass_->resize();
@@ -279,6 +292,14 @@ void RendererVk::renderFrame(
 			);
 			rtaoPass_->updateDescriptorSet(frame.frameIndex);
 		}
+		if (rtShadowPass_)
+		{
+			rtShadowPass_->setInput(
+				gbufferPass_->getNormalImage(),
+				gbufferPass_->getDepthImage()
+			);
+			rtShadowPass_->updateDescriptorSet(frame.frameIndex);
+		}
 	}
 
 	// RTAO pass
@@ -290,6 +311,24 @@ void RendererVk::renderFrame(
 		ubo.u_AORadius = renderSettings_->aoSettings.radius;
 
 		rtaoPass_->render(
+			ubo,
+			in,
+			frame,
+			view,
+			proj
+		);
+	}
+
+	// RT shadow pass
+	if (rtShadowPass_)
+	{
+		RTShadow_Constants::RayGenUBO ubo{};
+		ubo.u_useRTShadows = renderSettings_->useRTShadow ? 1 : 0;
+		ubo.u_lightDir = in.light->getDirection();
+		ubo.u_invView = glm::inverse(view);
+		ubo.u_invViewProj = glm::inverse(proj * view);
+
+		rtShadowPass_->render(
 			ubo,
 			in,
 			frame,
@@ -342,12 +381,22 @@ void RendererVk::renderFrame(
 	// debug pass
 	if (renderSettings_->debugMode != DebugMode::None)
 	{
-		debugPass_->render(
-			frame,
-			in.camera->getNearPlane(),
-			in.camera->getFarPlane(),
-			static_cast<int>(renderSettings_->debugMode)
-		);
+		//debugPass_->setInput(
+		//	rtShadowPass_->getOutColorImage(),
+		//	//gbufferPass_->getNormalImage(),
+		//	gbufferPass_->getDepthImage(),
+		//	shadowMapPass_->getDepthImage(),
+		//	//shadowMapPass_->getDepthImage()
+		//	rtWorldPass_->getOutDepthImage()
+		//);
+		//debugPass_->updateDescriptorSet(frame.frameIndex);
+
+		//debugPass_->render(
+		//	frame,
+		//	in.camera->getNearPlane(),
+		//	in.camera->getFarPlane(),
+		//	static_cast<int>(renderSettings_->debugMode)
+		//);
 
 		if (ui)
 		{
@@ -468,15 +517,34 @@ void RendererVk::renderFrame(
 			skybox->getDayTexture()
 		);
 		rtWorldPass_->setRTAOTexture(rtaoPass_->getOutColorImage());
+		rtWorldPass_->setRTShadowTexture(rtShadowPass_->getOutColorImage());
 
 		rtWorldPass_->updateDescriptorSet(frame.frameIndex);
-		rtWorldPass_->render(
-			in,
-			frame,
-			view,
-			proj,
-			in.light->getDirection()
-		);
+
+		RayTracingWorldPassUBOs ubos
+		{
+			.rayGenData = {
+				.u_invView = glm::inverse(view),
+				.u_invProj = glm::inverse(proj),
+				.u_view = view,
+				.u_proj = proj,
+				.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f)
+			},
+			.missData = {
+				.u_mix = glm::vec4(glm::clamp((in.light->getDirection().y + 0.15f) / 0.30f, 0.0f, 1.0f), 1.0f, 1.0f, 1.0f)
+			},
+			.closestHitOpaqueData = {
+				.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f),
+				.u_lightColor = glm::vec4(in.light->getLightColor(), 0.0f),
+				.u_ambStr = in.world->getAmbientStrength()
+			},
+			.closestHitWaterData = {
+				.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f),
+				.u_lightColor = glm::vec4(in.light->getLightColor(), 0.0f),
+				.u_time = in.time
+			}
+		};
+		rtWorldPass_->render(frame, ubos);
 	}
 	// --------------- END FORWARD RENDER --------------- //
 

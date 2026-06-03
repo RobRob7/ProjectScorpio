@@ -1,0 +1,72 @@
+#version 460 core
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : require
+
+#include "../common.glsl"
+#include "../../helper.glsl"
+
+layout(location = 0) rayPayloadEXT RTShadowPayload payload;
+
+layout(set = 0, binding = 0, rgba16f) uniform image2D OutColorImage;
+layout(set = 0, binding = 1) uniform accelerationStructureEXT TopLevelAS;
+layout(set = 0, binding = 2) uniform UBO
+{
+	mat4 u_invView;
+	mat4 u_invViewProj;
+
+    vec3 u_lightDir;
+    int u_useRTShadows;
+} ubo;
+layout(set = 0, binding = 3) uniform sampler2D NormalTex;
+layout(set = 0, binding = 4) uniform sampler2D DepthTex;
+
+
+void main()
+{
+
+    ivec2 pixel = ivec2(gl_LaunchIDEXT.xy);
+    ivec2 size = ivec2(gl_LaunchSizeEXT.xy);
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(size);
+
+    if (ubo.u_useRTShadows == 0)
+    {
+        imageStore(OutColorImage, pixel, vec4(1.0));
+        return;
+    }
+
+    float depth = texture(DepthTex, uv).r;
+    if (depth >= 0.999999)
+    {
+        imageStore(OutColorImage, pixel, vec4(1.0));
+        return;
+    }
+
+    vec3 normalVS = normalize(texture(NormalTex, uv).xyz);
+    vec3 normal = normalize((ubo.u_invView * vec4(normalVS, 0.0)).xyz);
+
+    vec3 worldHitPos = ReconstructWorldPos(uv, depth, ubo.u_invViewProj);
+
+    vec3 lightDir = normalize(-ubo.u_lightDir);
+    float ndotl = abs(dot(normal, normalize(-ubo.u_lightDir)));
+    float bias = mix(0.08, 0.015, ndotl);
+
+    vec3 shadowOrigin = worldHitPos + normal * bias;
+
+    payload.shadowed = false;
+
+    traceRayEXT(
+        TopLevelAS,
+        gl_RayFlagsTerminateOnFirstHitEXT |
+        gl_RayFlagsSkipClosestHitShaderEXT,
+        0x01,
+        0, 0, 0,
+        shadowOrigin,
+        0.001,
+        lightDir,
+        10000.0,
+        0
+    );
+
+    float shadow = (payload.shadowed) ? 0.0 : 1.0;
+    imageStore(OutColorImage, pixel, vec4(vec3(shadow), 1.0));
+}

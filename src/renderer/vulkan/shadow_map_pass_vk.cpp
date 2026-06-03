@@ -29,6 +29,70 @@ void ShadowMapPassVk::init()
 	createAttachments();
 } // end of init()
 
+void ShadowMapPassVk::renderBegin(
+	const RenderInputs& in,
+	const FrameContext& frame
+)
+{
+	vk::CommandBuffer cmd = frame.cmd;
+	vk::Extent2D extent = vk::Extent2D{ width_, height_ };
+
+	cmd.beginDebugUtilsLabelEXT({ "ShadowMapPassVk::cmd" });
+
+	depthImage_.transitionToDepthAttachment(cmd);
+
+	vk::RenderingAttachmentInfo depthAttachment{};
+	depthAttachment.imageView = depthImage_.view();
+	depthAttachment.imageLayout = vk::ImageLayout::eDepthAttachmentOptimal;
+	depthAttachment.loadOp = vk::AttachmentLoadOp::eClear;
+	depthAttachment.storeOp = vk::AttachmentStoreOp::eStore;
+	depthAttachment.clearValue.depthStencil = vk::ClearDepthStencilValue{ 1.0f, 0 };
+
+	vk::RenderingInfo renderingInfo{};
+	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
+	renderingInfo.renderArea.extent = extent;
+	renderingInfo.layerCount = 1;
+	renderingInfo.pDepthAttachment = &depthAttachment;
+
+	cmd.beginRendering(renderingInfo);
+
+	vk::Viewport viewport{};
+	viewport.x = 0.0f;
+	viewport.y = 0.0f;
+	viewport.width = static_cast<float>(width_);
+	viewport.height = static_cast<float>(height_);
+	viewport.minDepth = 0.0f;
+	viewport.maxDepth = 1.0f;
+	cmd.setViewport(0, 1, &viewport);
+
+	vk::Rect2D scissor{};
+	scissor.offset = vk::Offset2D{ 0, 0 };
+	scissor.extent = extent;
+	cmd.setScissor(0, 1, &scissor);
+
+	// configure light space transform
+	glm::vec3 minWS, maxWS;
+	if (!in.world->buildVisibleChunkBounds(minWS, maxWS))
+	{
+		cmd.endRendering();
+
+		depthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+		cmd.endDebugUtilsLabelEXT();
+		return;
+	}
+	buildLightSpaceBounds(in, minWS, maxWS);
+} // end of renderBegin()
+
+void ShadowMapPassVk::renderEnd(const FrameContext& frame)
+{
+	vk::CommandBuffer cmd = frame.cmd;
+	cmd.endRendering();
+
+	depthImage_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+
+	cmd.endDebugUtilsLabelEXT();
+} // end of renderEnd()
+
 void ShadowMapPassVk::render(
 	ChunkPassVk& chunk,
 	const RenderInputs& in,

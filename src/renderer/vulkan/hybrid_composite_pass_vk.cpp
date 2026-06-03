@@ -54,8 +54,10 @@ void HybridCompositePassVk::render(
     float farPlane
 )
 {
-    if (!rasterColor_ || !rasterDepth_ ||
-        !rtColor_ || !rtDepth_ ||
+    if (!rasterColor_ || 
+        !rasterDepth_ ||
+        !rtColor_ || !rtColor_->valid() ||
+        !rtDepth_ || !rtDepth_->valid() ||
         !pipeline_.valid())
     {
         return;

@@ -17,13 +17,7 @@ class ImageVk;
 class DebugPassVk
 {
 public:
-	DebugPassVk(
-		VulkanMain& vk,
-		const ImageVk& normalImage,
-		const ImageVk& depthImage,
-		const ImageVk& shadowMapImage,
-		const ImageVk& rtDepthImage
-	);
+	DebugPassVk(VulkanMain& vk);
 	~DebugPassVk();
 
 	void init();
@@ -36,6 +30,21 @@ public:
 		int mode
 	);
 
+	void updateDescriptorSet(uint32_t frameIndex);
+
+	void setInput(
+		ImageVk& normalTex,
+		ImageVk& depthTex,
+		ImageVk& shadowMapTex,
+		ImageVk& rtDepthTex
+	)
+	{
+		normalImage_ = &normalTex;
+		depthImage_ = &depthTex;
+		shadowMapImage_ = &shadowMapTex;
+		rtDepthImage_ = &rtDepthTex;
+	} // end of setInput()
+
 private:
 	void refreshInputs();
 	void createResources();
@@ -44,10 +53,10 @@ private:
 private:
 	VulkanMain& vk_;
 
-	const ImageVk& normalImage_;
-	const ImageVk& depthImage_;
-	const ImageVk& shadowMapImage_;
-	const ImageVk& rtDepthImage_;
+	ImageVk* normalImage_{ nullptr };
+	ImageVk* depthImage_{ nullptr };
+	ImageVk* shadowMapImage_{ nullptr };
+	ImageVk* rtDepthImage_{ nullptr };
 	
 	std::unique_ptr<ShaderModuleVk> shader_;
 

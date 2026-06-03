@@ -16,13 +16,6 @@ layout(set = 1, binding = 2) uniform samplerCube u_daySkyboxTex;
 
 void main()
 {
-    // shadow miss - light is visible
-    if (payload.rayType == 1)
-    {
-        payload.shadowed = 0;
-        return;
-    }
-
     vec3 dir = normalize(gl_WorldRayDirectionEXT);
 
     vec3 nightTex = texture(u_nightSkyboxTex, dir).rgb;
@@ -30,8 +23,6 @@ void main()
 
     vec3 skyColor = mix(dayTex, nightTex, u_mix.x);
     
-    // primary miss
     payload.color = skyColor;
-
     payload.depth = 1e30;
 }

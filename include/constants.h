@@ -218,6 +218,18 @@ namespace RTAO_Constants
 	};
 };
 
+namespace RTShadow_Constants
+{
+	struct RayGenUBO
+	{
+		glm::mat4 u_invView;
+		glm::mat4 u_invViewProj;
+
+		glm::vec3 u_lightDir;
+		int u_useRTShadows;
+	};
+};
+
 namespace RT_Water_Constants
 {
 	struct ClosestHitUBO

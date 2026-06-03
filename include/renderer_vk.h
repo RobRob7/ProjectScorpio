@@ -17,6 +17,7 @@ struct ChunkDrawList;
 class ChunkMeshGPUVk;
 class RayTracingWorldVk;
 class RTAOPassVk;
+class RTShadowPassVk;
 class RayTracingWorldPassVk;
 
 class GBufferPassVk;
@@ -79,6 +80,7 @@ private:
 
 	std::unique_ptr<RayTracingWorldVk> rtWorld_;
 	std::unique_ptr<RTAOPassVk> rtaoPass_;
+	std::unique_ptr<RTShadowPassVk> rtShadowPass_;
 	std::unique_ptr<RayTracingWorldPassVk> rtWorldPass_;
 
 	std::unique_ptr<HybridCompositePassVk> compositePassHybrid_;
