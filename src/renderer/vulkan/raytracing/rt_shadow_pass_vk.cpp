@@ -25,7 +25,7 @@ RTShadowPassVk::RTShadowPassVk(
 	pipeline_(vk),
 	sbt_(vk)
 {
-	factor_ = rs_.resScale.RT_SHADOW;
+	factor_ = std::max(1u, rs_.resScale.RT_SHADOW);
 
 	rayGenUBOs_.reserve(vk_.getMaxFramesInFlight());
 	rayGenDescriptorSets_.reserve(vk_.getMaxFramesInFlight());
@@ -42,8 +42,8 @@ RTShadowPassVk::~RTShadowPassVk() = default;
 void RTShadowPassVk::init()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
-	width_ = extent.width / factor_;
-	height_ = extent.height / factor_;
+	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
 
 	shader_ = std::make_unique<RayTracingShaderModuleVk>(
 		vk_.getDevice(),
@@ -67,15 +67,24 @@ void RTShadowPassVk::init()
 void RTShadowPassVk::resize()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
-	width_ = extent.width / factor_;
-	height_ = extent.height / factor_;
+	if (extent.width <= 0 || extent.height <= 0) return;
+
+	uint32_t newWidth = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	uint32_t newHeight = std::max(1u, (extent.height + factor_ - 1) / factor_);
+
+	if (newWidth == width_ && newHeight == height_)
+		return;
+
+	width_ = newWidth;
+	height_ = newHeight;
+
+	const uint32_t retireFrame = vk_.getPrevFrameIndex();
+
+	vk_.retireImage(retireFrame, std::move(outColorImage_));
+	outColorImage_ = ImageVk(vk_);
 
 	createOutputImage();
-
-	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
-	{
-		updateDescriptorSet(i);
-	} // end for
+	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void RTShadowPassVk::render(
@@ -83,6 +92,8 @@ void RTShadowPassVk::render(
 	const FrameContext& frame
 )
 {
+	syncSettings();
+
 	if (!outColorImage_.valid()||
 		!tlas_[frame.frameIndex].valid() ||
 		!normalTex_->valid() ||
@@ -90,6 +101,8 @@ void RTShadowPassVk::render(
 	{
 		return;
 	}
+
+	updateDescriptorSet(frame.frameIndex);
 
 	vk::CommandBuffer cmd = frame.cmd;
 
@@ -135,6 +148,17 @@ void RTShadowPassVk::render(
 
 
 //--- PRIVATE ---//
+void RTShadowPassVk::syncSettings()
+{
+	uint32_t newFactor = std::max(1u, rs_.resScale.RT_SHADOW);
+
+	if (newFactor == factor_)
+		return;
+
+	factor_ = newFactor;
+	resize();
+} // end of syncSettings()
+
 void RTShadowPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
 	// RAYGEN SET

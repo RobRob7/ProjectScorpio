@@ -42,7 +42,7 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(
 	pipeline_(vk),
 	sbt_(vk)
 {
-	factor_ = rs_.resScale.RT_WORLD;
+	factor_ = std::max(1u, rs_.resScale.RT_WORLD);
 
 	rayGenUBOs_.reserve(vk_.getMaxFramesInFlight());
 	missUBOs_.reserve(vk_.getMaxFramesInFlight());
@@ -73,8 +73,8 @@ RayTracingWorldPassVk::~RayTracingWorldPassVk() = default;
 void RayTracingWorldPassVk::init()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
-	width_ = extent.width / factor_;
-	height_ = extent.height / factor_;
+	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
 
 	shader_ = std::make_unique<RayTracingShaderModuleVk>(
 		vk_.getDevice(),
@@ -111,24 +111,36 @@ void RayTracingWorldPassVk::init()
 void RayTracingWorldPassVk::resize()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
-	width_ = extent.width / factor_;
-	height_ = extent.height / factor_;
+	if (extent.width <= 0 || extent.height <= 0) return;
 
-	outColorImage_.destroy();
-	outDepthImage_.destroy();
+	uint32_t newWidth = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	uint32_t newHeight = std::max(1u, (extent.height + factor_ - 1) / factor_);
+
+	if (newWidth == width_ && newHeight == height_)
+		return;
+
+	width_ = newWidth;
+	height_ = newHeight;
+
+	const uint32_t retireFrame = vk_.getPrevFrameIndex();
+
+	vk_.retireImage(retireFrame, std::move(outColorImage_));
+	vk_.retireImage(retireFrame, std::move(outDepthImage_));
+
+	outColorImage_ = ImageVk(vk_);
+	outDepthImage_ = ImageVk(vk_);
+
 	createOutputImages();
-
-	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
-	{
-		updateDescriptorSet(i);
-	} // end for
+	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void RayTracingWorldPassVk::render(
-	const FrameContext& frame,
-	const RayTracingWorldPassUBOs& ubos
+	const RayTracingWorldPassUBOs& ubos,
+	const FrameContext& frame
 )
 {
+	syncSettings();
+
 	if (!outColorImage_.valid() ||
 		!outDepthImage_.valid() ||
 		!rtaoTex_ || !rtaoTex_->valid() ||
@@ -137,6 +149,8 @@ void RayTracingWorldPassVk::render(
 	{
 		return;
 	}
+
+	updateDescriptorSet(frame.frameIndex);
 
 	vk::CommandBuffer cmd = frame.cmd;
 
@@ -188,24 +202,18 @@ void RayTracingWorldPassVk::render(
 	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
-void RayTracingWorldPassVk::setSkybox(
-	uint32_t frameIndex,
-	const TextureCubemapVk& nightTex,
-	const TextureCubemapVk& dayTex
-)
-{
-	missDescriptorSets_[frameIndex].writeCombinedImageSampler(
-		TO_API_FORM(RTChunkMissBinding::NightSkyboxTex),
-		nightTex.view(),
-		nightTex.sampler()
-	);
 
-	missDescriptorSets_[frameIndex].writeCombinedImageSampler(
-		TO_API_FORM(RTChunkMissBinding::DaySkyboxTex),
-		dayTex.view(),
-		dayTex.sampler()
-	);
-} // end of setSkybox()
+//--- PRIVATE ---//
+void RayTracingWorldPassVk::syncSettings()
+{
+	uint32_t newFactor = std::max(1u, rs_.resScale.RT_WORLD);
+
+	if (newFactor == factor_)
+		return;
+
+	factor_ = newFactor;
+	resize();
+} // end of syncSettings()
 
 void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
@@ -261,6 +269,24 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 				TO_API_FORM(RTChunkMissBinding::UBO),
 				missUBOs_[frameIndex].getBuffer(),
 				sizeof(RT_Chunk_Constants::MissUBO)
+			);
+		}
+
+		if (skyboxNightTex_ && skyboxNightTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(RTChunkMissBinding::NightSkyboxTex),
+				skyboxNightTex_->view(),
+				skyboxNightTex_->sampler()
+			);
+		}
+
+		if (skyboxDayTex_ && skyboxDayTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(RTChunkMissBinding::DaySkyboxTex),
+				skyboxDayTex_->view(),
+				skyboxDayTex_->sampler()
 			);
 		}
 	}
@@ -386,8 +412,6 @@ void RayTracingWorldPassVk::updateDescriptorSet(uint32_t frameIndex)
 	}
 } // end of updateDescriptorSet()
 
-
-//--- PRIVATE ---//
 void RayTracingWorldPassVk::createOutputImages()
 {
 	// output color image

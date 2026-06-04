@@ -51,17 +51,18 @@ public:
 	void resize();
 
 	void render(
-		const FrameContext& frame,
-		const RayTracingWorldPassUBOs& ubo
+		const RayTracingWorldPassUBOs& ubo,
+		const FrameContext& frame
 	);
 
-	void setSkybox(
-		uint32_t frameIndex,
-		const TextureCubemapVk& nightTex,
-		const TextureCubemapVk& dayTex
-	);
-
-	void updateDescriptorSet(uint32_t frameIndex);
+	void setSkyboxTextures(
+		TextureCubemapVk& nightTex,
+		TextureCubemapVk& dayTex
+	)
+	{
+		skyboxNightTex_ = &nightTex;
+		skyboxDayTex_ = &dayTex;
+	} // end of setSkyboxTextures()
 
 	void setRTAOTexture(ImageVk& rtaoTex)
 	{
@@ -79,6 +80,8 @@ public:
 	ImageVk& getOutDepthImage() { return outDepthImage_; }
 
 private:
+	void syncSettings();
+	void updateDescriptorSet(uint32_t frameIndex);
 	void createOutputImages();
 	void createResources();
 	void createDescriptorSet();
@@ -95,6 +98,8 @@ private:
 	const std::vector<BufferVk>& packedRTWaterInfoBuffer_;
 	const std::vector<vk::DeviceSize>& packedRTWaterInfoBufferSize_;
 
+	TextureCubemapVk* skyboxNightTex_{ nullptr };
+	TextureCubemapVk* skyboxDayTex_{ nullptr };
 	ImageVk* rtaoTex_{ nullptr };
 	ImageVk* rtShadowTex_{ nullptr };
 
