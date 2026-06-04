@@ -450,12 +450,12 @@ void ChunkManager::buildRTDrawList(
 			continue;
 		}
 
-		// set AABB
-		AABB box = ChunkWorldAABB(chunkX, chunkZ);
-		if (enableFrustumCulling_ && !IntersectsFrustum(box, fr))
-		{
-			continue;
-		}
+		//// set AABB
+		//AABB box = ChunkWorldAABB(chunkX, chunkZ);
+		//if (enableFrustumCulling_ && !IntersectsFrustum(box, fr))
+		//{
+		//	continue;
+		//}
 
 		// chunk/block count
 		frameChunksRendered_++;

@@ -570,7 +570,7 @@ void UI::drawMenuBar(IScene& scene)
 						if (ImGui::SmallButton("+##RTWorld"))
 						{
 							renderSettings_.resScale.RT_WORLD =
-								std::min(6u, renderSettings_.resScale.RT_WORLD + 1);
+								std::min(4u, renderSettings_.resScale.RT_WORLD + 1);
 						}
 					}
 					// RTAO scale
@@ -592,7 +592,7 @@ void UI::drawMenuBar(IScene& scene)
 						if (ImGui::SmallButton("+##RTAO"))
 						{
 							renderSettings_.resScale.RTAO =
-								std::min(6u, renderSettings_.resScale.RTAO + 1);
+								std::min(4u, renderSettings_.resScale.RTAO + 1);
 						}
 					}
 					// RT Shadow scale
@@ -614,7 +614,7 @@ void UI::drawMenuBar(IScene& scene)
 						if (ImGui::SmallButton("+##RTShadow"))
 						{
 							renderSettings_.resScale.RT_SHADOW =
-								std::min(6u, renderSettings_.resScale.RT_SHADOW + 1);
+								std::min(4u, renderSettings_.resScale.RT_SHADOW + 1);
 						}
 					}
 				}
