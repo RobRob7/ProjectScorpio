@@ -24,6 +24,11 @@ struct FrameContext;
 struct RenderInputs;
 struct ChunkDrawList;
 
+struct RTAOPassUBOs
+{
+	RTAO_Constants::RayGenUBO rayGenData{};
+};
+
 class RTAOPassVk
 {
 public:
@@ -37,11 +42,8 @@ public:
 	void resize();
 
 	void render(
-		RTAO_Constants::RayGenUBO& ubo,
-		const RenderInputs& in,
-		const FrameContext& frame,
-		const glm::mat4& view,
-		const glm::mat4& proj
+		const RTAOPassUBOs& ubos,
+		const FrameContext& frame
 	);
 
 	void updateDescriptorSet(uint32_t frameIndex);
@@ -71,7 +73,7 @@ private:
 	ImageVk* normalTex_{ nullptr };
 	ImageVk* depthTex_{ nullptr };
 
-	int factor_{ 2 };
+	int factor_{ 1 };
 	uint32_t width_{};
 	uint32_t height_{};
 
@@ -80,9 +82,7 @@ private:
 
 	std::unique_ptr<RayTracingShaderModuleVk> shader_;
 
-	// UBOs
 	std::vector<BufferVk> rayGenUBOs_;
-	RTAO_Constants::RayGenUBO rayGenData_{};
 
 	std::vector<DescriptorSetVk> rayGenDescriptorSets_;
 

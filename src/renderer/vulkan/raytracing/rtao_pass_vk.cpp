@@ -59,7 +59,7 @@ void RTAOPassVk::init()
 				"",
 				"raytracing/rtao/rtao_anyhit.rahit.spv"
 			}
-	}
+		}
 	);
 
 	createOutputImage();
@@ -84,11 +84,8 @@ void RTAOPassVk::resize()
 } // end of resize()
 
 void RTAOPassVk::render(
-	RTAO_Constants::RayGenUBO& ubo,
-	const RenderInputs& in,
-	const FrameContext& frame,
-	const glm::mat4& view,
-	const glm::mat4& proj
+	const RTAOPassUBOs& ubos,
+	const FrameContext& frame
 )
 {
 	if (!outColorImage_.valid()||
@@ -124,11 +121,7 @@ void RTAOPassVk::render(
 		nullptr
 	);
 
-	ubo.u_invView = glm::inverse(view);
-	ubo.u_invViewProj = glm::inverse(proj * view);
-	ubo.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
-	ubo.u_frameIndex = frame.frameIndex;
-	rayGenUBOs_[frame.frameIndex].upload(&ubo, sizeof(ubo));
+	rayGenUBOs_[frame.frameIndex].upload(&ubos.rayGenData, sizeof(ubos.rayGenData));
 
 	cmd.traceRaysKHR(
 		&sbt_.rayGenRegion(),

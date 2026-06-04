@@ -305,18 +305,17 @@ void RendererVk::renderFrame(
 	// RTAO pass
 	if (rtaoPass_)
 	{
-		RTAO_Constants::RayGenUBO ubo{};
-		ubo.u_useRTAO = renderSettings_->useRTAO ? 1 : 0;
-		ubo.u_AOSamples = renderSettings_->aoSettings.samples;
-		ubo.u_AORadius = renderSettings_->aoSettings.radius;
-
-		rtaoPass_->render(
-			ubo,
-			in,
-			frame,
-			view,
-			proj
-		);
+		RTAOPassUBOs ubos
+		{
+			.rayGenData = {
+				.u_invView = glm::inverse(view),
+				.u_invViewProj = glm::inverse(proj * view),
+				.u_useRTAO = renderSettings_->useRTAO ? 1 : 0,
+				.u_AORadius = renderSettings_->aoSettings.radius,
+				.u_AOSamples = renderSettings_->aoSettings.samples
+			}
+		};
+		rtaoPass_->render(ubos, frame);
 	}
 
 	// RT shadow pass

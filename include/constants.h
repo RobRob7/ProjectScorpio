@@ -208,8 +208,6 @@ namespace RTAO_Constants
 	{
 		glm::mat4 u_invView;
 		glm::mat4 u_invViewProj;
-		glm::vec3 u_cameraPos;
-		float u_frameIndex;
 
 		int u_useRTAO;
 		float u_AORadius;

@@ -14,9 +14,6 @@ layout(set = 0, binding = 2) uniform UBO
 	mat4 u_invView;
     mat4 u_invViewProj;
 
-    vec3 u_cameraPos;
-	float u_frameIndex;
-
     int u_useRTAO;
     float u_AORadius;
     int u_AOSamples;
