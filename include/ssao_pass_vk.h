@@ -10,6 +10,7 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include <cstdint>
 #include <memory>
 #include <array>
 #include <vector>
@@ -18,29 +19,45 @@ class VulkanMain;
 class ShaderModuleVk;
 struct FrameContext;
 
+struct SSAOPassUBOs
+{
+	SSAO_Constants::SSAOBlurUBO blurData{};
+	SSAO_Constants::SSAORawSamplesUBO rawSamplesData{};
+	SSAO_Constants::SSAORawUBO rawData{};
+};
+
 class SSAOPassVk
 {
 public:
-	SSAOPassVk(
-		VulkanMain& vk,
-		const ImageVk& gNormalImage,
-		const ImageVk& gDepthImage
-	);
+	explicit SSAOPassVk(VulkanMain& vk);
 	~SSAOPassVk();
 
 	void init();
 	void resize();
 
-	void renderOffscreen(
-		SSAO_Constants::SSAORawUBO& rawUBO,
-		SSAO_Constants::SSAOBlurUBO& blurUBO,
-		const FrameContext& frame,
-		const glm::mat4& proj
+	void render(
+		const SSAOPassUBOs& ubos,
+		const FrameContext& frame
 	);
 
+	void setInput(
+		uint32_t frameIndex,
+		ImageVk& gNormalTex,
+		ImageVk& gDepthTex
+	)
+	{
+		gNormalTex_ = &gNormalTex;
+		gDepthTex_ = &gDepthTex;
+
+		updateDescriptorSet(frameIndex);
+	} // end of setInput()
+
 	const ImageVk& ssaoBlurImage() const { return ssaoBlurImage_; }
+	vk::Extent2D getExtent() const { return { width_, height_ }; }
+	const std::array<glm::vec4, SSAO_Constants::MAX_KERNEL_SIZE>& getSamples() const { return samples_; }
 
 private:
+	void updateDescriptorSet(uint32_t frameIndex);
 	void createAttachments();
 	void createResources();
 	void createDescriptorSets();
@@ -51,20 +68,23 @@ private:
 private:
 	VulkanMain& vk_;
 
-	const ImageVk& gNormalImage_;
-	const ImageVk& gDepthImage_;
+	ImageVk* gNormalTex_{ nullptr };
+	ImageVk* gDepthTex_{ nullptr };
+
+	int factor_{ 1 };
+	uint32_t width_{};
+	uint32_t height_{};
 
 	std::unique_ptr<ShaderModuleVk> ssaoRawShader_;
 	std::unique_ptr<ShaderModuleVk> ssaoBlurShader_;
 
 	ImageVk ssaoNoiseImage_;
-	vk::Format noiseFormat_ = vk::Format::eR16G16B16A16Sfloat;
+	vk::Format noiseFormat_{ vk::Format::eR16G16B16A16Sfloat };
 
 	ImageVk ssaoRawImage_;
 	ImageVk ssaoBlurImage_;
-	vk::Format singleChannelFormat_ = vk::Format::eR8Unorm;
+	vk::Format singleChannelFormat_{ vk::Format::eR8Unorm };
 
-	SSAO_Constants::SSAORawSamplesUBO rawSamplesUBO_;
 	std::vector<BufferVk> ssaoRawSamplesUBOBuffers_;
 	std::vector<BufferVk> ssaoRawUBOBuffers_;
 	std::vector<BufferVk> ssaoBlurUBOBuffers_;
