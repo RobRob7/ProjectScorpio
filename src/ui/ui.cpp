@@ -520,7 +520,7 @@ void UI::drawMenuBar(IScene& scene)
 			// Pass Resolution Scale
 			if (ImGui::BeginMenu("Res Scale"))
 			{
-				constexpr float LABEL_WIDTH = 150.0f;
+				constexpr float LABEL_WIDTH = 200.0f;
 
 				// HYBRID OPTIONS
 				{

@@ -278,28 +278,16 @@ void RendererVk::renderFrame(
 			in.world->getRTDrawList(),
 			frame.frameIndex
 		);
-
-		if (rtaoPass_)
-		{
-			rtaoPass_->setInput(
-				frame.frameIndex,
-				gbufferPass_->getNormalImage(),
-				gbufferPass_->getDepthImage()
-			);
-		}
-		if (rtShadowPass_)
-		{
-			rtShadowPass_->setInput(
-				frame.frameIndex,
-				gbufferPass_->getNormalImage(),
-				gbufferPass_->getDepthImage()
-			);
-		}
 	}
 
 	// RTAO pass
 	if (rtaoPass_)
 	{
+		rtaoPass_->setInput(
+			gbufferPass_->getNormalImage(),
+			gbufferPass_->getDepthImage()
+		);
+
 		RTAOPassUBOs ubos
 		{
 			.rayGenData = {
@@ -316,6 +304,11 @@ void RendererVk::renderFrame(
 	// RT shadow pass
 	if (rtShadowPass_)
 	{
+		rtShadowPass_->setInput(
+			gbufferPass_->getNormalImage(),
+			gbufferPass_->getDepthImage()
+		);
+
 		RTShadowPassUBOs ubos
 		{
 			.rayGenData = {
@@ -537,15 +530,12 @@ void RendererVk::renderFrame(
 	if (vk_.supportsRayTracing() && rs_->useRT && rtWorldPass_)
 	{
 		CubemapVk* skybox = dynamic_cast<CubemapVk*>(in.skybox);
-		rtWorldPass_->setSkybox(
-			frame.frameIndex,
+		rtWorldPass_->setSkyboxTextures(
 			skybox->getNightTexture(),
 			skybox->getDayTexture()
 		);
 		rtWorldPass_->setRTAOTexture(rtaoPass_->getOutColorImage());
 		rtWorldPass_->setRTShadowTexture(rtShadowPass_->getOutColorImage());
-
-		rtWorldPass_->updateDescriptorSet(frame.frameIndex);
 
 		RayTracingWorldPassUBOs ubos
 		{
@@ -572,7 +562,7 @@ void RendererVk::renderFrame(
 				.u_time = in.time
 			}
 		};
-		rtWorldPass_->render(frame, ubos);
+		rtWorldPass_->render(ubos, frame);
 	}
 	// --------------- END FORWARD RENDER --------------- //
 

@@ -47,21 +47,19 @@ public:
 	);
 
 	void setInput(
-		uint32_t frameIndex,
 		ImageVk& normalTex,
 		ImageVk& depthTex
 	)
 	{
 		normalTex_ = &normalTex;
 		depthTex_ = &depthTex;
-
-		updateDescriptorSet(frameIndex);
 	} // end of setInput()
 
 	const ImageVk& getOutColorImage() const { return outColorImage_; }
 	ImageVk& getOutColorImage() { return outColorImage_; }
 
 private:
+	void syncSettings();
 	void updateDescriptorSet(uint32_t frameIndex);
 	void createOutputImage();
 	void createResources();

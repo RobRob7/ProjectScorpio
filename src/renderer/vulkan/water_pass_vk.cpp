@@ -36,7 +36,7 @@ WaterPassVk::WaterPassVk(VulkanMain& vk, const RenderSettings& rs)
 	dudvTex_(vk), normalTex_(vk),
 	pipeline_(vk)
 {
-	factor_ = rs_.resScale.WATER;
+	factor_ = std::max(1u, rs_.resScale.WATER);
 
 	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
 	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
@@ -645,10 +645,6 @@ void WaterPassVk::waterReflectionPass(
 
 		const glm::mat4 reflView = camera.getViewMatrix();
 		const glm::mat4 reflProj = proj;
-		//const float aspect = (height_ > 0)
-		//	? (static_cast<float>(width_) / static_cast<float>(height_))
-		//	: 1.0f;
-		//glm::mat4 proj = camera.getProjectionMatrixVk(aspect);
 
 		// render world
 		chunk.renderOpaque(
@@ -742,10 +738,6 @@ void WaterPassVk::waterRefractionPass(
 		cmd.setScissor(0, 1, &scissor);
 
 		const glm::mat4 view = in.camera->getViewMatrix();
-		//const float aspect = (height_ > 0)
-		//	? (static_cast<float>(width_) / static_cast<float>(height_))
-		//	: 1.0f;
-		//glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
 
 		// render world
 		chunk.renderOpaque(
