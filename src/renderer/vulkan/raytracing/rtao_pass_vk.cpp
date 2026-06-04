@@ -127,6 +127,8 @@ void RTAOPassVk::render(
 	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
+
+//--- PRIVATE ---//
 void RTAOPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
 	// RAYGEN SET
@@ -180,8 +182,6 @@ void RTAOPassVk::updateDescriptorSet(uint32_t frameIndex)
 	}
 } // end of updateDescriptorSet()
 
-
-//--- PRIVATE ---//
 void RTAOPassVk::createOutputImage()
 {
 	// output color image

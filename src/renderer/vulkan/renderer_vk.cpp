@@ -112,11 +112,7 @@ void RendererVk::init()
 	}
 	if (!ssaoPass_)
 	{
-		ssaoPass_ = std::make_unique<SSAOPassVk>(
-			vk_,
-			gbufferPass_->getNormalImage(),
-			gbufferPass_->getDepthImage()
-		);
+		ssaoPass_ = std::make_unique<SSAOPassVk>(vk_);
 	}
 
 	if (!waterPass_)
@@ -287,18 +283,18 @@ void RendererVk::renderFrame(
 		if (rtaoPass_)
 		{
 			rtaoPass_->setInput(
+				frame.frameIndex,
 				gbufferPass_->getNormalImage(),
 				gbufferPass_->getDepthImage()
 			);
-			rtaoPass_->updateDescriptorSet(frame.frameIndex);
 		}
 		if (rtShadowPass_)
 		{
 			rtShadowPass_->setInput(
+				frame.frameIndex,
 				gbufferPass_->getNormalImage(),
 				gbufferPass_->getDepthImage()
 			);
-			rtShadowPass_->updateDescriptorSet(frame.frameIndex);
 		}
 	}
 
@@ -346,19 +342,39 @@ void RendererVk::renderFrame(
 	// ssao pass
 	if (!renderSettings_->useRT && renderSettings_->useSSAO)
 	{
-		SSAO_Constants::SSAORawUBO rawUBO{};
-		rawUBO.u_kernelSize = renderSettings_->aoSettings.samples;
-		rawUBO.u_radius = renderSettings_->aoSettings.radius;
-
-		SSAO_Constants::SSAOBlurUBO blurUBO{};
-		blurUBO.u_texelSize = glm::vec2(1.0f / width_, 1.0f / height_);
-
-		ssaoPass_->renderOffscreen(
-			rawUBO,
-			blurUBO,
-			frame, 
-			proj
+		ssaoPass_->setInput(
+			frame.frameIndex,
+			gbufferPass_->getNormalImage(), 
+			gbufferPass_->getDepthImage()
 		);
+
+		vk::Extent2D ssaoExtent = ssaoPass_->getExtent();
+		SSAOPassUBOs ubos
+		{
+			.blurData = {
+				.u_texelSize = glm::vec2(
+					1.0f / static_cast<float>(ssaoExtent.width),
+					1.0f / static_cast<float>(ssaoExtent.height)
+				)
+			},
+			.rawData = {
+				.u_proj = proj,
+				.u_invProj = glm::inverse(proj),
+				.u_noiseScale = glm::vec2(
+					static_cast<float>(ssaoExtent.width) / SSAO_Constants::K_NOISE_SIZE,
+					static_cast<float>(ssaoExtent.height) / SSAO_Constants::K_NOISE_SIZE
+				),
+				.u_radius = renderSettings_->aoSettings.radius,
+				.u_bias = SSAO_Constants::BIAS,
+				.u_kernelSize = renderSettings_->aoSettings.samples,
+			}
+		};
+		std::memcpy(
+			ubos.rawSamplesData.u_samples,
+			ssaoPass_->getSamples().data(),
+			sizeof(ubos.rawSamplesData.u_samples)
+		);
+		ssaoPass_->render(ubos, frame);
 	}
 
 	// water refl + refr pass
@@ -527,7 +543,9 @@ void RendererVk::renderFrame(
 				.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f)
 			},
 			.missData = {
-				.u_mix = glm::vec4(glm::clamp((in.light->getDirection().y + 0.15f) / 0.30f, 0.0f, 1.0f), 1.0f, 1.0f, 1.0f)
+				.u_mix = glm::vec4(
+					glm::clamp((in.light->getDirection().y + 0.15f) / 0.30f, 0.0f, 1.0f), 
+					1.0f, 1.0f, 1.0f)
 			},
 			.closestHitOpaqueData = {
 				.u_lightDir = glm::vec4(in.light->getDirection(), 0.0f),

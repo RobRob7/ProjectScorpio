@@ -17,14 +17,8 @@
 #include <cstdint>
 
 //--- PUBLIC ---//
-SSAOPassVk::SSAOPassVk(
-	VulkanMain& vk,
-	const ImageVk& gNormalImage,
-	const ImageVk& gDepthImage
-)
+SSAOPassVk::SSAOPassVk(VulkanMain& vk)
 	: vk_(vk),
-	gNormalImage_(gNormalImage),
-	gDepthImage_(gDepthImage),
 	ssaoNoiseImage_(vk),
 	ssaoRawImage_(vk),
 	ssaoBlurImage_(vk),
@@ -51,6 +45,10 @@ SSAOPassVk::~SSAOPassVk() = default;
 
 void SSAOPassVk::init()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+	width_ = extent.width / factor_;
+	height_ = extent.height / factor_;
+
 	ssaoRawShader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
 		"ssaopass/ssao.vert.spv", 
@@ -72,20 +70,22 @@ void SSAOPassVk::init()
 
 void SSAOPassVk::resize()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+	width_ = extent.width / factor_;
+	height_ = extent.height / factor_;
+
 	createAttachments();
 	createDescriptorSets();
 	createPipelines();
 } // end of resize()
 
-void SSAOPassVk::renderOffscreen(
-	SSAO_Constants::SSAORawUBO& rawUBO,
-	SSAO_Constants::SSAOBlurUBO& blurUBO,
-	const FrameContext& frame,
-	const glm::mat4& proj
+void SSAOPassVk::render(
+	const SSAOPassUBOs& ubos,
+	const FrameContext& frame
 )
 {
 	vk::CommandBuffer cmd = frame.cmd;
-	vk::Extent2D extent = frame.extent;
+	vk::Extent2D extent = { width_, height_ };
 
 	// SSAO RAW RENDER
 	{
@@ -125,14 +125,8 @@ void SSAOPassVk::renderOffscreen(
 			scissor.extent = extent;
 			cmd.setScissor(0, 1, &scissor);
 
-			using namespace SSAO_Constants;
-			rawUBO.u_proj = proj;
-			rawUBO.u_invProj = glm::inverse(proj);
-			rawUBO.u_bias = BIAS;
-			rawUBO.u_noiseScale = glm::vec2(
-				static_cast<float>(extent.width) / static_cast<float>(K_NOISE_SIZE),
-				static_cast<float>(extent.height) / static_cast<float>(K_NOISE_SIZE));
-			ssaoRawUBOBuffers_[frame.frameIndex].upload(&rawUBO, sizeof(rawUBO));
+			ssaoRawSamplesUBOBuffers_[frame.frameIndex].upload(&ubos.rawSamplesData, sizeof(ubos.rawSamplesData));
+			ssaoRawUBOBuffers_[frame.frameIndex].upload(&ubos.rawData, sizeof(ubos.rawData));
 
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoRawPipeline_.getPipeline());
 
@@ -195,7 +189,7 @@ void SSAOPassVk::renderOffscreen(
 			scissor.extent = extent;
 			cmd.setScissor(0, 1, &scissor);
 
-			ssaoBlurUBOBuffers_[frame.frameIndex].upload(&blurUBO, sizeof(blurUBO));
+			ssaoBlurUBOBuffers_[frame.frameIndex].upload(&ubos.blurData, sizeof(ubos.blurData));
 
 			cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, ssaoBlurPipeline_.getPipeline());
 
@@ -216,18 +210,99 @@ void SSAOPassVk::renderOffscreen(
 
 		cmd.endDebugUtilsLabelEXT();
 	}
-} // end of renderOffscreen()
+} // end of render()
 
 
 //--- PRIVATE ---//
+void SSAOPassVk::updateDescriptorSet(uint32_t frameIndex)
+{
+	// RAW SET
+	{
+		DescriptorSetVk& set = ssaoRawDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (ssaoRawSamplesUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(SSAORawBinding::SamplesUBO),
+				ssaoRawSamplesUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(SSAO_Constants::SSAORawSamplesUBO)
+			);
+		}
+
+		if (ssaoRawUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(SSAORawBinding::UBO),
+				ssaoRawUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(SSAO_Constants::SSAORawUBO)
+			);
+		}
+
+		if (gNormalTex_ && gNormalTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(SSAORawBinding::GNormalTex),
+				gNormalTex_->view(),
+				gNormalTex_->sampler()
+			);
+		}
+
+		if (gDepthTex_ && gDepthTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(SSAORawBinding::GDepthTex),
+				gDepthTex_->view(),
+				gDepthTex_->sampler()
+			);
+		}
+
+		if (ssaoNoiseImage_.valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(SSAORawBinding::NoiseTex),
+				ssaoNoiseImage_.view(),
+				ssaoNoiseImage_.sampler()
+			);
+		}
+	}
+
+	// BLUR SET
+	{
+		DescriptorSetVk& set = ssaoBlurDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (ssaoBlurUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(SSAOBlurBinding::UBO),
+				ssaoBlurUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(SSAO_Constants::SSAOBlurUBO)
+			);
+		}
+
+		set.writeCombinedImageSampler(
+			TO_API_FORM(SSAOBlurBinding::SSAORawTex),
+			ssaoRawImage_.view(),
+			ssaoRawImage_.sampler()
+		);
+	}
+} // end of updateDescriptorSet()
+
 void SSAOPassVk::createAttachments()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
 
 	// RAW
 	ssaoRawImage_.createImage(
-		extent.width,
-		extent.height,
+		width_,
+		height_,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
@@ -249,14 +324,13 @@ void SSAOPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
-
 	ssaoRawImage_.setDebugName("SSAOPassVk-RawImage");
 
 
 	// BLUR
 	ssaoBlurImage_.createImage(
-		extent.width,
-		extent.height,
+		width_,
+		height_,
 		1,
 		false,
 		vk::SampleCountFlagBits::e1,
@@ -278,7 +352,6 @@ void SSAOPassVk::createAttachments()
 		vk::SamplerAddressMode::eClampToEdge,
 		vk::False
 	);
-
 	ssaoBlurImage_.setDebugName("SSAOPassVk-BlurImage");
 
 	// default ssaoblur texture (for when SSAO is disabled)
@@ -419,36 +492,6 @@ void SSAOPassVk::createDescriptorSets()
 			ssaoRawDescriptorSets_[i].setDebugName(
 				"SSAOPassVk-Raw::DescriptorSet frame " + std::to_string(i)
 			);
-
-			ssaoRawDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(SSAORawBinding::SamplesUBO),
-				ssaoRawSamplesUBOBuffers_[i].getBuffer(),
-				sizeof(SSAO_Constants::SSAORawSamplesUBO)
-			);
-
-			ssaoRawDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(SSAORawBinding::UBO),
-				ssaoRawUBOBuffers_[i].getBuffer(),
-				sizeof(SSAO_Constants::SSAORawUBO)
-			);
-
-			ssaoRawDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(SSAORawBinding::GNormalTex),
-				gNormalImage_.view(),
-				gNormalImage_.sampler()
-			);
-
-			ssaoRawDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(SSAORawBinding::GDepthTex),
-				gDepthImage_.view(),
-				gDepthImage_.sampler()
-			);
-
-			ssaoRawDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(SSAORawBinding::NoiseTex),
-				ssaoNoiseImage_.view(),
-				ssaoNoiseImage_.sampler()
-			);
 		}
 
 
@@ -487,18 +530,6 @@ void SSAOPassVk::createDescriptorSets()
 
 			ssaoBlurDescriptorSets_[i].setDebugName(
 				"SSAOPassVk-Blur::DescriptorSet frame " + std::to_string(i)
-			);
-
-			ssaoBlurDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(SSAOBlurBinding::UBO),
-				ssaoBlurUBOBuffers_[i].getBuffer(),
-				sizeof(SSAO_Constants::SSAOBlurUBO)
-			);
-
-			ssaoBlurDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(SSAOBlurBinding::SSAORawTex),
-				ssaoRawImage_.view(),
-				ssaoRawImage_.sampler()
 			);
 		}
 	} // end for
@@ -662,19 +693,5 @@ void SSAOPassVk::createKernel()
 		s *= scale;
 
 		samples_[i] = s;
-	} // end for
-
-	// upload kernel
-	for (int i = 0; i < MAX_KERNEL_SIZE; ++i)
-	{
-		rawSamplesUBO_.u_samples[i] = samples_[i];
-	} // end for
-
-	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
-	{
-		ssaoRawSamplesUBOBuffers_[i].upload(
-			&rawSamplesUBO_,
-			sizeof(rawSamplesUBO_)
-		);
 	} // end for
 } // end of createKernel()

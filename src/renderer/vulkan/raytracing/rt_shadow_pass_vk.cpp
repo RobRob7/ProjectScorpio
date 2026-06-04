@@ -127,6 +127,8 @@ void RTShadowPassVk::render(
 	cmd.endDebugUtilsLabelEXT();
 } // end of render()
 
+
+//--- PRIVATE ---//
 void RTShadowPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
 	// RAYGEN SET
@@ -137,11 +139,14 @@ void RTShadowPassVk::updateDescriptorSet(uint32_t frameIndex)
 			return;
 		}
 
-		set.writeStorageImage(
-			TO_API_FORM(RTShadowRayGenBinding::OutColorImage),
-			outColorImage_.view(),
-			vk::ImageLayout::eGeneral
-		);
+		if (outColorImage_.valid())
+		{
+			set.writeStorageImage(
+				TO_API_FORM(RTShadowRayGenBinding::OutColorImage),
+				outColorImage_.view(),
+				vk::ImageLayout::eGeneral
+			);
+		}
 
 		if (tlas_[frameIndex].valid())
 		{
@@ -151,7 +156,7 @@ void RTShadowPassVk::updateDescriptorSet(uint32_t frameIndex)
 			);
 		}
 
-		if (rayGenUBOs_[frameIndex].getBuffer())
+		if (rayGenUBOs_[frameIndex].valid())
 		{
 			set.writeUniformBuffer(
 				TO_API_FORM(RTShadowRayGenBinding::UBO),
@@ -180,8 +185,6 @@ void RTShadowPassVk::updateDescriptorSet(uint32_t frameIndex)
 	}
 } // end of updateDescriptorSet()
 
-
-//--- PRIVATE ---//
 void RTShadowPassVk::createOutputImage()
 {
 	// output color image
@@ -214,7 +217,6 @@ void RTShadowPassVk::createOutputImage()
 		vk::SamplerAddressMode::eClampToEdge,
 		false
 	);
-
 	outColorImage_.setDebugName("RTShadowPassVk-ColorImage");
 } // end of createOutputImage()
 
