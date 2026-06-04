@@ -2,6 +2,8 @@
 
 #include "bindings.h"
 
+#include "render_settings.h"
+
 #include "vulkan_main.h"
 #include "frame_context_vk.h"
 
@@ -13,14 +15,18 @@
 //--- PUBLIC ---//
 RTAOPassVk::RTAOPassVk(
 	VulkanMain& vk,
+	const RenderSettings& rs,
 	const std::vector<AccelerationStructureVk>& tlas
 )
 	: vk_(vk),
+	rs_(rs),
 	tlas_(tlas),
 	outColorImage_(vk),
 	pipeline_(vk),
 	sbt_(vk)
 {
+	factor_ = rs_.resScale.RTAO;
+
 	rayGenUBOs_.reserve(vk_.getMaxFramesInFlight());
 	rayGenDescriptorSets_.reserve(vk_.getMaxFramesInFlight());
 

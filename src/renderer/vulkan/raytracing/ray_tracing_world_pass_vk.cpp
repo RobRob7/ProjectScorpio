@@ -2,6 +2,8 @@
 
 #include "bindings.h"
 
+#include "render_settings.h"
+
 #include "chunk_manager.h"
 #include "render_inputs.h"
 #include "chunk_draw_list.h"
@@ -18,6 +20,7 @@
 //--- PUBLIC ---//
 RayTracingWorldPassVk::RayTracingWorldPassVk(
 	VulkanMain& vk,
+	const RenderSettings& rs,
 	const std::vector<AccelerationStructureVk>& tlas,
 	const std::vector<BufferVk>& packedRTOpaqueInfoBuffer,
 	const std::vector<vk::DeviceSize>& packedRTOpaqueInfoBufferSize,
@@ -25,6 +28,7 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(
 	const std::vector<vk::DeviceSize>& packedRTWaterInfoBufferSize
 )
 	: vk_(vk),
+	rs_(rs),
 	tlas_(tlas),
 	packedRTOpaqueInfoBuffer_(packedRTOpaqueInfoBuffer),
 	packedRTOpaqueInfoBufferSize_(packedRTOpaqueInfoBufferSize),
@@ -38,6 +42,8 @@ RayTracingWorldPassVk::RayTracingWorldPassVk(
 	pipeline_(vk),
 	sbt_(vk)
 {
+	factor_ = rs_.resScale.RT_WORLD;
+
 	rayGenUBOs_.reserve(vk_.getMaxFramesInFlight());
 	missUBOs_.reserve(vk_.getMaxFramesInFlight());
 	closestHitOpaqueUBOs_.reserve(vk_.getMaxFramesInFlight());

@@ -145,7 +145,7 @@ public:
     uint32_t mipLevels() const { return mipLevels_; }
 
 private:
-    VulkanMain& vk_;
+    VulkanMain* vk_{ nullptr };
 
     vk::UniqueImage image_{};
     vk::UniqueDeviceMemory memory_{};

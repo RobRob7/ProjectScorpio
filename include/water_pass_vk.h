@@ -1,6 +1,8 @@
 #ifndef WATER_PASS_VK_H
 #define WATER_PASS_VK_H
 
+#include "constants.h"
+
 #include "image_vk.h"
 #include "texture_2d_vk.h"
 
@@ -14,6 +16,7 @@
 
 #include <memory>
 #include <vector>
+#include <cstdint>
 
 class VulkanMain;
 class ShaderModuleVk;
@@ -21,14 +24,17 @@ struct RenderInputs;
 class ChunkPassVk;
 struct FrameContext;
 struct RenderSettings;
+struct ChunkDrawList;
+
+struct WaterPassUBOs
+{
+	Chunk_Constants::ChunkWaterUBO waterData{};
+};
 
 class WaterPassVk
 {
 public:
-	WaterPassVk(
-		VulkanMain& vk,
-		const ImageVk& shadowMapTex
-	);
+	explicit WaterPassVk(VulkanMain& vk, const RenderSettings& rs);
 	~WaterPassVk();
 
 	void init();
@@ -43,15 +49,16 @@ public:
 		const glm::mat4& lightSpaceMatrix
 	);
 
-	void renderWater(
-		const FrameContext& frame,
-		const RenderSettings& rs,
-		const RenderInputs& in,
-		const glm::mat4& view,
-		const glm::mat4& proj,
-		const glm::mat4& lightSpaceMatrix,
-		int width, int height
+	void render(
+		const WaterPassUBOs& ubos,
+		const ChunkDrawList& drawList,
+		const FrameContext& frame
 	);
+
+	void setInput(ImageVk& shadowMapTex)
+	{
+		shadowMapTex_ = &shadowMapTex;
+	} // end of setInput()
 
 	ImageVk& getReflColorImage() { return reflColorImage_; }
 	ImageVk& getReflDepthImage() { return reflDepthImage_; }
@@ -59,11 +66,16 @@ public:
 	ImageVk& getRefrColorImage() { return refrColorImage_; }
 	ImageVk& getRefrDepthImage() { return refrDepthImage_; }
 
+	vk::Extent2D getExtent() const { return { width_, height_ }; }
+
 private:
+	void syncSettings();
+	void updateDescriptorSet(uint32_t frameIndex);
 	void createAttachments();
 	void createResources();
 	void createDescriptorSet();
 	void createPipeline();
+
 	void waterPass(
 		const RenderSettings& rs,
 		const FrameContext& frame,
@@ -90,13 +102,13 @@ private:
 	) const;
 private:
 	VulkanMain& vk_;
+	const RenderSettings& rs_;
 
-	const ImageVk& shadowMapImage_;
+	ImageVk* shadowMapTex_{ nullptr };
 
 	uint32_t factor_{};
-
-	uint32_t width_{ 0 };
-	uint32_t height_{ 0 };
+	uint32_t width_{};
+	uint32_t height_{};
 
 	ImageVk reflColorImage_;
 	ImageVk reflDepthImage_;
@@ -104,8 +116,8 @@ private:
 	ImageVk refrColorImage_;
 	ImageVk refrDepthImage_;
 
-	vk::Format colorFormat_ = vk::Format::eR16G16B16A16Sfloat;
-	vk::Format depthFormat_ = vk::Format::eD32Sfloat;
+	vk::Format colorFormat_{ vk::Format::eR16G16B16A16Sfloat };
+	vk::Format depthFormat_{ vk::Format::eD32Sfloat };
 
 	std::unique_ptr<ShaderModuleVk> shader_;
 

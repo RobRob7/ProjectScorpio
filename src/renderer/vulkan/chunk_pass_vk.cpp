@@ -21,22 +21,16 @@
 
 #include <memory>
 #include <cstddef>
+#include <algorithm>
 
 using namespace Chunk_Constants;
 using namespace Gbuffer_Constants;
 using namespace Shadow_Map_Constants;
 
 //--- PUBLIC ---//
-ChunkPassVk::ChunkPassVk(
-	VulkanMain& vk,
-	RenderSettings& rs,
-	const ImageVk& ssaoBlurImage,
-	const ImageVk& shadowMapImage
-)
+ChunkPassVk::ChunkPassVk(VulkanMain& vk, RenderSettings& rs)
 	: vk_(vk),
 	rs_(rs),
-	ssaoBlurImage_(ssaoBlurImage),
-	shadowMapImage_(shadowMapImage),
 	atlas_(vk),
 	opaquePipeline_(vk),
 	opaqueGBufferPipeline_(vk),
@@ -113,7 +107,7 @@ void ChunkPassVk::init(
 
 void ChunkPassVk::resize()
 {
-	refreshTexBinding();
+	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void ChunkPassVk::renderOpaque(
@@ -127,6 +121,8 @@ void ChunkPassVk::renderOpaque(
 	const uint32_t waterPassHeight
 )
 {
+	updateSingleDescriptorSet(frame.frameIndex, renderTarget);
+
 	in.world->buildOpaqueDrawList(view, proj);
 
 	vk::CommandBuffer cmd = frame.cmd;
@@ -403,50 +399,364 @@ void ChunkPassVk::renderOpaque(
 
 
 //--- PRIVATE ---//
-void ChunkPassVk::refreshTexBinding()
+void ChunkPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
-	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
+	// OPAQUE REGULAR
 	{
-		// opaque
-		opaqueDescriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(ChunkBinding::SSAOTex),
-			ssaoBlurImage_.view(),
-			ssaoBlurImage_.sampler()
-		);
+		DescriptorSetVk& set = opaqueDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
 
-		opaqueDescriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(ChunkBinding::ShadowTex),
-			shadowMapImage_.view(),
-			shadowMapImage_.sampler()
-		);
+		if (opaqueUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(ChunkBinding::UBO),
+				opaqueUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(ChunkOpaqueUBO)
+			);
+		}
 
-		// reflection
-		reflectionDescriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(ChunkBinding::SSAOTex),
-			ssaoBlurImage_.view(),
-			ssaoBlurImage_.sampler()
-		);
+		if (atlas_.valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::AtlasTex),
+				atlas_.view(),
+				atlas_.sampler()
+			);
+		}
 
-		reflectionDescriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(ChunkBinding::ShadowTex),
-			shadowMapImage_.view(),
-			shadowMapImage_.sampler()
-		);
+		if (ssaoBlurTex_ && ssaoBlurTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::SSAOTex),
+				ssaoBlurTex_->view(),
+				ssaoBlurTex_->sampler()
+			);
+		}
 
-		// refraction
-		refractionDescriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(ChunkBinding::SSAOTex),
-			ssaoBlurImage_.view(),
-			ssaoBlurImage_.sampler()
-		);
+		if (shadowMapTex_ && shadowMapTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::ShadowTex),
+				shadowMapTex_->view(),
+				shadowMapTex_->sampler()
+			);
+		}
+	}
 
-		refractionDescriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(ChunkBinding::ShadowTex),
-			shadowMapImage_.view(),
-			shadowMapImage_.sampler()
-		);
-	} // end for
-} // end of refreshTexBinding()
+	// REFLECTION
+	{
+		DescriptorSetVk& set = reflectionDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (reflUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(ChunkBinding::UBO),
+				reflUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(ChunkOpaqueUBO)
+			);
+		}
+
+		if (atlas_.valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::AtlasTex),
+				atlas_.view(),
+				atlas_.sampler()
+			);
+		}
+
+		if (ssaoBlurTex_ && ssaoBlurTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::SSAOTex),
+				ssaoBlurTex_->view(),
+				ssaoBlurTex_->sampler()
+			);
+		}
+
+		if (shadowMapTex_ && shadowMapTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::ShadowTex),
+				shadowMapTex_->view(),
+				shadowMapTex_->sampler()
+			);
+		}
+	}
+
+	// REFRACTION
+	{
+		DescriptorSetVk& set = refractionDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (refrUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(ChunkBinding::UBO),
+				refrUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(ChunkOpaqueUBO)
+			);
+		}
+
+		if (atlas_.valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::AtlasTex),
+				atlas_.view(),
+				atlas_.sampler()
+			);
+		}
+
+		if (ssaoBlurTex_ && ssaoBlurTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::SSAOTex),
+				ssaoBlurTex_->view(),
+				ssaoBlurTex_->sampler()
+			);
+		}
+
+		if (shadowMapTex_ && shadowMapTex_->valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(ChunkBinding::ShadowTex),
+				shadowMapTex_->view(),
+				shadowMapTex_->sampler()
+			);
+		}
+	}
+
+	// GBUFFER
+	{
+		DescriptorSetVk& set = opaqueGBufferDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (opaqueGBufferUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(GbufferBinding::UBO),
+				opaqueGBufferUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(GbufferUBO)
+			);
+		}
+	}
+
+	// SHADOW
+	{
+		DescriptorSetVk& set = opaqueShadowDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
+
+		if (opaqueShadowUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(ShadowMapPassBinding::UBO),
+				opaqueShadowUBOBuffers_[frameIndex].getBuffer(),
+				sizeof(ShadowMapPassUBO)
+			);
+		}
+	}
+} // end of updateDescriptorSet()
+
+void ChunkPassVk::updateSingleDescriptorSet(uint32_t frameIndex, RenderTargetVk renderTarget)
+{
+	if (renderTarget == RenderTargetVk::Default)
+	{
+		// OPAQUE DEFAULT
+		{
+			DescriptorSetVk& set = opaqueDescriptorSets_[frameIndex];
+			if (!set.valid())
+			{
+				return;
+			}
+
+			if (opaqueUBOBuffers_[frameIndex].valid())
+			{
+				set.writeUniformBuffer(
+					TO_API_FORM(ChunkBinding::UBO),
+					opaqueUBOBuffers_[frameIndex].getBuffer(),
+					sizeof(ChunkOpaqueUBO)
+				);
+			}
+
+			if (atlas_.valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::AtlasTex),
+					atlas_.view(),
+					atlas_.sampler()
+				);
+			}
+
+			if (ssaoBlurTex_ && ssaoBlurTex_->valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::SSAOTex),
+					ssaoBlurTex_->view(),
+					ssaoBlurTex_->sampler()
+				);
+			}
+
+			if (shadowMapTex_ && shadowMapTex_->valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::ShadowTex),
+					shadowMapTex_->view(),
+					shadowMapTex_->sampler()
+				);
+			}
+		}
+	}
+	else if (renderTarget == RenderTargetVk::WaterReflection)
+	{
+		// REFLECTION
+		{
+			DescriptorSetVk& set = reflectionDescriptorSets_[frameIndex];
+			if (!set.valid())
+			{
+				return;
+			}
+
+			if (reflUBOBuffers_[frameIndex].valid())
+			{
+				set.writeUniformBuffer(
+					TO_API_FORM(ChunkBinding::UBO),
+					reflUBOBuffers_[frameIndex].getBuffer(),
+					sizeof(ChunkOpaqueUBO)
+				);
+			}
+
+			if (atlas_.valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::AtlasTex),
+					atlas_.view(),
+					atlas_.sampler()
+				);
+			}
+
+			if (ssaoBlurTex_ && ssaoBlurTex_->valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::SSAOTex),
+					ssaoBlurTex_->view(),
+					ssaoBlurTex_->sampler()
+				);
+			}
+
+			if (shadowMapTex_ && shadowMapTex_->valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::ShadowTex),
+					shadowMapTex_->view(),
+					shadowMapTex_->sampler()
+				);
+			}
+		}
+	}
+	else if (renderTarget == RenderTargetVk::WaterRefraction)
+	{
+		// REFRACTION
+		{
+			DescriptorSetVk& set = refractionDescriptorSets_[frameIndex];
+			if (!set.valid())
+			{
+				return;
+			}
+
+			if (refrUBOBuffers_[frameIndex].valid())
+			{
+				set.writeUniformBuffer(
+					TO_API_FORM(ChunkBinding::UBO),
+					refrUBOBuffers_[frameIndex].getBuffer(),
+					sizeof(ChunkOpaqueUBO)
+				);
+			}
+
+			if (atlas_.valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::AtlasTex),
+					atlas_.view(),
+					atlas_.sampler()
+				);
+			}
+
+			if (ssaoBlurTex_ && ssaoBlurTex_->valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::SSAOTex),
+					ssaoBlurTex_->view(),
+					ssaoBlurTex_->sampler()
+				);
+			}
+
+			if (shadowMapTex_ && shadowMapTex_->valid())
+			{
+				set.writeCombinedImageSampler(
+					TO_API_FORM(ChunkBinding::ShadowTex),
+					shadowMapTex_->view(),
+					shadowMapTex_->sampler()
+				);
+			}
+		}
+	}
+	else if (renderTarget == RenderTargetVk::GBuffer)
+	{
+		// GBUFFER
+		{
+			DescriptorSetVk& set = opaqueGBufferDescriptorSets_[frameIndex];
+			if (!set.valid())
+			{
+				return;
+			}
+
+			if (opaqueGBufferUBOBuffers_[frameIndex].valid())
+			{
+				set.writeUniformBuffer(
+					TO_API_FORM(GbufferBinding::UBO),
+					opaqueGBufferUBOBuffers_[frameIndex].getBuffer(),
+					sizeof(GbufferUBO)
+				);
+			}
+		}
+	}
+	else if (renderTarget == RenderTargetVk::Shadow)
+	{
+		// SHADOW
+		{
+			DescriptorSetVk& set = opaqueShadowDescriptorSets_[frameIndex];
+			if (!set.valid())
+			{
+				return;
+			}
+
+			if (opaqueShadowUBOBuffers_[frameIndex].valid())
+			{
+				set.writeUniformBuffer(
+					TO_API_FORM(ShadowMapPassBinding::UBO),
+					opaqueShadowUBOBuffers_[frameIndex].getBuffer(),
+					sizeof(ShadowMapPassUBO)
+				);
+			}
+		}
+	}
+} // end of updateSingleDescriptorSet()
 
 void ChunkPassVk::createResources()
 {
@@ -554,18 +864,6 @@ void ChunkPassVk::createDescriptorSets()
 			opaqueDescriptorSets_[i].setDebugName(
 				"ChunkPassVK-Opaque::DescriptorSet frame " + std::to_string(i)
 			);
-
-			opaqueDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(ChunkBinding::UBO),
-				opaqueUBOBuffers_[i].getBuffer(),
-				sizeof(ChunkOpaqueUBO)
-			);
-
-			opaqueDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(ChunkBinding::AtlasTex),
-				atlas_.view(),
-				atlas_.sampler()
-			);
 		}
 
 		// reflection
@@ -627,18 +925,6 @@ void ChunkPassVk::createDescriptorSets()
 
 			reflectionDescriptorSets_[i].setDebugName(
 				"ChunkPassVK-Reflection::DescriptorSet frame " + std::to_string(i)
-			);
-
-			reflectionDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(ChunkBinding::UBO),
-				reflUBOBuffers_[i].getBuffer(),
-				sizeof(ChunkOpaqueUBO)
-			);
-
-			reflectionDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(ChunkBinding::AtlasTex),
-				atlas_.view(),
-				atlas_.sampler()
 			);
 		}
 
@@ -702,18 +988,6 @@ void ChunkPassVk::createDescriptorSets()
 			refractionDescriptorSets_[i].setDebugName(
 				"ChunkPassVK-Refraction::DescriptorSet frame " + std::to_string(i)
 			);
-
-			refractionDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(ChunkBinding::UBO),
-				refrUBOBuffers_[i].getBuffer(),
-				sizeof(ChunkOpaqueUBO)
-			);
-
-			refractionDescriptorSets_[i].writeCombinedImageSampler(
-				TO_API_FORM(ChunkBinding::AtlasTex),
-				atlas_.view(),
-				atlas_.sampler()
-			);
 		}
 
 		// gbuffer
@@ -735,12 +1009,6 @@ void ChunkPassVk::createDescriptorSets()
 
 			opaqueGBufferDescriptorSets_[i].setDebugName(
 				"ChunkPassVK-GBuffer::DescriptorSet frame " + std::to_string(i)
-			);
-
-			opaqueGBufferDescriptorSets_[i].writeUniformBuffer(
-				TO_API_FORM(GbufferBinding::UBO),
-				opaqueGBufferUBOBuffers_[i].getBuffer(),
-				sizeof(GbufferUBO)
 			);
 		}
 

@@ -13,11 +13,12 @@
 #include <array>
 
 class Shader;
+struct RenderSettings;
 
 class SSAOPass
 {
 public:
-	SSAOPass();
+	SSAOPass(const RenderSettings& rs);
 	~SSAOPass();
 
 	void init();
@@ -41,8 +42,11 @@ private:
 	void createNoise();
 	void createKernel();
 private:
-	int width_{};
-	int height_{};
+	const RenderSettings& rs_;
+
+	uint32_t factor_{};
+	uint32_t width_{};
+	uint32_t height_{};
 
 	uint32_t fboRaw_{};
 	uint32_t fboBlur_{};

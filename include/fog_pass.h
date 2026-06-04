@@ -15,7 +15,7 @@ struct RenderSettings;
 class FogPass
 {
 public:
-    FogPass();
+    FogPass(const RenderSettings& rs);
     ~FogPass();
 
     void init();
@@ -32,10 +32,11 @@ public:
 private:
     void destroyGL();
 private:
+    const RenderSettings& rs_;
+
+    uint32_t factor_{};
     int width_{};
     int height_{};
-
-    uint32_t resFactor_{ Fog_Constants::RES_FACTOR };
 
     uint32_t numWorkGroups_{ Fog_Constants::WORK_GROUPS };
     uint32_t workGroupX_{};

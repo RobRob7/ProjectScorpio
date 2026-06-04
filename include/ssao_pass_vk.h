@@ -18,6 +18,7 @@
 class VulkanMain;
 class ShaderModuleVk;
 struct FrameContext;
+struct RenderSettings;
 
 struct SSAOPassUBOs
 {
@@ -29,7 +30,7 @@ struct SSAOPassUBOs
 class SSAOPassVk
 {
 public:
-	explicit SSAOPassVk(VulkanMain& vk);
+	explicit SSAOPassVk(VulkanMain& vk, const RenderSettings& rs);
 	~SSAOPassVk();
 
 	void init();
@@ -41,22 +42,20 @@ public:
 	);
 
 	void setInput(
-		uint32_t frameIndex,
 		ImageVk& gNormalTex,
 		ImageVk& gDepthTex
 	)
 	{
 		gNormalTex_ = &gNormalTex;
 		gDepthTex_ = &gDepthTex;
-
-		updateDescriptorSet(frameIndex);
 	} // end of setInput()
 
-	const ImageVk& ssaoBlurImage() const { return ssaoBlurImage_; }
+	ImageVk& ssaoBlurImage() { return ssaoBlurImage_; }
 	vk::Extent2D getExtent() const { return { width_, height_ }; }
 	const std::array<glm::vec4, SSAO_Constants::MAX_KERNEL_SIZE>& getSamples() const { return samples_; }
 
 private:
+	void syncSettings();
 	void updateDescriptorSet(uint32_t frameIndex);
 	void createAttachments();
 	void createResources();
@@ -67,11 +66,12 @@ private:
 	void createKernel();
 private:
 	VulkanMain& vk_;
+	const RenderSettings& rs_;
 
 	ImageVk* gNormalTex_{ nullptr };
 	ImageVk* gDepthTex_{ nullptr };
 
-	int factor_{ 1 };
+	uint32_t factor_{};
 	uint32_t width_{};
 	uint32_t height_{};
 

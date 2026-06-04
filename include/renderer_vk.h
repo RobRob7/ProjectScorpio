@@ -52,7 +52,7 @@ public:
 		UI* ui
 	) override;
 
-	RenderSettings& settings() override { return *renderSettings_; }
+	RenderSettings& settings() override { return *rs_; }
 
 private:
 	void createSceneAttachments();
@@ -68,7 +68,7 @@ private:
 	vk::Format sceneColorFormat_{ vk::Format::eR16G16B16A16Sfloat };
 	vk::Format sceneDepthFormat_{ vk::Format::eD32Sfloat };
 
-	std::unique_ptr<RenderSettings> renderSettings_;
+	std::unique_ptr<RenderSettings> rs_;
 
 	std::unique_ptr<GBufferPassVk> gbufferPass_;
 	std::unique_ptr<ShadowMapPassVk> shadowMapPass_;

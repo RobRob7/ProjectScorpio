@@ -1,5 +1,7 @@
 #include "fog_pass_vk.h"
 
+#include "render_settings.h"
+
 #include "constants.h"
 
 #include "bindings.h"
@@ -10,13 +12,17 @@
 #include <vulkan/vulkan.hpp>
 
 #include <cstdint>
+#include <algorithm>
 
 //--- PUBLIC ---//
-FogPassVk::FogPassVk(VulkanMain& vk)
+FogPassVk::FogPassVk(VulkanMain& vk, const RenderSettings& rs)
 	: vk_(vk),
+	rs_(rs),
 	outputImage_(vk),
 	computePipeline_(vk)
 {
+	factor_ = std::max(1u, rs_.resScale.FOG);
+
 	uboBuffers_.reserve(vk.getMaxFramesInFlight());
 	descriptorSets_.reserve(vk.getMaxFramesInFlight());
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
@@ -30,11 +36,19 @@ FogPassVk::~FogPassVk() = default;
 
 void FogPassVk::init()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
+
+	workGroupX_ = (width_ + numWorkGroups_ - 1) / numWorkGroups_;
+	workGroupY_ = (height_ + numWorkGroups_ - 1) / numWorkGroups_;
+
 	compShader_ = std::make_unique<ComputeShaderModuleVk>(
 		vk_.getDevice(),
 		"fogpass/fog.comp.spv"
 	);
 
+	createAttachment();
 	createResources();
 	createDescriptorSet();
 	createPipeline();
@@ -45,8 +59,8 @@ void FogPassVk::resize()
 	vk::Extent2D extent = vk_.getSwapChainExtent();
 	if (extent.width <= 0 || extent.height <= 0) return;
 
-	uint32_t newWidth = (extent.width + resFactor_ - 1) / resFactor_;
-	uint32_t newHeight = (extent.height + resFactor_ - 1) / resFactor_;
+	uint32_t newWidth = (extent.width + factor_ - 1) / factor_;
+	uint32_t newHeight = (extent.height + factor_ - 1) / factor_;
 
 	if (newWidth == width_ && newHeight == height_) return;
 
@@ -56,8 +70,13 @@ void FogPassVk::resize()
 	workGroupX_ = (width_ + (numWorkGroups_ - 1)) / numWorkGroups_;
 	workGroupY_ = (height_ + (numWorkGroups_ - 1)) / numWorkGroups_;
 
+	const uint32_t retireFrame = vk_.getPrevFrameIndex();
+
+	vk_.retireImage(retireFrame, std::move(outputImage_));
+	outputImage_ = ImageVk(vk_);
+
 	createAttachment();
-	refreshInput();
+	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void FogPassVk::render(
@@ -65,6 +84,8 @@ void FogPassVk::render(
 	Fog_Constants::FogPassUBO& fogUBO
 )
 {
+	syncSettings();
+
 	if (!inputShadowMapImage_ ||
 		!inputDepthImage_ ||
 		!outputImage_.valid() ||
@@ -73,34 +94,15 @@ void FogPassVk::render(
 		return;
 	}
 
+	updateDescriptorSet(frame.frameIndex);
+	
 	vk::CommandBuffer cmd = frame.cmd;
 
 	cmd.beginDebugUtilsLabelEXT({ "FogPassVk::cmd" });
 
-	DescriptorSetVk& desc = descriptorSets_[frame.frameIndex];
-	if (!desc.valid()) return;
-
-	desc.writeCombinedImageSampler(
-		TO_API_FORM(FogPassBinding::ForwardDepthTex),
-		inputDepthImage_->view(),
-		inputDepthImage_->sampler()
-	);
-
-	desc.writeCombinedImageSampler(
-		TO_API_FORM(FogPassBinding::ShadowMapTex),
-		inputShadowMapImage_->view(),
-		inputShadowMapImage_->sampler()
-	);
-
-	desc.writeStorageImage(
-		TO_API_FORM(FogPassBinding::OutColorTex),
-		outputImage_.view(),
-		vk::ImageLayout::eGeneral
-	);
-
 	outputImage_.transitionToGeneral(cmd);
 
-	vk::DescriptorSet set = desc.getSet();
+	vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
 
 	uboBuffers_[frame.frameIndex].upload(&fogUBO, sizeof(fogUBO));
 
@@ -126,33 +128,52 @@ void FogPassVk::render(
 
 
 //--- PRIVATE ---//
-void FogPassVk::refreshInput()
+void FogPassVk::syncSettings()
 {
-	if (!inputDepthImage_ || 
-		!inputShadowMapImage_)
+	uint32_t newFactor = std::max(1u, rs_.resScale.FOG);
+
+	if (newFactor == factor_)
 		return;
 
-	for (auto& set : descriptorSets_)
+	factor_ = newFactor;
+	resize();
+} // end of syncSettings()
+
+void FogPassVk::updateDescriptorSet(uint32_t frameIndex)
+{
+	DescriptorSetVk& set = descriptorSets_[frameIndex];
+	if (!set.valid())
+	{
+		return;
+	}
+
+	if (outputImage_.valid())
+	{
+		set.writeStorageImage(
+			TO_API_FORM(FogPassBinding::OutColorTex),
+			outputImage_.view(),
+			vk::ImageLayout::eGeneral
+		);
+	}
+
+	if (inputDepthImage_ && inputDepthImage_->valid())
 	{
 		set.writeCombinedImageSampler(
 			TO_API_FORM(FogPassBinding::ForwardDepthTex),
 			inputDepthImage_->view(),
 			inputDepthImage_->sampler()
 		);
+	}
 
+	if (inputShadowMapImage_ && inputShadowMapImage_->valid())
+	{
 		set.writeCombinedImageSampler(
 			TO_API_FORM(FogPassBinding::ShadowMapTex),
 			inputShadowMapImage_->view(),
 			inputShadowMapImage_->sampler()
 		);
-
-		set.writeStorageImage(
-			TO_API_FORM(FogPassBinding::OutColorTex),
-			outputImage_.view(),
-			vk::ImageLayout::eGeneral
-		);
-	} // end for
-} // end of refreshInput()
+	}
+} // end of updateDescriptorSet()
 
 void FogPassVk::createAttachment()
 {
@@ -223,7 +244,7 @@ void FogPassVk::createDescriptorSet()
 		inputShadowBinding.descriptorCount = 1;
 		inputShadowBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
 
-		vk::DescriptorSetLayoutBinding outputColorBinding;
+		vk::DescriptorSetLayoutBinding outputColorBinding{};
 		outputColorBinding.binding = TO_API_FORM(FogPassBinding::OutColorTex);
 		outputColorBinding.descriptorType = vk::DescriptorType::eStorageImage;
 		outputColorBinding.descriptorCount = 1;
@@ -236,19 +257,19 @@ void FogPassVk::createDescriptorSet()
 			outputColorBinding
 			});
 
-		vk::DescriptorPoolSize uboPool;
+		vk::DescriptorPoolSize uboPool{};
 		uboPool.type = vk::DescriptorType::eUniformBuffer;
 		uboPool.descriptorCount = 1;
 
-		vk::DescriptorPoolSize inputDepthPool;
+		vk::DescriptorPoolSize inputDepthPool{};
 		inputDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
 		inputDepthPool.descriptorCount = 1;
 
-		vk::DescriptorPoolSize inputShadowPool;
+		vk::DescriptorPoolSize inputShadowPool{};
 		inputShadowPool.type = vk::DescriptorType::eCombinedImageSampler;
 		inputShadowPool.descriptorCount = 1;
 		
-		vk::DescriptorPoolSize outputColorPool;
+		vk::DescriptorPoolSize outputColorPool{};
 		outputColorPool.type = vk::DescriptorType::eStorageImage;
 		outputColorPool.descriptorCount = 1;
 

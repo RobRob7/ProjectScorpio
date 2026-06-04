@@ -23,6 +23,7 @@ class RayTracingShaderModuleVk;
 struct FrameContext;
 struct RenderInputs;
 struct ChunkDrawList;
+struct RenderSettings;
 
 struct RayTracingWorldPassUBOs
 {
@@ -37,6 +38,7 @@ class RayTracingWorldPassVk
 public:
 	explicit RayTracingWorldPassVk(
 		VulkanMain& vk,
+		const RenderSettings& rs,
 		const std::vector<AccelerationStructureVk>& tlas,
 		const std::vector<BufferVk>& packedRTOpaqueInfoBuffer,
 		const std::vector<vk::DeviceSize>& packedRTOpaqueInfoBufferSize,
@@ -84,6 +86,7 @@ private:
 	void createSBT();
 private:
 	VulkanMain& vk_;
+	const RenderSettings& rs_;
 	const std::vector<AccelerationStructureVk>& tlas_;
 
 	const std::vector<BufferVk>& packedRTOpaqueInfoBuffer_;
@@ -95,7 +98,7 @@ private:
 	ImageVk* rtaoTex_{ nullptr };
 	ImageVk* rtShadowTex_{ nullptr };
 
-	int factor_{ 1 };
+	uint32_t factor_{};
 	uint32_t width_{};
 	uint32_t height_{};
 

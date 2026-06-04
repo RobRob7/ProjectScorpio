@@ -22,7 +22,7 @@ struct RenderSettings;
 class FogPassVk
 {
 public:
-	explicit FogPassVk(VulkanMain& vk);
+	explicit FogPassVk(VulkanMain& vk, const RenderSettings& rs);
 	~FogPassVk();
 
 	void init();
@@ -42,18 +42,19 @@ public:
 	ImageVk& getOutputImage() { return outputImage_; }
 
 private:
-	void refreshInput();
+	void syncSettings();
+	void updateDescriptorSet(uint32_t frameIndex);
 	void createAttachment();
 	void createResources();
 	void createDescriptorSet();
 	void createPipeline();
 private:
 	VulkanMain& vk_;
+	const RenderSettings& rs_;
 
+	uint32_t factor_{};
 	uint32_t width_{};
 	uint32_t height_{};
-
-	uint32_t resFactor_{ Fog_Constants::RES_FACTOR };
 
 	uint32_t numWorkGroups_{Fog_Constants::WORK_GROUPS};
 	uint32_t workGroupX_{};

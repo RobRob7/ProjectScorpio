@@ -3,6 +3,8 @@
 #include "constants.h"
 #include "bindings.h"
 
+#include "render_settings.h"
+
 #include "shader.h"
 
 #include <glad/glad.h>
@@ -14,7 +16,11 @@
 #include <random>
 
 //--- PUBLIC ---//
-SSAOPass::SSAOPass() = default;
+SSAOPass::SSAOPass(const RenderSettings& rs)
+	: rs_(rs)
+{
+	factor_ = rs.resScale.SSAO;
+} // end of constructor
 
 SSAOPass::~SSAOPass()
 {
@@ -42,8 +48,8 @@ void SSAOPass::resize(int w, int h)
 	if (w == width_ && h == height_) return;
 
 	destroyTargets();
-	width_ = w;
-	height_ = h;
+	width_ = w / factor_;
+	height_ = h / factor_;
 	createTargets();
 } // end of resize()
 
