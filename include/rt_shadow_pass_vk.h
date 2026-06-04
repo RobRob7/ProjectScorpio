@@ -12,8 +12,6 @@
 #include "ray_tracing_pipeline_vk.h"
 #include "acceleration_structure_vk.h"
 
-#include <glm/glm.hpp>
-
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -23,6 +21,11 @@ class RayTracingShaderModuleVk;
 struct FrameContext;
 struct RenderInputs;
 struct ChunkDrawList;
+
+struct RTShadowPassUBOs
+{
+	RTShadow_Constants::RayGenUBO rayGenData{};
+};
 
 class RTShadowPassVk
 {
@@ -37,11 +40,8 @@ public:
 	void resize();
 
 	void render(
-		RTShadow_Constants::RayGenUBO& ubo,
-		const RenderInputs& in,
-		const FrameContext& frame,
-		const glm::mat4& view,
-		const glm::mat4& proj
+		const RTShadowPassUBOs& ubos,
+		const FrameContext& frame
 	);
 
 	void updateDescriptorSet(uint32_t frameIndex);
@@ -80,7 +80,6 @@ private:
 
 	std::unique_ptr<RayTracingShaderModuleVk> shader_;
 
-	// UBOs
 	std::vector<BufferVk> rayGenUBOs_;
 
 	std::vector<DescriptorSetVk> rayGenDescriptorSets_;

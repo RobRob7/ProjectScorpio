@@ -12,8 +12,6 @@
 #include "ray_tracing_pipeline_vk.h"
 #include "acceleration_structure_vk.h"
 
-#include <glm/glm.hpp>
-
 #include <memory>
 #include <vector>
 #include <cstdint>

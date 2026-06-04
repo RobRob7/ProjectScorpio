@@ -2,24 +2,13 @@
 
 #include "bindings.h"
 
-#include "render_inputs.h"
-#include "chunk_draw_list.h"
-#include "chunk_mesh_gpu_vk.h"
-
-#include "camera.h"
-#include "light_vk.h"
-
 #include "vulkan_main.h"
 #include "frame_context_vk.h"
 
 #include "ray_tracing_shader_vk.h"
 
-#include <glm/glm.hpp>
-
 #include <vector>
 #include <algorithm>
-
-using namespace RTAO_Constants;
 
 //--- PUBLIC ---//
 RTAOPassVk::RTAOPassVk(
@@ -167,7 +156,7 @@ void RTAOPassVk::updateDescriptorSet(uint32_t frameIndex)
 			set.writeUniformBuffer(
 				TO_API_FORM(RTAORayGenBinding::UBO),
 				rayGenUBOs_[frameIndex].getBuffer(),
-				sizeof(RayGenUBO)
+				sizeof(RTAO_Constants::RayGenUBO)
 			);
 		}
 
@@ -234,7 +223,7 @@ void RTAOPassVk::createResources()
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
 	{
 		rayGenUBOs_[i].create(
-			sizeof(RayGenUBO),
+			sizeof(RTAO_Constants::RayGenUBO),
 			vk::BufferUsageFlagBits::eUniformBuffer,
 			vk::MemoryPropertyFlagBits::eHostVisible |
 			vk::MemoryPropertyFlagBits::eHostCoherent

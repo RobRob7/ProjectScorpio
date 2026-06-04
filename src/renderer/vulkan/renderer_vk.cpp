@@ -321,19 +321,16 @@ void RendererVk::renderFrame(
 	// RT shadow pass
 	if (rtShadowPass_)
 	{
-		RTShadow_Constants::RayGenUBO ubo{};
-		ubo.u_useRTShadows = renderSettings_->useRTShadow ? 1 : 0;
-		ubo.u_lightDir = in.light->getDirection();
-		ubo.u_invView = glm::inverse(view);
-		ubo.u_invViewProj = glm::inverse(proj * view);
-
-		rtShadowPass_->render(
-			ubo,
-			in,
-			frame,
-			view,
-			proj
-		);
+		RTShadowPassUBOs ubos
+		{
+			.rayGenData = {
+				.u_invView = glm::inverse(view),
+				.u_invViewProj = glm::inverse(proj * view),
+				.u_lightDir = in.light->getDirection(),
+				.u_useRTShadows = renderSettings_->useRTShadow ? 1 : 0
+			}
+		};
+		rtShadowPass_->render(ubos, frame);
 	}
 
 	// shadow map pass
