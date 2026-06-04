@@ -517,6 +517,162 @@ void UI::drawMenuBar(IScene& scene)
 		// RENDERER OPTIONS
 		if (ImGui::BeginMenu("Renderer"))
 		{
+			// Pass Resolution Scale
+			if (ImGui::BeginMenu("Res Scale"))
+			{
+				constexpr float LABEL_WIDTH = 150.0f;
+
+				// HYBRID OPTIONS
+				{
+					// fog scale
+					{
+						ImGui::Text("Fog Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##Fog"))
+						{
+							renderSettings_.resScale.FOG =
+								std::max(1u, renderSettings_.resScale.FOG - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.FOG);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##Fog"))
+						{
+							renderSettings_.resScale.FOG =
+								std::min(6u, renderSettings_.resScale.FOG + 1);
+						}
+					}
+				}
+
+				// RT OPTIONS
+				{
+					ImGui::BeginDisabled(!renderSettings_.useRT);
+					// RT world scale
+					{
+						ImGui::Text("RTWorld Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##RTWorld"))
+						{
+							renderSettings_.resScale.RT_WORLD =
+								std::max(1u, renderSettings_.resScale.RT_WORLD - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.RT_WORLD);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##RTWorld"))
+						{
+							renderSettings_.resScale.RT_WORLD =
+								std::min(6u, renderSettings_.resScale.RT_WORLD + 1);
+						}
+					}
+					// RTAO scale
+					{
+						ImGui::Text("RTAO Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##RTAO"))
+						{
+							renderSettings_.resScale.RTAO =
+								std::max(1u, renderSettings_.resScale.RTAO - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.RTAO);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##RTAO"))
+						{
+							renderSettings_.resScale.RTAO =
+								std::min(6u, renderSettings_.resScale.RTAO + 1);
+						}
+					}
+					// RT Shadow scale
+					{
+						ImGui::Text("RTShadow Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##RTShadow"))
+						{
+							renderSettings_.resScale.RT_SHADOW =
+								std::max(1u, renderSettings_.resScale.RT_SHADOW - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.RT_SHADOW);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##RTShadow"))
+						{
+							renderSettings_.resScale.RT_SHADOW =
+								std::min(6u, renderSettings_.resScale.RT_SHADOW + 1);
+						}
+					}
+				}
+				ImGui::EndDisabled();
+
+				// NON RT OPTIONS
+				{
+					ImGui::BeginDisabled(renderSettings_.useRT);
+					// water scale
+					{
+						ImGui::Text("Water Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##Water"))
+						{
+							renderSettings_.resScale.WATER =
+								std::max(1u, renderSettings_.resScale.WATER - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.WATER);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##Water"))
+						{
+							renderSettings_.resScale.WATER =
+								std::min(6u, renderSettings_.resScale.WATER + 1);
+						}
+					}
+					// SSAO scale
+					{
+						ImGui::Text("SSAO Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##SSAO"))
+						{
+							renderSettings_.resScale.SSAO =
+								std::max(1u, renderSettings_.resScale.SSAO - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.SSAO);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##SSAO"))
+						{
+							renderSettings_.resScale.SSAO =
+								std::min(6u, renderSettings_.resScale.SSAO + 1);
+						}
+					}
+				}
+				ImGui::EndDisabled();
+
+				ImGui::EndMenu();
+			}
+
 			// API selection
 			if (ImGui::BeginMenu("API"))
 			{

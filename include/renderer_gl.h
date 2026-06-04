@@ -52,7 +52,7 @@ private:
 	int width_{};
 	int height_{};
 
-	std::unique_ptr<RenderSettings> renderSettings_;
+	std::unique_ptr<RenderSettings> rs_;
 
 	// passes
 	std::unique_ptr<GBufferPass> gbuffer_;

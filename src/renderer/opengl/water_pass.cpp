@@ -32,9 +32,10 @@
 using namespace Chunk_Constants;
 
 //--- PUBLIC ---//
-WaterPass::WaterPass()
-    : factor_(WATER_TEX_FACTOR)
+WaterPass::WaterPass(const RenderSettings& rs)
+    : rs_(rs)
 {
+    factor_ = rs.resScale.WATER;
 } // end of constructor
 
 WaterPass::~WaterPass()
@@ -64,8 +65,8 @@ void WaterPass::resize(int w, int h)
     destroyTargets();
     fullW_ = w;
     fullH_ = h;
-    width_  = std::max(1, w / factor_);
-    height_ = std::max(1, h / factor_);
+    width_  = w / factor_;
+    height_ = h / factor_;
     createTargets();
 } // end of resize()
 

@@ -1,5 +1,7 @@
 #include "fog_pass.h"
 
+#include "render_settings.h"
+
 #include "constants.h"
 #include "compute_shader.h"
 
@@ -9,7 +11,11 @@
 #include <stdexcept>
 
 //--- PUBLIC ---//
-FogPass::FogPass() = default;
+FogPass::FogPass(const RenderSettings& rs)
+	: rs_(rs)
+{
+	factor_ = rs_.resScale.FOG;
+} // end of constructor
 
 FogPass::~FogPass()
 {
@@ -31,8 +37,8 @@ void FogPass::resize(int w, int h)
 {
 	if (w <= 0 || h <= 0) return;
 
-	int newWidth = (w + resFactor_ - 1) / resFactor_;
-	int newHeight = (h + resFactor_ - 1) / resFactor_;
+	int newWidth = (w + factor_ - 1) / factor_;
+	int newHeight = (h + factor_ - 1) / factor_;
 
 	if (newWidth == width_ && newHeight == height_)
 		return;

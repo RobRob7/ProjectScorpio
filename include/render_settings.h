@@ -5,6 +5,24 @@
 
 #include <glm/glm.hpp>
 
+#include <cstdint>
+
+struct PassResolutionScale
+{
+	// HYBRID
+	uint32_t FOG{ 2 };
+	uint32_t FXAA{ 1 };
+
+	// RT
+	uint32_t RT_WORLD{ 1 };
+	uint32_t RTAO{ 1 };
+	uint32_t RT_SHADOW{ 1 };
+	
+	// NON-RT
+	uint32_t WATER{ 2 };
+	uint32_t SSAO{ 2 };
+};
+
 enum class DebugMode : int
 {
 	None = 0,		// '1' key
@@ -37,20 +55,23 @@ struct FogSettings
 struct RenderSettings
 {
 	// debug view mode
-	DebugMode debugMode = DebugMode::None;
+	DebugMode debugMode{ DebugMode::None };
+
+	// pass resolution scales
+	PassResolutionScale resScale{};
 
 	// display options
-	bool enableVsync = true;
+	bool enableVsync{ true };
 
 	// graphics options
-	bool useRT = false;
-	bool useRTAO = true;
-	bool useRTShadow = true;
+	bool useRT{ false };
+	bool useRTAO{ true };
+	bool useRTShadow{ true };
 
-	bool useShadowMap = true;
-	bool useSSAO = true;
-	bool useFXAA = false;
-	bool useFog = true;
+	bool useShadowMap{ true };
+	bool useSSAO{ true };
+	bool useFXAA{ false };
+	bool useFog{ true };
 
 	// fog controls
 	FogSettings fogSettings;

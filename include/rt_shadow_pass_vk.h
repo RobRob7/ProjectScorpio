@@ -21,6 +21,7 @@ class RayTracingShaderModuleVk;
 struct FrameContext;
 struct RenderInputs;
 struct ChunkDrawList;
+struct RenderSettings;
 
 struct RTShadowPassUBOs
 {
@@ -32,6 +33,7 @@ class RTShadowPassVk
 public:
 	explicit RTShadowPassVk(
 		VulkanMain& vk,
+		const RenderSettings& rs,
 		const std::vector<AccelerationStructureVk>& tlas
 	);
 	~RTShadowPassVk();
@@ -68,12 +70,13 @@ private:
 	void createSBT();
 private:
 	VulkanMain& vk_;
+	const RenderSettings& rs_;
 	const std::vector<AccelerationStructureVk>& tlas_;
 
 	ImageVk* normalTex_{ nullptr };
 	ImageVk* depthTex_{ nullptr };
 
-	int factor_{ 1 };
+	uint32_t factor_{};
 	uint32_t width_{};
 	uint32_t height_{};
 

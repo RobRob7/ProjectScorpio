@@ -28,18 +28,16 @@ using namespace Chunk_Constants;
 using namespace World;
 
 //--- PUBLIC ---//
-WaterPassVk::WaterPassVk(
-	VulkanMain& vk,
-	const ImageVk& shadowMapTex
-)
+WaterPassVk::WaterPassVk(VulkanMain& vk, const RenderSettings& rs)
 	: vk_(vk),
-	shadowMapImage_(shadowMapTex),
-	factor_(WATER_TEX_FACTOR),
+	rs_(rs),
 	reflColorImage_(vk), reflDepthImage_(vk),
 	refrColorImage_(vk), refrDepthImage_(vk),
 	dudvTex_(vk), normalTex_(vk),
 	pipeline_(vk)
 {
+	factor_ = rs_.resScale.WATER;
+
 	uboBuffers_.reserve(vk_.getMaxFramesInFlight());
 	descriptorSets_.reserve(vk_.getMaxFramesInFlight());
 
@@ -54,16 +52,15 @@ WaterPassVk::~WaterPassVk() = default;
 
 void WaterPassVk::init()
 {
+	vk::Extent2D extent = vk_.getSwapChainExtent();
+	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
+
 	shader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
 		"water/water.vert.spv",
 		"water/water.frag.spv"
 	);
-
-	vk::Extent2D extent = vk_.getSwapChainExtent();
-
-	width_ = std::max(1u, extent.width / factor_);
-	height_ = std::max(1u, extent.height / factor_);
 
 	dudvTex_.loadFromFile("dudv.png", true);
 	dudvTex_.setDebugName("WaterPassVk-DuDvTexture");
@@ -80,12 +77,31 @@ void WaterPassVk::init()
 void WaterPassVk::resize()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
+	if (extent.width <= 0 || extent.height <= 0) return;
 
-	width_ = std::max(1u, extent.width / factor_);
-	height_ = std::max(1u, extent.height / factor_);
+	uint32_t newWidth = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	uint32_t newHeight = std::max(1u, (extent.height + factor_ - 1) / factor_);
+
+	if (newWidth == width_ && newHeight == height_)
+		return;
+
+	width_ = newWidth;
+	height_ = newHeight;
+
+	const uint32_t retireFrame = vk_.getPrevFrameIndex();
+
+	vk_.retireImage(retireFrame, std::move(reflColorImage_));
+	vk_.retireImage(retireFrame, std::move(reflDepthImage_));
+	vk_.retireImage(retireFrame, std::move(refrColorImage_));
+	vk_.retireImage(retireFrame, std::move(refrDepthImage_));
+
+	reflColorImage_ = ImageVk(vk_);
+	reflDepthImage_ = ImageVk(vk_);
+	refrColorImage_ = ImageVk(vk_);
+	refrDepthImage_ = ImageVk(vk_);
 
 	createAttachments();
-	createDescriptorSet();
+	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void WaterPassVk::renderOffscreen(
@@ -97,6 +113,8 @@ void WaterPassVk::renderOffscreen(
 	const glm::mat4& lightSpaceMatrix
 )
 {
+	syncSettings();
+
 	// refl + refr passes
 	waterPass(
 		rs, 
@@ -108,18 +126,13 @@ void WaterPassVk::renderOffscreen(
 	);
 } // end of renderOffscreen()
 
-void WaterPassVk::renderWater(
-	const FrameContext& frame,
-	const RenderSettings& rs,
-	const RenderInputs& in,
-	const glm::mat4& view,
-	const glm::mat4& proj,
-	const glm::mat4& lightSpaceMatrix,
-	int width, int height
+void WaterPassVk::render(
+	const WaterPassUBOs& ubos,
+	const ChunkDrawList& drawList,
+	const FrameContext& frame
 )
 {
-	ChunkDrawList list;
-	in.world->buildWaterDrawList(view, proj, list);
+	updateDescriptorSet(frame.frameIndex);
 
 	vk::CommandBuffer cmd = frame.cmd;
 
@@ -127,26 +140,9 @@ void WaterPassVk::renderWater(
 
 	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline_.getPipeline());
 
+	uboBuffers_[frame.frameIndex].upload(&ubos.waterData, sizeof(ubos.waterData));
+
 	vk::DescriptorSet set = descriptorSets_[frame.frameIndex].getSet();
-
-	ChunkWaterUBO ubo{};
-	ubo.u_useShadowMap = rs.useShadowMap ? 1 : 0;
-	ubo.u_lightSpaceMatrix = lightSpaceMatrix;
-	ubo.u_time = in.time;
-	ubo.u_view = view;
-	ubo.u_proj = proj;
-	ubo.u_screenSize = glm::vec2(width, height);
-	ubo.u_ambientStrength = in.world->getAmbientStrength();
-
-	ubo.u_near = in.camera->getNearPlane();
-	ubo.u_far = in.camera->getFarPlane();
-	ubo.u_viewPos = in.camera->getCameraPosition();
-
-	ubo.u_lightDir = in.light->getDirection();
-	ubo.u_lightColor = in.light->getLightColor();
-
-	uboBuffers_[frame.frameIndex].upload(&ubo, sizeof(ubo), 0);
-
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipeline_.getLayout(),
@@ -155,7 +151,7 @@ void WaterPassVk::renderWater(
 		0, nullptr
 	);
 
-	for (const auto& item : list.items)
+	for (const auto& item : drawList.items)
 	{
 		glm::mat4 model = glm::translate(
 			glm::mat4(1.0f),
@@ -176,10 +172,93 @@ void WaterPassVk::renderWater(
 	} // end for
 
 	cmd.endDebugUtilsLabelEXT();
-} // end of renderWater()
+} // end of render()
 
 
 //--- PRIVATE ---//
+void WaterPassVk::syncSettings()
+{
+	uint32_t newFactor = std::max(1u, rs_.resScale.WATER);
+
+	if (newFactor == factor_)
+		return;
+
+	factor_ = newFactor;
+	resize();
+} // end of syncSettings()
+
+void WaterPassVk::updateDescriptorSet(uint32_t frameIndex)
+{
+	DescriptorSetVk& set = descriptorSets_[frameIndex];
+	if (!set.valid())
+	{
+		return;
+	}
+
+	if (uboBuffers_[frameIndex].valid())
+	{
+		set.writeUniformBuffer(
+			TO_API_FORM(WaterBinding::UBO),
+			uboBuffers_[frameIndex].getBuffer(),
+			sizeof(ChunkWaterUBO)
+		);
+	}
+
+	if (reflColorImage_.valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::ReflColorTex),
+			reflColorImage_.view(),
+			reflColorImage_.sampler()
+		);
+	}
+
+	if (refrColorImage_.valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::RefrColorTex),
+			refrColorImage_.view(),
+			refrColorImage_.sampler()
+		);
+	}
+
+	if (refrDepthImage_.valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::RefrDepthTex),
+			refrDepthImage_.view(),
+			refrDepthImage_.sampler()
+		);
+	}
+
+	if (dudvTex_.valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::DudvTex),
+			dudvTex_.view(),
+			dudvTex_.sampler()
+		);
+	}
+
+	if (normalTex_.valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::NormalTex),
+			normalTex_.view(),
+			normalTex_.sampler()
+		);
+	}
+
+	if (shadowMapTex_ && shadowMapTex_->valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(WaterBinding::ShadowTex),
+			shadowMapTex_->view(),
+			shadowMapTex_->sampler()
+		);
+	}
+} // end of updateDescriptorSet()
+
 void WaterPassVk::createAttachments()
 {
 	/////////////////////////////////
@@ -409,48 +488,6 @@ void WaterPassVk::createDescriptorSet()
 		descriptorSets_[i].setDebugName(
 			"WaterPassVK::DescriptorSet frame " + std::to_string(i)
 		);
-
-		descriptorSets_[i].writeUniformBuffer(
-			TO_API_FORM(WaterBinding::UBO),
-			uboBuffers_[i].getBuffer(),
-			sizeof(ChunkWaterUBO)
-		);
-
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(WaterBinding::ReflColorTex),
-			reflColorImage_.view(),
-			reflColorImage_.sampler()
-		);
-
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(WaterBinding::RefrColorTex),
-			refrColorImage_.view(),
-			refrColorImage_.sampler()
-		);
-
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(WaterBinding::RefrDepthTex),
-			refrDepthImage_.view(),
-			refrDepthImage_.sampler()
-		);
-
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(WaterBinding::DudvTex),
-			dudvTex_.view(),
-			dudvTex_.sampler()
-		);
-
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(WaterBinding::NormalTex),
-			normalTex_.view(),
-			normalTex_.sampler()
-		);
-
-		descriptorSets_[i].writeCombinedImageSampler(
-			TO_API_FORM(WaterBinding::ShadowTex),
-			shadowMapImage_.view(),
-			shadowMapImage_.sampler()
-		);
 	} // end for
 } // end of createDescriptorSet()
 
@@ -505,7 +542,7 @@ void WaterPassVk::waterPass(
 	const glm::mat4& lightSpaceMatrix
 )
 {
-	vk::CommandBuffer cmd = frame.cmd;
+	vk::CommandBuffer cmd{ frame.cmd };
 
 	// REFLECTION
 	cmd.beginDebugUtilsLabelEXT({ "WaterPassVk-Reflection::cmd" });
@@ -553,7 +590,8 @@ void WaterPassVk::waterReflectionPass(
 	const glm::mat4& lightSpaceMatrix
 ) const
 {
-	vk::CommandBuffer cmd = frame.cmd;
+	vk::CommandBuffer cmd{ frame.cmd };
+	vk::Extent2D extent{ width_, height_ };
 
 	vk::ClearValue normalClear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
@@ -575,10 +613,7 @@ void WaterPassVk::waterReflectionPass(
 
 	vk::RenderingInfo renderingInfo{};
 	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = vk::Extent2D{
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_)
-	};
+	renderingInfo.renderArea.extent = extent;
 	renderingInfo.layerCount = 1;
 	renderingInfo.colorAttachmentCount = 1;
 	renderingInfo.pColorAttachments = &colorAttachment;
@@ -589,18 +624,15 @@ void WaterPassVk::waterReflectionPass(
 		vk::Viewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(width_);
-		viewport.height = static_cast<float>(height_);
+		viewport.width = static_cast<float>(extent.width);
+		viewport.height = static_cast<float>(extent.height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		cmd.setViewport(0, 1, &viewport);
 
 		vk::Rect2D scissor{};
 		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = vk::Extent2D{
-			static_cast<uint32_t>(width_),
-			static_cast<uint32_t>(height_)
-		};
+		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
 
 		// build reflected view matrix
@@ -612,11 +644,11 @@ void WaterPassVk::waterReflectionPass(
 		camera.invertPitch();
 
 		const glm::mat4 reflView = camera.getViewMatrix();
-
-		const float aspect = (height_ > 0)
-			? (static_cast<float>(width_) / static_cast<float>(height_))
-			: 1.0f;
-		glm::mat4 proj = camera.getProjectionMatrixVk(aspect);
+		const glm::mat4 reflProj = proj;
+		//const float aspect = (height_ > 0)
+		//	? (static_cast<float>(width_) / static_cast<float>(height_))
+		//	: 1.0f;
+		//glm::mat4 proj = camera.getProjectionMatrixVk(aspect);
 
 		// render world
 		chunk.renderOpaque(
@@ -624,7 +656,7 @@ void WaterPassVk::waterReflectionPass(
 			in,
 			frame,
 			reflView,
-			proj,
+			reflProj,
 			lightSpaceMatrix,
 			width_,
 			height_
@@ -664,7 +696,8 @@ void WaterPassVk::waterRefractionPass(
 	const glm::mat4& lightSpaceMatrix
 ) const
 {
-	vk::CommandBuffer cmd = frame.cmd;
+	vk::CommandBuffer cmd{ frame.cmd };
+	vk::Extent2D extent{ width_, height_ };
 
 	vk::ClearValue normalClear{ {0.0f, 0.0f, 0.0f, 1.0f} };
 
@@ -686,10 +719,7 @@ void WaterPassVk::waterRefractionPass(
 
 	vk::RenderingInfo renderingInfo{};
 	renderingInfo.renderArea.offset = vk::Offset2D{ 0, 0 };
-	renderingInfo.renderArea.extent = vk::Extent2D{
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_)
-	};
+	renderingInfo.renderArea.extent = extent;
 	renderingInfo.layerCount = 1;
 	renderingInfo.colorAttachmentCount = 1;
 	renderingInfo.pColorAttachments = &colorAttachment;
@@ -700,25 +730,22 @@ void WaterPassVk::waterRefractionPass(
 		vk::Viewport viewport{};
 		viewport.x = 0.0f;
 		viewport.y = 0.0f;
-		viewport.width = static_cast<float>(width_);
-		viewport.height = static_cast<float>(height_);
+		viewport.width = static_cast<float>(extent.width);
+		viewport.height = static_cast<float>(extent.height);
 		viewport.minDepth = 0.0f;
 		viewport.maxDepth = 1.0f;
 		cmd.setViewport(0, 1, &viewport);
 
 		vk::Rect2D scissor{};
 		scissor.offset = vk::Offset2D{ 0, 0 };
-		scissor.extent = vk::Extent2D{
-			static_cast<uint32_t>(width_),
-			static_cast<uint32_t>(height_)
-		};
+		scissor.extent = extent;
 		cmd.setScissor(0, 1, &scissor);
 
 		const glm::mat4 view = in.camera->getViewMatrix();
-		const float aspect = (height_ > 0)
-			? (static_cast<float>(width_) / static_cast<float>(height_))
-			: 1.0f;
-		glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
+		//const float aspect = (height_ > 0)
+		//	? (static_cast<float>(width_) / static_cast<float>(height_))
+		//	: 1.0f;
+		//glm::mat4 proj = in.camera->getProjectionMatrixVk(aspect);
 
 		// render world
 		chunk.renderOpaque(

@@ -10,7 +10,7 @@
 
 //--- PUBLIC ---//
 ImageVk::ImageVk(VulkanMain& vk)
-    : vk_(vk)
+    : vk_(&vk)
 {
 } // end of constructor
 
@@ -20,12 +20,12 @@ void ImageVk::setDebugName(const std::string& name)
 {
     if (!image_) return;
 
-    vk_.setDebugName(
+    vk_->setDebugName(
         vk::ObjectType::eImage,
         reinterpret_cast<uint64_t>(static_cast<VkImage>(image_.get())),
         name + "::Image"
     );
-    vk_.setDebugName(
+    vk_->setDebugName(
         vk::ObjectType::eImageView,
         reinterpret_cast<uint64_t>(static_cast<VkImageView>(view_.get())),
         name + "::ImageView"
@@ -57,7 +57,7 @@ void ImageVk::createImage(
 	layers_ = layers;
 	format_ = format;
 
-	vk::Device device = vk_.getDevice();
+	vk::Device device = vk_->getDevice();
 
     if (autoMipLevels)
     {
@@ -90,7 +90,7 @@ void ImageVk::createImage(
 
 	vk::MemoryAllocateInfo mai{};
 	mai.allocationSize = memReq.size;
-	mai.memoryTypeIndex = vk_.findMemoryType(memReq.memoryTypeBits, properties);
+	mai.memoryTypeIndex = vk_->findMemoryType(memReq.memoryTypeBits, properties);
 
 	vk::ResultValue rvMem = device.allocateMemoryUnique(mai);
 	if (rvMem.result != vk::Result::eSuccess)
@@ -119,7 +119,7 @@ void ImageVk::generateMipmaps(
 {
     // check format support for linear blitting
     vk::FormatProperties formatProps =
-        vk_.getPhysicalDevice().getFormatProperties(imageFormat);
+        vk_->getPhysicalDevice().getFormatProperties(imageFormat);
 
     if (!(formatProps.optimalTilingFeatures &
         vk::FormatFeatureFlagBits::eSampledImageFilterLinear))
@@ -129,7 +129,7 @@ void ImageVk::generateMipmaps(
         );
     }
 
-    vk::CommandBuffer cmd = vk_.beginSingleTimeCommands();
+    vk::CommandBuffer cmd = vk_->beginSingleTimeCommands();
 
     vk::ImageMemoryBarrier barrier{};
     barrier.image = image;
@@ -223,7 +223,7 @@ void ImageVk::generateMipmaps(
         barrier
     );
 
-    vk_.endSingleTimeCommands(cmd);
+    vk_->endSingleTimeCommands(cmd);
 
     layout_ = vk::ImageLayout::eShaderReadOnlyOptimal;
 } // end of generateMipmaps()
@@ -250,7 +250,7 @@ void ImageVk::createImageView(
 	ivci.subresourceRange.baseArrayLayer = 0;
 	ivci.subresourceRange.layerCount = layers;
 
-	vk::ResultValue rv = vk_.getDevice().createImageViewUnique(ivci);
+	vk::ResultValue rv = vk_->getDevice().createImageViewUnique(ivci);
 	if (rv.result != vk::Result::eSuccess)
 	{
 		throw std::runtime_error("ImageVk::createImageView - createImageViewUnique failed: " + vk::to_string(rv.result));
@@ -275,7 +275,7 @@ void ImageVk::createSampler(
 
 	sci.anisotropyEnable = enableAnisotropy;
 	sci.maxAnisotropy = enableAnisotropy
-        ? vk_.getPhysicalDeviceProperties().limits.maxSamplerAnisotropy
+        ? vk_->getPhysicalDeviceProperties().limits.maxSamplerAnisotropy
         : 1.0f;
 
 	sci.borderColor = vk::BorderColor::eFloatOpaqueWhite;
@@ -288,7 +288,7 @@ void ImageVk::createSampler(
 	sci.maxLod = std::min(5.0f, static_cast<float>(mipLevels_ - 1));
 	sci.mipLodBias = 0.0f; 
 
-	vk::ResultValue rv = vk_.getDevice().createSamplerUnique(sci);
+	vk::ResultValue rv = vk_->getDevice().createSamplerUnique(sci);
 	if (rv.result != vk::Result::eSuccess)
 	{
 		throw std::runtime_error("ImageVk::createSampler - createSamplerUnique failed: " + vk::to_string(rv.result));

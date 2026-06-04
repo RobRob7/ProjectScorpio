@@ -3,6 +3,7 @@
 #include "bindings.h"
 #include "constants.h"
 
+#include "render_settings.h"
 #include "frame_context_vk.h"
 #include "shader_vk.h"
 #include "utils_vk.h"
@@ -17,14 +18,17 @@
 #include <cstdint>
 
 //--- PUBLIC ---//
-SSAOPassVk::SSAOPassVk(VulkanMain& vk)
+SSAOPassVk::SSAOPassVk(VulkanMain& vk, const RenderSettings& rs)
 	: vk_(vk),
+	rs_(rs),
 	ssaoNoiseImage_(vk),
 	ssaoRawImage_(vk),
 	ssaoBlurImage_(vk),
 	ssaoRawPipeline_(vk),
 	ssaoBlurPipeline_(vk)
 {
+	factor_ = std::max(1u, rs_.resScale.SSAO);
+
 	ssaoRawSamplesUBOBuffers_.reserve(vk_.getMaxFramesInFlight());
 	ssaoRawUBOBuffers_.reserve(vk.getMaxFramesInFlight());
 	ssaoRawDescriptorSets_.reserve(vk.getMaxFramesInFlight());
@@ -46,8 +50,8 @@ SSAOPassVk::~SSAOPassVk() = default;
 void SSAOPassVk::init()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
-	width_ = extent.width / factor_;
-	height_ = extent.height / factor_;
+	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
 
 	ssaoRawShader_ = std::make_unique<ShaderModuleVk>(
 		vk_.getDevice(),
@@ -71,12 +75,27 @@ void SSAOPassVk::init()
 void SSAOPassVk::resize()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
-	width_ = extent.width / factor_;
-	height_ = extent.height / factor_;
+	if (extent.width <= 0 || extent.height <= 0) return;
+
+	uint32_t newWidth = std::max(1u, (extent.width + factor_ - 1) / factor_);
+	uint32_t newHeight = std::max(1u, (extent.height + factor_ - 1) / factor_);
+
+	if (newWidth == width_ && newHeight == height_)
+		return;
+
+	width_ = newWidth;
+	height_ = newHeight;
+
+	const uint32_t retireFrame = vk_.getPrevFrameIndex();
+
+	vk_.retireImage(retireFrame, std::move(ssaoRawImage_));
+	vk_.retireImage(retireFrame, std::move(ssaoBlurImage_));
+
+	ssaoRawImage_ = ImageVk(vk_);
+	ssaoBlurImage_ = ImageVk(vk_);
 
 	createAttachments();
-	createDescriptorSets();
-	createPipelines();
+	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void SSAOPassVk::render(
@@ -84,6 +103,18 @@ void SSAOPassVk::render(
 	const FrameContext& frame
 )
 {
+	syncSettings();
+
+	if (!gNormalTex_ ||
+		!gDepthTex_ ||
+		!ssaoRawImage_.valid() ||
+		!ssaoBlurImage_.valid())
+	{
+		return;
+	}
+
+	updateDescriptorSet(frame.frameIndex);
+
 	vk::CommandBuffer cmd = frame.cmd;
 	vk::Extent2D extent = { width_, height_ };
 
@@ -214,6 +245,17 @@ void SSAOPassVk::render(
 
 
 //--- PRIVATE ---//
+void SSAOPassVk::syncSettings()
+{
+	uint32_t newFactor = std::max(1u, rs_.resScale.SSAO);
+
+	if (newFactor == factor_)
+		return;
+
+	factor_ = newFactor;
+	resize();
+} // end of syncSettings()
+
 void SSAOPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
 	// RAW SET
@@ -287,18 +329,19 @@ void SSAOPassVk::updateDescriptorSet(uint32_t frameIndex)
 			);
 		}
 
-		set.writeCombinedImageSampler(
-			TO_API_FORM(SSAOBlurBinding::SSAORawTex),
-			ssaoRawImage_.view(),
-			ssaoRawImage_.sampler()
-		);
+		if (ssaoRawImage_.valid())
+		{
+			set.writeCombinedImageSampler(
+				TO_API_FORM(SSAOBlurBinding::SSAORawTex),
+				ssaoRawImage_.view(),
+				ssaoRawImage_.sampler()
+			);
+		}
 	}
 } // end of updateDescriptorSet()
 
 void SSAOPassVk::createAttachments()
 {
-	vk::Extent2D extent = vk_.getSwapChainExtent();
-
 	// RAW
 	ssaoRawImage_.createImage(
 		width_,

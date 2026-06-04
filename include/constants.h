@@ -16,8 +16,6 @@ enum class Backend
 
 namespace World
 {
-	const int WATER_TEX_FACTOR = 2;
-
  	const int MIN_GROUND = 100.0;
 	const int MAX_TERRAIN = MIN_GROUND;
 	const int SEA_LEVEL = MIN_GROUND + 40;
@@ -427,7 +425,6 @@ namespace FXAA_Constants
 
 namespace Fog_Constants
 {
-	const uint32_t RES_FACTOR = 2;
 	const uint32_t WORK_GROUPS = 16;
 
 	struct FogPassUBO

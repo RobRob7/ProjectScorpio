@@ -37,17 +37,17 @@ void RendererGL::init()
 {
     destroyGL();
 
-    if (!renderSettings_) renderSettings_ = std::make_unique<RenderSettings>();
+    if (!rs_) rs_ = std::make_unique<RenderSettings>();
 
     if (!gbuffer_)              gbuffer_ = std::make_unique<GBufferPass>();
     if (!shadowMapPass_)        shadowMapPass_ = std::make_unique<ShadowMapPassGL>();
     if (!debugPass_)            debugPass_ = std::make_unique<DebugPass>();
-    if (!ssaoPass_)             ssaoPass_ = std::make_unique<SSAOPass>();
+    if (!ssaoPass_)             ssaoPass_ = std::make_unique<SSAOPass>(*rs_);
     if (!fxaaPass_)             fxaaPass_ = std::make_unique<FXAAPass>();
-    if (!fogPass_)              fogPass_ = std::make_unique<FogPass>();
+    if (!fogPass_)              fogPass_ = std::make_unique<FogPass>(*rs_);
     if (!compositePassPost_)    compositePassPost_ = std::make_unique<PostCompositePassGL>();
     if (!presentPass_)          presentPass_ = std::make_unique<PresentPass>();
-    if (!waterPass_)            waterPass_ = std::make_unique<WaterPass>();
+    if (!waterPass_)            waterPass_ = std::make_unique<WaterPass>(*rs_);
 
     if (!chunkPass_)            chunkPass_ = std::make_unique<ChunkPassGL>();
 
@@ -104,12 +104,12 @@ void RendererGL::renderFrame(
     in.light->updateLight(
         in.time, 
         in.camera->getCameraPosition(),
-        renderSettings_->sunPaused
+        rs_->sunPaused
     );
 
     // update opaque + water shader
-    chunkPass_->updateShader(in, *renderSettings_, width_, height_);
-    waterPass_->updateShader(in, *renderSettings_, width_, height_);
+    chunkPass_->updateShader(in, *rs_, width_, height_);
+    waterPass_->updateShader(in, *rs_, width_, height_);
 
     const glm::mat4 view = in.camera->getViewMatrix();
     const float aspect = (height_ > 0)
@@ -134,11 +134,11 @@ void RendererGL::renderFrame(
     );
 
     // ssao pass
-    if (renderSettings_->useSSAO)
+    if (rs_->useSSAO)
     {
         SSAO_Constants::SSAORawUBO rawUBO{};
-        rawUBO.u_kernelSize = renderSettings_->aoSettings.samples;
-        rawUBO.u_radius = renderSettings_->aoSettings.radius;
+        rawUBO.u_kernelSize = rs_->aoSettings.samples;
+        rawUBO.u_radius = rs_->aoSettings.radius;
 
         SSAO_Constants::SSAOBlurUBO blurUBO{};
         blurUBO.u_texelSize = glm::vec2(1.0f / width_, 1.0f / height_);
@@ -153,7 +153,7 @@ void RendererGL::renderFrame(
     }
 
     // debug pass
-    if (renderSettings_->debugMode != DebugMode::None)
+    if (rs_->debugMode != DebugMode::None)
     {
         debugPass_->render(
             gbuffer_->getNormalTexture(),
@@ -161,14 +161,14 @@ void RendererGL::renderFrame(
             shadowMapPass_->getDepthTexture(),
             in.camera->getNearPlane(),
             in.camera->getFarPlane(),
-            static_cast<int>(renderSettings_->debugMode)
+            static_cast<int>(rs_->debugMode)
         );
         return;
     }
 
     // water pass
     waterPass_->renderOffscreen(
-        *renderSettings_,
+        *rs_,
         shadowMapPass_.get(),
         *chunkPass_, 
         in
@@ -194,7 +194,7 @@ void RendererGL::renderFrame(
     );
 
     waterPass_->renderWater(
-        *renderSettings_,
+        *rs_,
         shadowMapPass_.get(),
         in, 
         view, 
@@ -225,21 +225,21 @@ void RendererGL::renderFrame(
     uint32_t postColor{};
 
     // FOG
-    if (renderSettings_->useFog)
+    if (rs_->useFog)
     {
         Fog_Constants::FogPassUBO fogUBO{};
         fogUBO.u_invViewProj = glm::inverse(proj * view);
         fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
         fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
         fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
-        fogUBO.u_fogStartEnd = { renderSettings_->fogSettings.start, renderSettings_->fogSettings.end };
+        fogUBO.u_fogStartEnd = { rs_->fogSettings.start, rs_->fogSettings.end };
         fogUBO.u_fogColor = glm::vec4(in.light->getLightColor(), 1.0f);
         fogUBO.u_lightDir = in.light->getDirection();
-        fogUBO.u_maxDistance = renderSettings_->fogSettings.maxDistance;
+        fogUBO.u_maxDistance = rs_->fogSettings.maxDistance;
         fogUBO.u_ambStr = in.world->getAmbientStrength();
-        fogUBO.u_stepSize = renderSettings_->fogSettings.stepSize;
-        fogUBO.u_scatteringDensity = renderSettings_->fogSettings.scatteringDensity;
-        fogUBO.u_absorptionDensity = renderSettings_->fogSettings.absorptionDensity;
+        fogUBO.u_stepSize = rs_->fogSettings.stepSize;
+        fogUBO.u_scatteringDensity = rs_->fogSettings.scatteringDensity;
+        fogUBO.u_absorptionDensity = rs_->fogSettings.absorptionDensity;
 
         fogPass_->render(
             forwardDepthTex_,
@@ -257,7 +257,7 @@ void RendererGL::renderFrame(
     }
 
     // FXAA
-    if (renderSettings_->useFXAA)
+    if (rs_->useFXAA)
     {
         fxaaPass_->render(postBaseColor);
         postBaseColor = fxaaPass_->getOutputTex();
@@ -285,7 +285,7 @@ void RendererGL::renderFrame(
 
 RenderSettings& RendererGL::settings()
 {
-    return *renderSettings_;
+    return *rs_;
 } // end of settings()
 
 

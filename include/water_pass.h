@@ -20,7 +20,7 @@ class ShadowMapPassGL;
 class WaterPass
 {
 public:
-	WaterPass();
+	WaterPass(const RenderSettings& rs);
 	~WaterPass();
 
 	void init();
@@ -80,11 +80,13 @@ private:
 		const RenderInputs& in
 	) const;
 private:
+	const RenderSettings& rs_;
+
 	int factor_{};
-	int width_{ 0 };
-	int height_{ 0 };
-	int fullW_{ 0 };
-	int fullH_{ 0 };
+	int width_{};
+	int height_{};
+	int fullW_{};
+	int fullH_{};
 
 	std::unique_ptr<Shader> shader_;
 

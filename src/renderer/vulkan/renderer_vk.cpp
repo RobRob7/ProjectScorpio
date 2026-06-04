@@ -51,9 +51,9 @@ RendererVk::~RendererVk() = default;
 
 void RendererVk::init()
 {
-	if (!renderSettings_) 
+	if (!rs_) 
 	{
-		renderSettings_ = std::make_unique<RenderSettings>();
+		rs_ = std::make_unique<RenderSettings>();
 	}
 
 	if (vk_.supportsRayTracing())
@@ -67,6 +67,7 @@ void RendererVk::init()
 		{
 			rtaoPass_ = std::make_unique<RTAOPassVk>(
 				vk_,
+				*rs_,
 				rtWorld_->getTLAS()
 			);
 		}
@@ -74,6 +75,7 @@ void RendererVk::init()
 		{
 			rtShadowPass_ = std::make_unique<RTShadowPassVk>(
 				vk_,
+				*rs_,
 				rtWorld_->getTLAS()
 			);
 		}
@@ -82,6 +84,7 @@ void RendererVk::init()
 		{
 			rtWorldPass_ = std::make_unique<RayTracingWorldPassVk>(
 				vk_,
+				*rs_,
 				rtWorld_->getTLAS(),
 				rtWorld_->getPackedRTOpaqueInfoBuffer(),
 				rtWorld_->getPackedRTOpaqueInfoBufferSize(),
@@ -112,24 +115,16 @@ void RendererVk::init()
 	}
 	if (!ssaoPass_)
 	{
-		ssaoPass_ = std::make_unique<SSAOPassVk>(vk_);
+		ssaoPass_ = std::make_unique<SSAOPassVk>(vk_, *rs_);
 	}
 
 	if (!waterPass_)
 	{
-		waterPass_ = std::make_unique<WaterPassVk>(
-			vk_,
-			shadowMapPass_->getDepthImage()
-		);
+		waterPass_ = std::make_unique<WaterPassVk>(vk_, *rs_);
 	}
 	if (!chunkPass_)
 	{
-		chunkPass_ = std::make_unique<ChunkPassVk>(
-			vk_,
-			*renderSettings_,
-			ssaoPass_->ssaoBlurImage(),
-			shadowMapPass_->getDepthImage()
-		);
+		chunkPass_ = std::make_unique<ChunkPassVk>(vk_, *rs_);
 	}
 
 	if (!compositePassHybrid_)
@@ -144,7 +139,7 @@ void RendererVk::init()
 
 	if (!fogPass_)
 	{
-		fogPass_ = std::make_unique<FogPassVk>(vk_);
+		fogPass_ = std::make_unique<FogPassVk>(vk_, *rs_);
 	}
 	if (!fxaaPass_)
 	{
@@ -170,7 +165,7 @@ void RendererVk::init()
 	}
 	else
 	{
-		renderSettings_->useRT = false;
+		rs_->useRT = false;
 	}
 
 	gbufferPass_->init();
@@ -248,14 +243,18 @@ void RendererVk::renderFrame(
 	in.light->updateLight(
 		in.time, 
 		in.camera->getCameraPosition(),
-		renderSettings_->sunPaused
+		rs_->sunPaused
 	);
 
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), &frame);
-	if (renderSettings_->useRT)
+	if (rs_->useRT)
 	{
 		in.world->buildRTDrawList(view, proj);
+	}
+	else
+	{
+		in.world->buildWaterDrawList(view, proj);
 	}
 
 	// ----------------- PASSES ----------------- //
@@ -272,7 +271,7 @@ void RendererVk::renderFrame(
 	}
 
 	// RT upload
-	if (vk_.supportsRayTracing() && renderSettings_->useRT && rtWorld_)
+	if (vk_.supportsRayTracing() && rs_->useRT && rtWorld_)
 	{
 		rtWorld_->upload(
 			cmd,
@@ -306,9 +305,9 @@ void RendererVk::renderFrame(
 			.rayGenData = {
 				.u_invView = glm::inverse(view),
 				.u_invViewProj = glm::inverse(proj * view),
-				.u_useRTAO = renderSettings_->useRTAO ? 1 : 0,
-				.u_AORadius = renderSettings_->aoSettings.radius,
-				.u_AOSamples = renderSettings_->aoSettings.samples
+				.u_useRTAO = rs_->useRTAO ? 1 : 0,
+				.u_AORadius = rs_->aoSettings.radius,
+				.u_AOSamples = rs_->aoSettings.samples
 			}
 		};
 		rtaoPass_->render(ubos, frame);
@@ -323,14 +322,14 @@ void RendererVk::renderFrame(
 				.u_invView = glm::inverse(view),
 				.u_invViewProj = glm::inverse(proj * view),
 				.u_lightDir = in.light->getDirection(),
-				.u_useRTShadows = renderSettings_->useRTShadow ? 1 : 0
+				.u_useRTShadows = rs_->useRTShadow ? 1 : 0
 			}
 		};
 		rtShadowPass_->render(ubos, frame);
 	}
 
 	// shadow map pass
-	if ((!renderSettings_->useRT && shadowMapPass_) || renderSettings_->useFog)
+	if ((!rs_->useRT && shadowMapPass_) || rs_->useFog)
 	{
 		shadowMapPass_->render(
 			*chunkPass_,
@@ -340,10 +339,9 @@ void RendererVk::renderFrame(
 	}
 
 	// ssao pass
-	if (!renderSettings_->useRT && renderSettings_->useSSAO)
+	if (!rs_->useRT && rs_->useSSAO)
 	{
 		ssaoPass_->setInput(
-			frame.frameIndex,
 			gbufferPass_->getNormalImage(), 
 			gbufferPass_->getDepthImage()
 		);
@@ -364,9 +362,9 @@ void RendererVk::renderFrame(
 					static_cast<float>(ssaoExtent.width) / SSAO_Constants::K_NOISE_SIZE,
 					static_cast<float>(ssaoExtent.height) / SSAO_Constants::K_NOISE_SIZE
 				),
-				.u_radius = renderSettings_->aoSettings.radius,
+				.u_radius = rs_->aoSettings.radius,
 				.u_bias = SSAO_Constants::BIAS,
-				.u_kernelSize = renderSettings_->aoSettings.samples,
+				.u_kernelSize = rs_->aoSettings.samples,
 			}
 		};
 		std::memcpy(
@@ -378,10 +376,11 @@ void RendererVk::renderFrame(
 	}
 
 	// water refl + refr pass
-	if (!renderSettings_->useRT && waterPass_)
+	if (!rs_->useRT && waterPass_)
 	{
+
 		waterPass_->renderOffscreen(
-			*renderSettings_,
+			*rs_,
 			frame,
 			proj,
 			*chunkPass_,
@@ -391,7 +390,7 @@ void RendererVk::renderFrame(
 	}
 
 	// debug pass
-	if (renderSettings_->debugMode != DebugMode::None)
+	if (rs_->debugMode != DebugMode::None)
 	{
 		//debugPass_->setInput(
 		//	rtShadowPass_->getOutColorImage(),
@@ -407,7 +406,7 @@ void RendererVk::renderFrame(
 		//	frame,
 		//	in.camera->getNearPlane(),
 		//	in.camera->getFarPlane(),
-		//	static_cast<int>(renderSettings_->debugMode)
+		//	static_cast<int>(rs_->debugMode)
 		//);
 
 		if (ui)
@@ -469,8 +468,13 @@ void RendererVk::renderFrame(
 		scissor.extent = frame.extent;
 		cmd.setScissor(0, 1, &scissor);
 
-		if (chunkPass_ && !renderSettings_->useRT)
+		if (chunkPass_ && !rs_->useRT)
 		{
+			chunkPass_->setInput(
+				ssaoPass_->ssaoBlurImage(),
+				shadowMapPass_->getDepthImage()
+			);
+
 			chunkPass_->renderOpaque(
 				RenderTargetVk::Default,
 				in,
@@ -481,21 +485,31 @@ void RendererVk::renderFrame(
 			);
 		}
 
-		if (waterPass_ && !renderSettings_->useRT)
+		if (waterPass_ && !rs_->useRT)
 		{
-			waterPass_->renderWater(
-				frame,
-				*renderSettings_,
-				in,
-				view,
-				proj,
-				shadowMapPass_->getLightSpaceMatrix(),
-				width_,
-				height_
-			);
+			waterPass_->setInput(shadowMapPass_->getDepthImage());
+
+			WaterPassUBOs ubos
+			{
+				.waterData = {
+					.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix(),
+					.u_view = view,
+					.u_proj = proj,
+
+					.u_time = in.time,
+					.u_useShadowMap = rs_->useShadowMap ? 1 : 0,
+					.u_near = in.camera->getNearPlane(),
+					.u_far = in.camera->getFarPlane(),
+					.u_screenSize = glm::vec2(width_, height_),
+					.u_viewPos = in.camera->getCameraPosition(),
+					.u_lightDir = in.light->getDirection(),
+					.u_ambientStrength = in.world->getAmbientStrength()
+				}
+			};
+			waterPass_->render(ubos, in.world->getWaterDrawList(), frame);
 		}
 
-		if (in.skybox && !renderSettings_->useRT) 
+		if (in.skybox && !rs_->useRT) 
 		{
 			in.skybox->render(
 				&frame,
@@ -520,7 +534,7 @@ void RendererVk::renderFrame(
 	cmd.endDebugUtilsLabelEXT();
 
 	// RT render
-	if (vk_.supportsRayTracing() && renderSettings_->useRT && rtWorldPass_)
+	if (vk_.supportsRayTracing() && rs_->useRT && rtWorldPass_)
 	{
 		CubemapVk* skybox = dynamic_cast<CubemapVk*>(in.skybox);
 		rtWorldPass_->setSkybox(
@@ -567,7 +581,7 @@ void RendererVk::renderFrame(
 	sceneDepth_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
 
 	// ----------------- HYBRID COMPOSITE PASS ----------------- //
-	if (vk_.supportsRayTracing() && renderSettings_->useRT)
+	if (vk_.supportsRayTracing() && rs_->useRT)
 	{
 		compositePassHybrid_->setInput(
 			{ sceneColor_, sceneDepth_ },
@@ -587,7 +601,7 @@ void RendererVk::renderFrame(
 	ImageVk* finalSceneDepth = nullptr;
 	ImageVk* postBaseColor = nullptr;
 	ImageVk* postColor = nullptr;
-	if (renderSettings_->useRT)
+	if (rs_->useRT)
 	{
 		finalSceneColor = &compositePassHybrid_->getOutColorImage();
 		finalSceneDepth = &compositePassHybrid_->getOutDepthImage();
@@ -601,7 +615,7 @@ void RendererVk::renderFrame(
 	postBaseColor = finalSceneColor;
 
 	// FOG
-	if (renderSettings_->useFog)
+	if (rs_->useFog)
 	{
 		fogPass_->setInput(
 			*finalSceneDepth,
@@ -613,14 +627,14 @@ void RendererVk::renderFrame(
 		fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
 		fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
 		fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
-		fogUBO.u_fogStartEnd = { renderSettings_->fogSettings.start, renderSettings_->fogSettings.end };
+		fogUBO.u_fogStartEnd = { rs_->fogSettings.start, rs_->fogSettings.end };
 		fogUBO.u_fogColor = glm::vec4(in.light->getLightColor(), 1.0f);
 		fogUBO.u_lightDir = in.light->getDirection();
-		fogUBO.u_maxDistance = renderSettings_->fogSettings.maxDistance;
+		fogUBO.u_maxDistance = rs_->fogSettings.maxDistance;
 		fogUBO.u_ambStr = in.world->getAmbientStrength();
-		fogUBO.u_stepSize = renderSettings_->fogSettings.stepSize;
-		fogUBO.u_scatteringDensity = renderSettings_->fogSettings.scatteringDensity;
-		fogUBO.u_absorptionDensity = renderSettings_->fogSettings.absorptionDensity;
+		fogUBO.u_stepSize = rs_->fogSettings.stepSize;
+		fogUBO.u_scatteringDensity = rs_->fogSettings.scatteringDensity;
+		fogUBO.u_absorptionDensity = rs_->fogSettings.absorptionDensity;
 
 		fogPass_->render(
 			frame,
@@ -637,7 +651,7 @@ void RendererVk::renderFrame(
 	}
 
 	// FXAA
-	if (renderSettings_->useFXAA)
+	if (rs_->useFXAA)
 	{
 		fxaaPass_->setInput(*postBaseColor);
 		fxaaPass_->render(frame);

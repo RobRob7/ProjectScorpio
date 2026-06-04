@@ -129,6 +129,7 @@ public:
 
     uint32_t getMaxFramesInFlight() const { return MAX_FRAMES_IN_FLIGHT; }
 
+    uint32_t getPrevFrameIndex() const { return (currentFrame_ + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT; }
     uint32_t currentFrameIndex() const { return currentFrame_; }
 
     void retireBuffer(uint32_t frameIndex, BufferVk&& buffer)

@@ -15,6 +15,7 @@
 #include <memory>
 #include <cstdlib>
 #include <vector>
+#include <cstdint>
 
 class VulkanMain;
 class ImageVk;
@@ -33,12 +34,7 @@ struct ChunkPassUBOs
 class ChunkPassVk
 {
 public:
-	explicit ChunkPassVk(
-		VulkanMain& vk,
-		RenderSettings& rs,
-		const ImageVk& ssaoBlurImage, 
-		const ImageVk& shadowMapImage
-	);
+	explicit ChunkPassVk(VulkanMain& vk, RenderSettings& rs);
 	~ChunkPassVk();
 
 	void init(
@@ -59,8 +55,18 @@ public:
 		const uint32_t waterPassHeight = {}
 	);
 
+	void setInput(
+		ImageVk& ssaoBlurTex,
+		ImageVk& shadowMapTex
+	)
+	{
+		ssaoBlurTex_ = &ssaoBlurTex;
+		shadowMapTex_ = &shadowMapTex;
+	} // end of setInput()
+
 private:
-	void refreshTexBinding();
+	void updateDescriptorSet(uint32_t frameIndex);
+	void updateSingleDescriptorSet(uint32_t frameIndex, RenderTargetVk renderTarget);
 	void createResources();
 	void createDescriptorSets();
 	void createPipelines(
@@ -70,11 +76,10 @@ private:
 	);
 private:
 	VulkanMain& vk_;
-
 	RenderSettings& rs_;
 
-	const ImageVk& ssaoBlurImage_;
-	const ImageVk& shadowMapImage_;
+	ImageVk* ssaoBlurTex_{ nullptr };
+	ImageVk* shadowMapTex_{ nullptr };
 
 	std::unique_ptr<ShaderModuleVk> opaqueShader_;
 	std::unique_ptr<ShaderModuleVk> opaqueGBufferShader_;
