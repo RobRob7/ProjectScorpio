@@ -11,9 +11,10 @@ endif()
 project(Scorpio LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# find Vulkan SDK
 find_package(Vulkan REQUIRED)
+find_package(Threads REQUIRED)
 
 # GLFW no build, install
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -45,8 +46,9 @@ set(ASSIMP_BUILD_FBX_IMPORTER ON CACHE BOOL "" FORCE)
 
 add_subdirectory(deps/assimp-6.0.5)
 
-# VS set startup project main
-set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
+if(MSVC)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT ${CMAKE_PROJECT_NAME})
+endif()
 
 # collect all *.cpp under src/ into MY_SOURCES
 file(GLOB_RECURSE MY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
@@ -58,6 +60,12 @@ target_sources("${CMAKE_PROJECT_NAME}" PRIVATE ${MY_SOURCES})
 
 if (MSVC)
     target_compile_options("${CMAKE_PROJECT_NAME}" PRIVATE /MP)
+else()
+    target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+    )
 endif()
 
 # include header directories
@@ -73,7 +81,8 @@ target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC
 
 # link libs
 target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE 
-	Vulkan::Vulkan 
+	Vulkan::Vulkan
+	Threads::Threads
 	glm 
 	glfw 
 	glad 

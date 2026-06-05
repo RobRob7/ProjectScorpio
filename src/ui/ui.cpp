@@ -25,23 +25,46 @@
 #include <vulkan/vulkan.hpp>
 
 #include <memory>
-#define NOMINMAX
-#include <windows.h>
-#include <psapi.h>
 #include <filesystem>
+
+#if defined(_WIN32)
+	#define NOMINMAX
+	#include <windows.h>
+	#include <psapi.h>
+#elif defined(__linux__)
+	#include <cstdio>
+	#include <unistd.h>
+#endif
 
 //--- HELPER ---//
 static size_t GetProcessMemoryMB()
 {
+#if defined(_WIN32)
+	// WINDOWS
 	PROCESS_MEMORY_COUNTERS_EX pmc{};
 	GetProcessMemoryInfo(
 		GetCurrentProcess(),
 		(PROCESS_MEMORY_COUNTERS*)&pmc,
 		sizeof(pmc)
 	);
-	 
-	// Working Set = physical RAM currently used
 	return pmc.WorkingSetSize / (1024 * 1024);
+
+#elif defined(__linux__)
+	// LINUX
+	long rss = 0;
+	FILE* fp = std::fopen("/proc/self/statm", "r");
+	if (!fp) return 0;
+
+	long pages = 0;
+	if (std::fscanf(fp, "%*s%ld", &pages) == 1)
+		rss = pages * sysconf(_SC_PAGESIZE);
+
+	std::fclose(fp);
+	return static_cast<size_t>(rss) / (1024 * 1024);
+
+#else
+	return 0;
+#endif
 } // end of GetProcessMemoryMB()
 
 //--- PUBLIC ---//
