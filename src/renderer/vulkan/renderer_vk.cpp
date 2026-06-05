@@ -70,6 +70,7 @@ void RendererVk::init()
 				*rs_,
 				rtWorld_->getTLAS()
 			);
+			rtaoPass_->init();
 		}
 		if (!rtShadowPass_)
 		{
@@ -78,6 +79,7 @@ void RendererVk::init()
 				*rs_,
 				rtWorld_->getTLAS()
 			);
+			rtShadowPass_->init();
 		}
 
 		if (!rtWorldPass_)
@@ -91,7 +93,14 @@ void RendererVk::init()
 				rtWorld_->getPackedRTWaterInfoBuffer(),
 				rtWorld_->getPackedRTWaterInfoBufferSize()
 			);
+			rtWorldPass_->init();
 		}
+	}
+	else
+	{
+		rs_->useRT = false;
+		rs_->useRTAO = false;
+		rs_->useRTShadow = false;
 	}
 
 	if (!gbufferPass_)
@@ -149,23 +158,6 @@ void RendererVk::init()
 	if (!presentPass_)
 	{
 		presentPass_ = std::make_unique<PresentPassVk>(vk_);
-	}
-
-	if (rtaoPass_)
-	{
-		rtaoPass_->init();
-	}
-	if (rtShadowPass_)
-	{
-		rtShadowPass_->init();
-	}
-	if (rtWorldPass_)
-	{
-		rtWorldPass_->init();
-	}
-	else
-	{
-		rs_->useRT = false;
 	}
 
 	gbufferPass_->init();
@@ -248,7 +240,7 @@ void RendererVk::renderFrame(
 
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), &frame);
-	if (rs_->useRT)
+	if (vk_.supportsRayTracing() && rs_->useRT)
 	{
 		in.world->buildRTDrawList(view, proj);
 	}
@@ -281,7 +273,7 @@ void RendererVk::renderFrame(
 	}
 
 	// RTAO pass
-	if (rtaoPass_)
+	if (vk_.supportsRayTracing() && rs_->useRT && rtaoPass_)
 	{
 		rtaoPass_->setInput(
 			gbufferPass_->getNormalImage(),
@@ -302,7 +294,7 @@ void RendererVk::renderFrame(
 	}
 
 	// RT shadow pass
-	if (rtShadowPass_)
+	if (vk_.supportsRayTracing() && rs_->useRT && rtShadowPass_)
 	{
 		rtShadowPass_->setInput(
 			gbufferPass_->getNormalImage(),
@@ -591,7 +583,7 @@ void RendererVk::renderFrame(
 	ImageVk* finalSceneDepth = nullptr;
 	ImageVk* postBaseColor = nullptr;
 	ImageVk* postColor = nullptr;
-	if (rs_->useRT)
+	if (vk_.supportsRayTracing() && rs_->useRT)
 	{
 		finalSceneColor = &compositePassHybrid_->getOutColorImage();
 		finalSceneDepth = &compositePassHybrid_->getOutDepthImage();
