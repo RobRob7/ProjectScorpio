@@ -15,7 +15,8 @@
 #include "fxaa_pass.h"
 #include "present_pass.h"
 #include "water_pass.h"
-#include "fog_pass.h"
+#include "fog_pass_gl.h"
+#include "god_ray_pass_gl.h"
 #include "post_composite_pass_gl.h"
 
 #include "render_inputs.h"
@@ -44,7 +45,8 @@ void RendererGL::init()
     if (!debugPass_)            debugPass_ = std::make_unique<DebugPass>();
     if (!ssaoPass_)             ssaoPass_ = std::make_unique<SSAOPass>(*rs_);
     if (!fxaaPass_)             fxaaPass_ = std::make_unique<FXAAPass>();
-    if (!fogPass_)              fogPass_ = std::make_unique<FogPass>(*rs_);
+    if (!fogPass_)              fogPass_ = std::make_unique<FogPassGL>(*rs_);
+    if (!godRayPass_)           godRayPass_ = std::make_unique<GodRayPassGL>(*rs_);
     if (!compositePassPost_)    compositePassPost_ = std::make_unique<PostCompositePassGL>();
     if (!presentPass_)          presentPass_ = std::make_unique<PresentPass>();
     if (!waterPass_)            waterPass_ = std::make_unique<WaterPass>(*rs_);
@@ -65,6 +67,7 @@ void RendererGL::init()
     waterPass_->init();
     fxaaPass_->init();
     fogPass_->init();
+    godRayPass_->init();
     compositePassPost_->init();
     presentPass_->init();
 } // end of init()
@@ -82,6 +85,7 @@ void RendererGL::resize(int w, int h)
     fxaaPass_->resize(width_, height_);
     waterPass_->resize(width_, height_);
     fogPass_->resize(width_, height_);
+    godRayPass_->resize(width_, height_);
     compositePassPost_->resize(width_, height_);
     presentPass_->resize(width_, height_);
 
@@ -128,10 +132,14 @@ void RendererGL::renderFrame(
     );
 
     // shadow map pass
-    shadowMapPass_->renderOffscreen(
-        *chunkPass_, 
-        in
-    );
+    if (shadowMapPass_ ||
+        rs_->useGodRays)
+    {
+        shadowMapPass_->renderOffscreen(
+            *chunkPass_,
+            in
+        );
+    }
 
     // ssao pass
     if (rs_->useSSAO)
@@ -220,57 +228,76 @@ void RendererGL::renderFrame(
 
 
     // ----------------- POST-PROCESSING ----------------- //
-    uint32_t finalSceneDepth = forwardDepthTex_;
-    uint32_t postBaseColor = forwardColorTex_;
-    uint32_t postColor{};
+    uint32_t sceneColor = forwardColorTex_;
+    uint32_t sceneDepth = forwardDepthTex_;
+    uint32_t currentColor = sceneColor;
 
     // FOG
     if (rs_->useFog)
     {
-        Fog_Constants::FogPassUBO fogUBO{};
-        fogUBO.u_invViewProj = glm::inverse(proj * view);
-        fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
-        fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
-        fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
-        fogUBO.u_fogStartEnd = { rs_->fogSettings.start, rs_->fogSettings.end };
-        fogUBO.u_fogColor = glm::vec4(in.light->getLightColor(), 1.0f);
-        fogUBO.u_lightDir = in.light->getDirection();
-        fogUBO.u_maxDistance = rs_->fogSettings.maxDistance;
-        fogUBO.u_ambStr = in.world->getAmbientStrength();
-        fogUBO.u_stepSize = rs_->fogSettings.stepSize;
-        fogUBO.u_scatteringDensity = rs_->fogSettings.scatteringDensity;
-        fogUBO.u_absorptionDensity = rs_->fogSettings.absorptionDensity;
+        fogPass_->setInput(sceneDepth);
 
-        fogPass_->render(
-            forwardDepthTex_,
-            shadowMapPass_->getDepthTexture(),
-            fogUBO
-        );
-        
-        compositePassPost_->setInput(
-            postBaseColor,
-            fogPass_->getOutputTex()
-        );
-        compositePassPost_->render();
-
-        postBaseColor = compositePassPost_->getOutColorImage();
+        Fog_Constants::FogPassUBO ubo{};
+        ubo.u_invViewProj = glm::inverse(proj * view);
+        ubo.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
+        ubo.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f);
+        ubo.u_maxDistance = rs_->fogSettings.maxDistance;
+        ubo.u_stepSize = rs_->fogSettings.stepSize;
+        ubo.u_scatteringDensity = rs_->fogSettings.scatteringDensity;
+        ubo.u_absorptionDensity = rs_->fogSettings.absorptionDensity;
+        fogPass_->render(ubo);
     }
+    else
+    {
+        fogPass_->clearColorImage({ 0.0f, 0.0f, 0.0f, 1.0f });
+    }
+
+    // GOD RAYS
+    if (rs_->useGodRays)
+    {
+        godRayPass_->setInput(
+            sceneDepth,
+            shadowMapPass_->getDepthTexture()
+        );
+
+        God_Ray_Constants::GodRayPassUBO ubo{};
+        ubo.u_invViewProj = glm::inverse(proj * view);
+        ubo.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
+        ubo.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
+        ubo.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f);
+        ubo.u_lightDir = in.light->getDirection();
+        ubo.u_maxDistance = rs_->godRaySettings.maxDistance;
+        ubo.u_stepSize = rs_->godRaySettings.stepSize;
+        godRayPass_->render(ubo);
+    }
+    else
+    {
+        godRayPass_->clearColorImage({ 0.0f, 0.0f, 0.0f, 0.0f });
+    }
+
+    // POST COMPOSITE
+    compositePassPost_->setInput(
+        fogPass_->getOutputImage(),
+        godRayPass_->getOutputImage(),
+        currentColor
+    );
+    compositePassPost_->render();
+    currentColor = compositePassPost_->getOutColorImage();
+
 
     // FXAA
     if (rs_->useFXAA)
     {
-        fxaaPass_->render(postBaseColor);
-        postBaseColor = fxaaPass_->getOutputTex();
+        fxaaPass_->render(currentColor);
+        currentColor = fxaaPass_->getOutputTex();
     }
-
-    postColor = postBaseColor;
     // --------------- END POST-PROCESSING --------------- //
 
 
     // ----------------- PRESENT PASS ----------------- //
     if (presentPass_)
     {
-        presentPass_->render(postColor);
+        presentPass_->render(currentColor);
     }
     // --------------- END PRESENT PASS --------------- //
 

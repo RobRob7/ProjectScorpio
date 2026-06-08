@@ -1,4 +1,4 @@
-#include "fog_pass_vk.h"
+#include "god_ray_pass_vk.h"
 
 #include "render_settings.h"
 
@@ -15,13 +15,13 @@
 #include <algorithm>
 
 //--- PUBLIC ---//
-FogPassVk::FogPassVk(VulkanMain& vk, const RenderSettings& rs)
+GodRayPassVk::GodRayPassVk(VulkanMain& vk, const RenderSettings& rs)
 	: vk_(vk),
 	rs_(rs),
 	outputImage_(vk),
 	computePipeline_(vk)
 {
-	factor_ = std::max(1u, rs_.resScale.FOG);
+	factor_ = std::max(1u, rs_.resScale.GOD_RAYS);
 
 	uboBuffers_.reserve(vk.getMaxFramesInFlight());
 	descriptorSets_.reserve(vk.getMaxFramesInFlight());
@@ -32,9 +32,9 @@ FogPassVk::FogPassVk(VulkanMain& vk, const RenderSettings& rs)
 	} // end for
 } // end of constuctor
 
-FogPassVk::~FogPassVk() = default;
+GodRayPassVk::~GodRayPassVk() = default;
 
-void FogPassVk::init()
+void GodRayPassVk::init()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
 	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
@@ -45,7 +45,7 @@ void FogPassVk::init()
 
 	compShader_ = std::make_unique<ComputeShaderModuleVk>(
 		vk_.getDevice(),
-		"fogpass/fog.comp.spv"
+		"godraypass/godray.comp.spv"
 	);
 
 	createAttachment();
@@ -54,7 +54,7 @@ void FogPassVk::init()
 	createPipeline();
 } // end of init()
 
-void FogPassVk::resize()
+void GodRayPassVk::resize()
 {
 	vk::Extent2D extent = vk_.getSwapChainExtent();
 	if (extent.width <= 0 || extent.height <= 0) return;
@@ -79,11 +79,12 @@ void FogPassVk::resize()
 	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
-void FogPassVk::render(const FogPassUBOs& ubos, const FrameContext& frame)
+void GodRayPassVk::render(const GodRayUBOs& ubos, const FrameContext& frame)
 {
 	syncSettings();
 
-	if (!inputDepthImage_ ||
+	if (!inputShadowMapImage_ ||
+		!inputDepthImage_ ||
 		!outputImage_.valid() ||
 		!computePipeline_.valid())
 	{
@@ -94,7 +95,7 @@ void FogPassVk::render(const FogPassUBOs& ubos, const FrameContext& frame)
 	
 	vk::CommandBuffer cmd = frame.cmd;
 
-	cmd.beginDebugUtilsLabelEXT({ "FogPassVk::cmd" });
+	cmd.beginDebugUtilsLabelEXT({ "GodRayPassVk::cmd" });
 
 	outputImage_.transitionToGeneral(cmd);
 
@@ -124,9 +125,9 @@ void FogPassVk::render(const FogPassUBOs& ubos, const FrameContext& frame)
 
 
 //--- PRIVATE ---//
-void FogPassVk::syncSettings()
+void GodRayPassVk::syncSettings()
 {
-	uint32_t newFactor = std::max(1u, rs_.resScale.FOG);
+	uint32_t newFactor = std::max(1u, rs_.resScale.GOD_RAYS);
 
 	if (newFactor == factor_)
 		return;
@@ -135,7 +136,7 @@ void FogPassVk::syncSettings()
 	resize();
 } // end of syncSettings()
 
-void FogPassVk::updateDescriptorSet(uint32_t frameIndex)
+void GodRayPassVk::updateDescriptorSet(uint32_t frameIndex)
 {
 	DescriptorSetVk& set = descriptorSets_[frameIndex];
 	if (!set.valid())
@@ -146,7 +147,7 @@ void FogPassVk::updateDescriptorSet(uint32_t frameIndex)
 	if (outputImage_.valid())
 	{
 		set.writeStorageImage(
-			TO_API_FORM(FogPassBinding::OutColorTex),
+			TO_API_FORM(GodRayPassBinding::OutColorTex),
 			outputImage_.view(),
 			vk::ImageLayout::eGeneral
 		);
@@ -155,14 +156,23 @@ void FogPassVk::updateDescriptorSet(uint32_t frameIndex)
 	if (inputDepthImage_ && inputDepthImage_->valid())
 	{
 		set.writeCombinedImageSampler(
-			TO_API_FORM(FogPassBinding::ForwardDepthTex),
+			TO_API_FORM(GodRayPassBinding::ForwardDepthTex),
 			inputDepthImage_->view(),
 			inputDepthImage_->sampler()
 		);
 	}
+
+	if (inputShadowMapImage_ && inputShadowMapImage_->valid())
+	{
+		set.writeCombinedImageSampler(
+			TO_API_FORM(GodRayPassBinding::ShadowMapTex),
+			inputShadowMapImage_->view(),
+			inputShadowMapImage_->sampler()
+		);
+	}
 } // end of updateDescriptorSet()
 
-void FogPassVk::createAttachment()
+void GodRayPassVk::createAttachment()
 {
 	outputImage_.createImage(
 		width_,
@@ -193,41 +203,45 @@ void FogPassVk::createAttachment()
 		vk::False
 	);
 
-	outputImage_.setDebugName("FogPassVk-OutputImage");
+	outputImage_.setDebugName("GodRayPassVk-OutputImage");
 } // end of createAttachment()
 
-void FogPassVk::createResources()
+void GodRayPassVk::createResources()
 {
 	for (auto& buffer : uboBuffers_)
 	{
 		buffer.create(
-			sizeof(Fog_Constants::FogPassUBO),
+			sizeof(God_Ray_Constants::GodRayPassUBO),
 			vk::BufferUsageFlagBits::eUniformBuffer,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent
 		);
 	} // end for
 } // end of createResources()
 
-void FogPassVk::createDescriptorSet()
+void GodRayPassVk::createDescriptorSet()
 {
 	for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
 	{
 		vk::DescriptorSetLayoutBinding uboBinding{};
-		uboBinding.binding = TO_API_FORM(FogPassBinding::UBO);
+		uboBinding.binding = TO_API_FORM(GodRayPassBinding::UBO);
 		uboBinding.descriptorType = vk::DescriptorType::eUniformBuffer;
 		uboBinding.descriptorCount = 1;
-		uboBinding.stageFlags = vk::ShaderStageFlagBits::eVertex | 
-			vk::ShaderStageFlagBits::eFragment |
-			vk::ShaderStageFlagBits::eCompute;
+		uboBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
 
 		vk::DescriptorSetLayoutBinding inputDepthBinding{};
-		inputDepthBinding.binding = TO_API_FORM(FogPassBinding::ForwardDepthTex);
+		inputDepthBinding.binding = TO_API_FORM(GodRayPassBinding::ForwardDepthTex);
 		inputDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
 		inputDepthBinding.descriptorCount = 1;
 		inputDepthBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
 
+		vk::DescriptorSetLayoutBinding inputShadowBinding{};
+		inputShadowBinding.binding = TO_API_FORM(GodRayPassBinding::ShadowMapTex);
+		inputShadowBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		inputShadowBinding.descriptorCount = 1;
+		inputShadowBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
+
 		vk::DescriptorSetLayoutBinding outputColorBinding{};
-		outputColorBinding.binding = TO_API_FORM(FogPassBinding::OutColorTex);
+		outputColorBinding.binding = TO_API_FORM(GodRayPassBinding::OutColorTex);
 		outputColorBinding.descriptorType = vk::DescriptorType::eStorageImage;
 		outputColorBinding.descriptorCount = 1;
 		outputColorBinding.stageFlags = vk::ShaderStageFlagBits::eCompute;
@@ -235,6 +249,7 @@ void FogPassVk::createDescriptorSet()
 		descriptorSets_[i].createLayout({
 			uboBinding, 
 			inputDepthBinding,
+			inputShadowBinding,
 			outputColorBinding
 			});
 
@@ -245,6 +260,10 @@ void FogPassVk::createDescriptorSet()
 		vk::DescriptorPoolSize inputDepthPool{};
 		inputDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
 		inputDepthPool.descriptorCount = 1;
+
+		vk::DescriptorPoolSize inputShadowPool{};
+		inputShadowPool.type = vk::DescriptorType::eCombinedImageSampler;
+		inputShadowPool.descriptorCount = 1;
 		
 		vk::DescriptorPoolSize outputColorPool{};
 		outputColorPool.type = vk::DescriptorType::eStorageImage;
@@ -253,23 +272,24 @@ void FogPassVk::createDescriptorSet()
 		descriptorSets_[i].createPool({
 			uboPool, 
 			inputDepthPool,
+			inputShadowPool,
 			outputColorPool
 			});
 		descriptorSets_[i].allocate();
 
 		descriptorSets_[i].writeUniformBuffer(
-			TO_API_FORM(FogPassBinding::UBO),
+			TO_API_FORM(GodRayPassBinding::UBO),
 			uboBuffers_[i].getBuffer(),
-			sizeof(Fog_Constants::FogPassUBO)
+			sizeof(God_Ray_Constants::GodRayPassUBO)
 		);
 
 		descriptorSets_[i].setDebugName(
-			"FogPassVk::DescriptorSet frame " + std::to_string(i)
+			"GodRayPassVk::DescriptorSet frame " + std::to_string(i)
 		);
 	} // end for
 } // end of createDescriptorSet()
 
-void FogPassVk::createPipeline()
+void GodRayPassVk::createPipeline()
 {
 	ComputePipelineDescVk compDesc{};
 	compDesc.computeShader = compShader_->shader();
@@ -277,5 +297,5 @@ void FogPassVk::createPipeline()
 
 	computePipeline_.create(compDesc);
 
-	computePipeline_.setDebugName("FogPassVk::Pipeline");
+	computePipeline_.setDebugName("GodRayPassVk::Pipeline");
 } // end of createPipeline()

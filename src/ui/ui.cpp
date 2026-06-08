@@ -534,6 +534,9 @@ void UI::drawMenuBar(IScene& scene)
 			if (ImGui::Checkbox("Volumetric Fog##graphics", &renderSettings_.useFog))
 			{
 			}
+			if (ImGui::Checkbox("God Rays##graphics", &renderSettings_.useGodRays))
+			{
+			}
 			ImGui::EndMenu();
 		}
 
@@ -567,6 +570,28 @@ void UI::drawMenuBar(IScene& scene)
 						{
 							renderSettings_.resScale.FOG =
 								std::min(6u, renderSettings_.resScale.FOG + 1);
+						}
+					}
+					// god ray scale
+					{
+						ImGui::Text("God Ray Pass");
+						ImGui::SameLine(LABEL_WIDTH);
+
+						if (ImGui::SmallButton("-##godray"))
+						{
+							renderSettings_.resScale.GOD_RAYS =
+								std::max(1u, renderSettings_.resScale.GOD_RAYS - 1);
+						}
+
+						ImGui::SameLine();
+						ImGui::Text("%u", renderSettings_.resScale.GOD_RAYS);
+
+						ImGui::SameLine();
+
+						if (ImGui::SmallButton("+##godray"))
+						{
+							renderSettings_.resScale.GOD_RAYS =
+								std::min(6u, renderSettings_.resScale.GOD_RAYS + 1);
 						}
 					}
 				}
@@ -998,22 +1023,12 @@ void UI::drawInspector(IScene& scene)
 	if (ImGui::CollapsingHeader("Fog", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		bool changed = false;
-		changed |= ImGui::DragFloat("Start Pos##fog", &renderSettings_.fogSettings.start, 0.1f, 0.0f, renderSettings_.fogSettings.end);
-		if (ImGui::Button("Reset##fog_start"))
-		{
-			renderSettings_.fogSettings.start = 50.0f;
-		}
-		changed |= ImGui::DragFloat("End Pos##fog", &renderSettings_.fogSettings.end, 0.1f, renderSettings_.fogSettings.start, 2000.0f);
-		if (ImGui::Button("Reset##fog_end"))
-		{
-			renderSettings_.fogSettings.end = 200.0f;
-		}
 		changed |= ImGui::DragFloat("Max Ray Distance##fog", &renderSettings_.fogSettings.maxDistance, 0.1f, 0.0f, 200.0f);
 		if (ImGui::Button("Reset##fog_maxdistance"))
 		{
 			renderSettings_.fogSettings.maxDistance = 100.0f;
 		}
-		changed |= ImGui::DragFloat("Step Size##fog", &renderSettings_.fogSettings.stepSize, 0.01f, 0.01f, 1.5f);
+		changed |= ImGui::DragFloat("Step Size##fog", &renderSettings_.fogSettings.stepSize, 0.01f, 0.03f, 1.5f);
 		if (ImGui::Button("Reset##fog_stepsize"))
 		{
 			renderSettings_.fogSettings.stepSize = 0.150f;
@@ -1028,21 +1043,24 @@ void UI::drawInspector(IScene& scene)
 		{
 			renderSettings_.fogSettings.absorptionDensity = 0.003f;
 		}
+		ImGui::Separator();
+	}
+	ImGui::EndDisabled();
 
-
-		// ensure start + kMinGap <= end ALWAYS
-		if (changed)
+	// ------- god rays -------
+	ImGui::BeginDisabled(!renderSettings_.useGodRays);
+	if (ImGui::CollapsingHeader("God Rays", ImGuiTreeNodeFlags_DefaultOpen))
+	{
+		bool changed = false;
+		changed |= ImGui::DragFloat("Max Ray Distance##godray", &renderSettings_.godRaySettings.maxDistance, 0.1f, 0.0f, 200.0f);
+		if (ImGui::Button("Reset##godray_maxdistance"))
 		{
-			const float kMinGap = 100.0f;
-			const float minFogStart = 25.0f;
-			if (renderSettings_.fogSettings.start < minFogStart)
-				renderSettings_.fogSettings.start = minFogStart;
-
-			if (renderSettings_.fogSettings.start > renderSettings_.fogSettings.end - kMinGap)
-			{
-				renderSettings_.fogSettings.start = std::max(minFogStart, renderSettings_.fogSettings.end - kMinGap);
-				renderSettings_.fogSettings.end = renderSettings_.fogSettings.start + kMinGap;
-			}
+			renderSettings_.godRaySettings.maxDistance = 100.0f;
+		}
+		changed |= ImGui::DragFloat("Step Size##godray", &renderSettings_.godRaySettings.stepSize, 0.01f, 0.03f, 1.5f);
+		if (ImGui::Button("Reset##godray_stepsize"))
+		{
+			renderSettings_.godRaySettings.stepSize = 0.150f;
 		}
 		ImGui::Separator();
 	}

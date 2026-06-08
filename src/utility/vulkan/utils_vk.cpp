@@ -296,6 +296,15 @@ namespace VkUtils
 			srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
 			dstStage = vk::PipelineStageFlagBits::eFragmentShader;
 		}
+		else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+			newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+		{
+			barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+			barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+			srcStage = vk::PipelineStageFlagBits::eTransfer;
+			dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+		}
 		else
 		{
 			throw std::runtime_error(

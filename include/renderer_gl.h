@@ -22,7 +22,8 @@ class SSAOPass;
 class FXAAPass;
 class PresentPass;
 class WaterPass;
-class FogPass;
+class FogPassGL;
+class GodRayPassGL;
 class PostCompositePassGL;
 
 struct RenderInputs;
@@ -65,7 +66,8 @@ private:
 
 	std::unique_ptr<PostCompositePassGL> compositePassPost_;
 
-	std::unique_ptr<FogPass> fogPass_;
+	std::unique_ptr<FogPassGL> fogPass_;
+	std::unique_ptr<GodRayPassGL> godRayPass_;
 	std::unique_ptr<FXAAPass> fxaaPass_;
 
 	std::unique_ptr<PresentPass> presentPass_;

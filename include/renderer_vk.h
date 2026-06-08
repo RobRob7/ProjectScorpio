@@ -33,6 +33,7 @@ class PostCompositePassVk;
 
 class FXAAPassVk;
 class FogPassVk;
+class GodRayPassVk;
 class PresentPassVk;
 
 class UI;
@@ -87,6 +88,7 @@ private:
 	std::unique_ptr<PostCompositePassVk> compositePassPost_;
 
 	std::unique_ptr<FogPassVk> fogPass_;
+	std::unique_ptr<GodRayPassVk> godRayPass_;
 	std::unique_ptr<FXAAPassVk> fxaaPass_;
 
 	std::unique_ptr<PresentPassVk> presentPass_;

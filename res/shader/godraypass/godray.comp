@@ -1,0 +1,102 @@
+#version 460 core
+
+#include "../helper.glsl"
+
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(std140, set = 0, binding = 0) uniform UBO
+{
+    mat4 u_invViewProj;
+    mat4 u_lightSpaceMatrix;
+
+    vec4 u_cameraPos;
+    vec4 u_sunColor;
+
+    vec3 u_lightDir;
+    float u_maxDistance;
+
+    float u_stepSize;
+    vec3 _pad0;
+} ubo;
+
+layout(binding = 1) uniform sampler2D ForwardDepthTex;
+layout(binding = 2) uniform sampler2D ShadowMapTex;
+
+layout(binding = 3, rgba16f) writeonly uniform image2D GodRaysImage;
+
+float SampleShadowMap(vec3 worldPos)
+{
+    vec4 lightClip = ubo.u_lightSpaceMatrix * vec4(worldPos, 1.0);
+    vec3 proj = lightClip.xyz / lightClip.w;
+
+#ifdef VULKAN
+    proj.xy = proj.xy * 0.5 + 0.5;
+#else
+    proj = proj * 0.5 + 0.5;
+#endif
+
+    if(proj.x < 0.0 || proj.x > 1.0 ||
+       proj.y < 0.0 || proj.y > 1.0 ||
+       proj.z < 0.0 || proj.z > 1.0)
+    {
+        return 1.0;
+    }
+
+    float closestDepth = texture(ShadowMapTex, proj.xy).r;
+    float currentDepth = proj.z;
+
+    return currentDepth <= closestDepth ? 1.0 : 0.0;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 godRaySize = imageSize(GodRaysImage);
+
+    if(pixel.x >= godRaySize.x || pixel.y >= godRaySize.y)
+        return;
+
+    vec2 uv = (vec2(pixel) + 0.5) / vec2(godRaySize);
+
+    float z01 = texture(ForwardDepthTex, uv).r;
+
+    vec3 fragPos = ReconstructWorldPos(uv, z01, ubo.u_invViewProj);
+
+    vec3 rayDir = normalize(fragPos - ubo.u_cameraPos.xyz);
+
+    float rayDistance = length(fragPos - ubo.u_cameraPos.xyz);
+    rayDistance = min(rayDistance, ubo.u_maxDistance);
+
+    vec3 radiance = vec3(0.0);
+    float transmittance = 1.0;
+
+    float stepSize = max(ubo.u_stepSize, 0.01);
+
+    float godRayDensity = 0.003;
+    float godRayIntensity = 3.0;
+    float extinction = godRayDensity;
+
+    float sunAmount = max(-ubo.u_lightDir.y, 0.0);
+
+    for (float t = 0.0; t < rayDistance; t += stepSize)
+    {
+        vec3 marchPos = ubo.u_cameraPos.xyz + rayDir * t;
+
+        float visibility = SampleShadowMap(marchPos);
+
+        vec3 sunScatter = ubo.u_sunColor.rgb
+                        * visibility
+                        * sunAmount
+                        * godRayDensity
+                        * godRayIntensity;
+
+        radiance += transmittance * sunScatter * stepSize;
+        transmittance *= exp(-extinction * stepSize);
+
+        if(transmittance < 0.01)
+            break;
+    } // end for
+
+
+    imageStore(GodRaysImage, pixel, vec4(radiance, 1.0));
+}

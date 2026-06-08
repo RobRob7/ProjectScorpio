@@ -2,6 +2,8 @@
 
 #include "frame_context_vk.h"
 
+#include "render_settings.h"
+
 #include "bindings.h"
 #include "shader_vk.h"
 #include "vulkan_main.h"
@@ -10,6 +12,7 @@
 #include <vulkan/vulkan.hpp>
 
 #include <cstdint>
+#include <algorithm>
 
 //--- PUBLIC ---//
 PostCompositePassVk::PostCompositePassVk(VulkanMain& vk)
@@ -28,6 +31,10 @@ PostCompositePassVk::~PostCompositePassVk() = default;
 
 void PostCompositePassVk::init()
 {
+    vk::Extent2D extent = vk_.getSwapChainExtent();
+    width_ = extent.width;
+    height_ = extent.height;
+
     shader_ = std::make_unique<ShaderModuleVk>(
         vk_.getDevice(),
         "compositepass/post_compositepass.vert.spv",
@@ -41,14 +48,30 @@ void PostCompositePassVk::init()
 
 void PostCompositePassVk::resize()
 {
-    postColorImage_.destroy();
+    vk::Extent2D extent = vk_.getSwapChainExtent();
+    if (extent.width <= 0 || extent.height <= 0) return;
+
+    uint32_t newWidth = extent.width;
+    uint32_t newHeight = extent.height;
+
+    if (newWidth == width_ && newHeight == height_) return;
+
+    width_ = newWidth;
+    height_ = newHeight;
+
+    const uint32_t retireFrame = vk_.getPrevFrameIndex();
+
+    vk_.retireImage(retireFrame, std::move(postColorImage_));
+    postColorImage_ = ImageVk(vk_);
+
     createAttachment();
-    refreshInput();
+    updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
 void PostCompositePassVk::render(FrameContext& frame)
 {
     if (!fogColorImage_ ||
+        !godRayColorImage_ ||
         !sceneColorImage_ ||
         !pipeline_.valid())
     {
@@ -59,9 +82,14 @@ void PostCompositePassVk::render(FrameContext& frame)
     if (!desc.valid()) return;
 
     desc.writeCombinedImageSampler(
-        TO_API_FORM(PostCompositePassBinding::FogColorTex),
+        TO_API_FORM(PostCompositePassBinding::FogTex),
         fogColorImage_->view(),
         fogColorImage_->sampler()
+    );
+    desc.writeCombinedImageSampler(
+        TO_API_FORM(PostCompositePassBinding::GodRayTex),
+        godRayColorImage_->view(),
+        godRayColorImage_->sampler()
     );
     desc.writeCombinedImageSampler(
         TO_API_FORM(PostCompositePassBinding::SceneColorTex),
@@ -129,35 +157,48 @@ void PostCompositePassVk::render(FrameContext& frame)
 
 
 //--- PRIVATE ---//
-void PostCompositePassVk::refreshInput()
+void PostCompositePassVk::updateDescriptorSet(uint32_t frameIndex)
 {
-    if (!fogColorImage_ ||
-        !sceneColorImage_)
+    DescriptorSetVk& set = descriptorSets_[frameIndex];
+    if (!set.valid())
+    {
         return;
+    }
 
-    for (auto& set : descriptorSets_)
+    if (fogColorImage_ &&  fogColorImage_->valid())
     {
         set.writeCombinedImageSampler(
-            TO_API_FORM(PostCompositePassBinding::FogColorTex),
+            TO_API_FORM(PostCompositePassBinding::FogTex),
             fogColorImage_->view(),
             fogColorImage_->sampler()
         );
+    }
+
+    if (godRayColorImage_ && godRayColorImage_->valid())
+    {
+        set.writeCombinedImageSampler(
+            TO_API_FORM(PostCompositePassBinding::GodRayTex),
+            godRayColorImage_->view(),
+            godRayColorImage_->sampler()
+        );
+    }
+
+    if (sceneColorImage_ && sceneColorImage_->valid())
+    {
         set.writeCombinedImageSampler(
             TO_API_FORM(PostCompositePassBinding::SceneColorTex),
             sceneColorImage_->view(),
             sceneColorImage_->sampler()
         );
-    } // end for
-} // end of refreshInput()
+    }
+} // end of updateDescriptorSet()
 
 void PostCompositePassVk::createAttachment()
 {
-    vk::Extent2D extent = vk_.getSwapChainExtent();
-
     // color
     postColorImage_.createImage(
-        extent.width,
-        extent.height,
+        width_,
+        height_,
         1,
         false,
         vk::SampleCountFlagBits::e1,
@@ -191,33 +232,45 @@ void PostCompositePassVk::createDescriptorSet()
     for (uint32_t i = 0; i < vk_.getMaxFramesInFlight(); ++i)
     {
         vk::DescriptorSetLayoutBinding fogColorBinding{};
-        fogColorBinding.binding = TO_API_FORM(PostCompositePassBinding::FogColorTex);
+        fogColorBinding.binding = TO_API_FORM(PostCompositePassBinding::FogTex);
         fogColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
         fogColorBinding.descriptorCount = 1;
         fogColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
-        vk::DescriptorSetLayoutBinding fxaaDepthBinding{};
-        fxaaDepthBinding.binding = TO_API_FORM(PostCompositePassBinding::SceneColorTex);
-        fxaaDepthBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
-        fxaaDepthBinding.descriptorCount = 1;
-        fxaaDepthBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+        vk::DescriptorSetLayoutBinding godRayColorBinding{};
+        godRayColorBinding.binding = TO_API_FORM(PostCompositePassBinding::GodRayTex);
+        godRayColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        godRayColorBinding.descriptorCount = 1;
+        godRayColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
+
+        vk::DescriptorSetLayoutBinding sceneColorBinding{};
+        sceneColorBinding.binding = TO_API_FORM(PostCompositePassBinding::SceneColorTex);
+        sceneColorBinding.descriptorType = vk::DescriptorType::eCombinedImageSampler;
+        sceneColorBinding.descriptorCount = 1;
+        sceneColorBinding.stageFlags = vk::ShaderStageFlagBits::eFragment;
 
         descriptorSets_[i].createLayout({
             fogColorBinding,
-            fxaaDepthBinding
+            godRayColorBinding,
+            sceneColorBinding
             });
 
         vk::DescriptorPoolSize fogColorPool{};
         fogColorPool.type = vk::DescriptorType::eCombinedImageSampler;
         fogColorPool.descriptorCount = 1;
 
-        vk::DescriptorPoolSize fxaaDepthPool{};
-        fxaaDepthPool.type = vk::DescriptorType::eCombinedImageSampler;
-        fxaaDepthPool.descriptorCount = 1;
+        vk::DescriptorPoolSize godRayColorPool{};
+        godRayColorPool.type = vk::DescriptorType::eCombinedImageSampler;
+        godRayColorPool.descriptorCount = 1;
+
+        vk::DescriptorPoolSize sceneColorPool{};
+        sceneColorPool.type = vk::DescriptorType::eCombinedImageSampler;
+        sceneColorPool.descriptorCount = 1;
 
         descriptorSets_[i].createPool({
             fogColorPool,
-            fxaaDepthPool
+            godRayColorPool,
+            sceneColorPool
             });
         descriptorSets_[i].allocate();
 

@@ -1,5 +1,5 @@
-#ifndef FOG_PASS_VK_H
-#define FOG_PASS_VK_H
+#ifndef GOD_RAY_PASS_VK_H
+#define GOD_RAY_PASS_VK_H
 
 #include "constants.h"
 #include "frame_context_vk.h"
@@ -19,25 +19,29 @@ class VulkanMain;
 class ComputeShaderModuleVk;
 struct RenderSettings;
 
-struct FogPassUBOs
+struct GodRayUBOs
 {
-	Fog_Constants::FogPassUBO ubo{};
+	God_Ray_Constants::GodRayPassUBO ubo{};
 };
 
-class FogPassVk
+class GodRayPassVk
 {
 public:
-	explicit FogPassVk(VulkanMain& vk, const RenderSettings& rs);
-	~FogPassVk();
+	explicit GodRayPassVk(VulkanMain& vk, const RenderSettings& rs);
+	~GodRayPassVk();
 
 	void init();
 	void resize();
 
-	void render(const FogPassUBOs& ubos, const FrameContext& frame);
+	void render(const GodRayUBOs& ubos, const FrameContext& frame);
 
-	void setInput(ImageVk& inputDepth)
+	void setInput(
+		ImageVk& inputDepth, 
+		ImageVk& inputShadowMap
+	)
 	{
 		inputDepthImage_ = &inputDepth;
+		inputShadowMapImage_ = &inputShadowMap;
 	} // end of setInput()
 
 	ImageVk& getOutputImage() { return outputImage_; }
@@ -57,11 +61,12 @@ private:
 	uint32_t width_{};
 	uint32_t height_{};
 
-	uint32_t numWorkGroups_{Fog_Constants::WORK_GROUPS};
+	uint32_t numWorkGroups_{ God_Ray_Constants::WORK_GROUPS };
 	uint32_t workGroupX_{};
 	uint32_t workGroupY_{};
 
 	ImageVk* inputDepthImage_{ nullptr };
+	ImageVk* inputShadowMapImage_{ nullptr };
 
 	ImageVk outputImage_;
 	vk::Format outputFormat_{ vk::Format::eR16G16B16A16Sfloat };

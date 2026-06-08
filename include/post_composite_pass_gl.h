@@ -20,27 +20,29 @@ public:
 	void render();
 
 	void setInput(
-		const uint32_t& inputFogTex,
-		const uint32_t& inputFXAATex
+		uint32_t inputFogTex,
+		uint32_t inputGodRayTex,
+		uint32_t inputSceneColorTex
 	)
 	{
 		fogColorImage_ = &inputFogTex;
-		sceneColorImage_ = &inputFXAATex;
+		godRayColorImage_ = &inputGodRayTex;
+		sceneColorImage_ = &inputSceneColorTex;
 	} // end of setInput()
 
-	const uint32_t& getOutColorImage() const { return postColorImage_; }
+	uint32_t& getOutColorImage() { return postColorImage_; }
 
 private:
 	void destroyAttachment();
 	void destroyGL();
-	void refreshInput();
 	void createAttachment();
 private:
 	int width_{};
 	int height_{};
 
-	const uint32_t* fogColorImage_{ nullptr };
-	const uint32_t* sceneColorImage_{ nullptr };
+	uint32_t* fogColorImage_{ nullptr };
+	uint32_t* godRayColorImage_{ nullptr };
+	uint32_t* sceneColorImage_{ nullptr };
 	
 	uint32_t postColorImage_{};
 	GLenum postColorFormat_{ GL_RGBA16F };
