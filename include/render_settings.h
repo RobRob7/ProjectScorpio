@@ -11,6 +11,7 @@ struct PassResolutionScale
 {
 	// HYBRID
 	uint32_t FOG{ 2 };
+	uint32_t GOD_RAYS{ 4 };
 	uint32_t FXAA{ 1 };
 
 	// RT
@@ -40,16 +41,17 @@ struct AOSettings
 
 struct FogSettings
 {
-	float start{ 50.0f };
-	float end{ 175.0f };
-
-	float rayZLimit{ 75.0f };
-
 	float maxDistance{ 100.0f };
 	float stepSize{ 0.150f };
 
 	float scatteringDensity{ 0.015f };
 	float absorptionDensity{ 0.003f };
+};
+
+struct GodRaySettings
+{
+	float maxDistance{ 100.0f };
+	float stepSize{ 0.150f };
 };
 
 struct RenderSettings
@@ -72,11 +74,10 @@ struct RenderSettings
 	bool useSSAO{ true };
 	bool useFXAA{ false };
 	bool useFog{ true };
+	bool useGodRays{ true };
 
-	// fog controls
 	FogSettings fogSettings;
-
-	// AO controls
+	GodRaySettings godRaySettings;
 	AOSettings aoSettings;
 
 	// sun controls

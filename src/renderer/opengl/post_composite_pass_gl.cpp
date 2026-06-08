@@ -42,12 +42,13 @@ void PostCompositePassGL::render()
 {
 	if (!shader_ ||
 		!fogColorImage_ ||
-		!sceneColorImage_ ||
-		!postColorImage_||
+		!godRayColorImage_ ||
+		!sceneColorImage_||
 		!fsVao_)
 		return;
 
-	glBindTextureUnit(TO_API_FORM(PostCompositePassBinding::FogColorTex), *fogColorImage_);
+	glBindTextureUnit(TO_API_FORM(PostCompositePassBinding::FogTex), *fogColorImage_);
+	glBindTextureUnit(TO_API_FORM(PostCompositePassBinding::GodRayTex), *godRayColorImage_);
 	glBindTextureUnit(TO_API_FORM(PostCompositePassBinding::SceneColorTex), *sceneColorImage_);
 
 	const GLboolean prevDepth = glIsEnabled(GL_DEPTH_TEST);
@@ -95,11 +96,6 @@ void PostCompositePassGL::destroyGL()
 		fsVao_ = 0;
 	}
 } // end of destroyGL()
-
-void PostCompositePassGL::refreshInput()
-{
-
-} // end of refreshInput()
 
 void PostCompositePassGL::createAttachment()
 {

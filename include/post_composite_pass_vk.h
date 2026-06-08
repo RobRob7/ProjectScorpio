@@ -12,6 +12,7 @@
 class VulkanMain;
 class ShaderModuleVk;
 struct FrameContext;
+struct RenderSettings;
 
 class PostCompositePassVk
 {
@@ -26,10 +27,12 @@ public:
 
 	void setInput(
 		ImageVk& inputFogTex,
+		ImageVk& inputGodRayTex,
 		ImageVk& inputSceneColorTex
 	)
 	{
 		fogColorImage_ = &inputFogTex;
+		godRayColorImage_ = &inputGodRayTex;
 		sceneColorImage_ = &inputSceneColorTex;
 	} // end of setInput()
 
@@ -37,7 +40,7 @@ public:
 	ImageVk& getOutColorImage() { return postColorImage_; }
 
 private:
-	void refreshInput();
+	void updateDescriptorSet(uint32_t frameIndex);
 	void createAttachment();
 	void createDescriptorSet();
 	void createPipeline();
@@ -45,7 +48,11 @@ private:
 private:
 	VulkanMain& vk_;
 
+	uint32_t width_{};
+	uint32_t height_{};
+
 	ImageVk* fogColorImage_{ nullptr };
+	ImageVk* godRayColorImage_{ nullptr };
 	ImageVk* sceneColorImage_{ nullptr };
 
 	ImageVk postColorImage_;

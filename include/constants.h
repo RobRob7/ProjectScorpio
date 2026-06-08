@@ -430,22 +430,34 @@ namespace Fog_Constants
 	struct FogPassUBO
 	{
 		glm::mat4 u_invViewProj;
+
+		glm::vec4 u_cameraPos;
+		glm::vec4 u_sunColor;
+
+		float u_maxDistance;
+		float u_stepSize;
+		float u_scatteringDensity;
+		float u_absorptionDensity;
+	};
+};
+
+namespace God_Ray_Constants
+{
+	const uint32_t WORK_GROUPS = 16;
+
+	struct GodRayPassUBO
+	{
+		glm::mat4 u_invViewProj;
 		glm::mat4 u_lightSpaceMatrix;
 
 		glm::vec4 u_cameraPos;
-
-		glm::vec2 u_nearFar;
-		glm::vec2 u_fogStartEnd;
-
-		glm::vec4 u_fogColor;
+		glm::vec4 u_sunColor;
 
 		glm::vec3 u_lightDir;
 		float u_maxDistance;
 
-		float u_ambStr;
 		float u_stepSize;
-		float u_scatteringDensity;
-		float u_absorptionDensity;
+		glm::vec3 _pad0;
 	};
 };
 

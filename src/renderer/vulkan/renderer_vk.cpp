@@ -35,6 +35,7 @@
 #include "post_composite_pass_vk.h"
 #include "fxaa_pass_vk.h"
 #include "fog_pass_vk.h"
+#include "god_ray_pass_vk.h"
 #include "present_pass_vk.h"
 
 #include <glm/glm.hpp>
@@ -150,6 +151,10 @@ void RendererVk::init()
 	{
 		fogPass_ = std::make_unique<FogPassVk>(vk_, *rs_);
 	}
+	if (!godRayPass_)
+	{
+		godRayPass_ = std::make_unique<GodRayPassVk>(vk_, *rs_);
+	}
 	if (!fxaaPass_)
 	{
 		fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
@@ -176,6 +181,7 @@ void RendererVk::init()
 	compositePassPost_->init();
 
 	fogPass_->init();
+	godRayPass_->init();
 	fxaaPass_->init();
 	presentPass_->init();
 } // end of init()
@@ -203,6 +209,7 @@ void RendererVk::resize(int w, int h)
 	if (compositePassPost_)	compositePassPost_->resize();
 
 	if (fogPass_)		fogPass_->resize();
+	if (godRayPass_)	godRayPass_->resize();
 	if (fxaaPass_)		fxaaPass_->resize();
 
 	if (presentPass_)	presentPass_->resize();
@@ -314,7 +321,8 @@ void RendererVk::renderFrame(
 	}
 
 	// shadow map pass
-	if ((!rs_->useRT && shadowMapPass_) || rs_->useFog)
+	if ((!rs_->useRT && shadowMapPass_) ||
+		rs_->useGodRays)
 	{
 		shadowMapPass_->render(
 			*chunkPass_,
@@ -579,69 +587,91 @@ void RendererVk::renderFrame(
 
 
 	// ----------------- POST-PROCESSING ----------------- //
-	ImageVk* finalSceneColor = nullptr;
-	ImageVk* finalSceneDepth = nullptr;
-	ImageVk* postBaseColor = nullptr;
-	ImageVk* postColor = nullptr;
+	ImageVk* sceneColor = nullptr;
+	ImageVk* sceneDepth = nullptr;
+	ImageVk* currentColor = nullptr;
 	if (vk_.supportsRayTracing() && rs_->useRT)
 	{
-		finalSceneColor = &compositePassHybrid_->getOutColorImage();
-		finalSceneDepth = &compositePassHybrid_->getOutDepthImage();
+		sceneColor = &compositePassHybrid_->getOutColorImage();
+		sceneDepth = &compositePassHybrid_->getOutDepthImage();
 	}
 	else
 	{
-		finalSceneColor = &sceneColor_;
-		finalSceneDepth = &sceneDepth_;
+		sceneColor = &sceneColor_;
+		sceneDepth = &sceneDepth_;
 	}
 
-	postBaseColor = finalSceneColor;
+	currentColor = sceneColor;
 
 	// FOG
 	if (rs_->useFog)
 	{
-		fogPass_->setInput(
-			*finalSceneDepth,
+		fogPass_->setInput(*sceneDepth);
+		
+		FogPassUBOs ubos
+		{
+			.ubo = {
+				.u_invViewProj = glm::inverse(proj * view),
+				.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f),
+				.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f),
+				.u_maxDistance = rs_->fogSettings.maxDistance,
+				.u_stepSize = rs_->fogSettings.stepSize,
+				.u_scatteringDensity = rs_->fogSettings.scatteringDensity,
+				.u_absorptionDensity = rs_->fogSettings.absorptionDensity
+			}
+		};
+		fogPass_->render(ubos, frame);
+	}
+	else
+	{
+		fogPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 1 });
+	}
+
+	// GOD RAYS
+	if (rs_->useGodRays)
+	{
+		godRayPass_->setInput(
+			*sceneDepth,
 			shadowMapPass_->getDepthImage()
 		);
 		
-		Fog_Constants::FogPassUBO fogUBO{};
-		fogUBO.u_invViewProj = glm::inverse(proj * view);
-		fogUBO.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix();
-		fogUBO.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f);
-		fogUBO.u_nearFar = { in.camera->getNearPlane(), in.camera->getFarPlane() };
-		fogUBO.u_fogStartEnd = { rs_->fogSettings.start, rs_->fogSettings.end };
-		fogUBO.u_fogColor = glm::vec4(in.light->getLightColor(), 1.0f);
-		fogUBO.u_lightDir = in.light->getDirection();
-		fogUBO.u_maxDistance = rs_->fogSettings.maxDistance;
-		fogUBO.u_ambStr = in.world->getAmbientStrength();
-		fogUBO.u_stepSize = rs_->fogSettings.stepSize;
-		fogUBO.u_scatteringDensity = rs_->fogSettings.scatteringDensity;
-		fogUBO.u_absorptionDensity = rs_->fogSettings.absorptionDensity;
-
-		fogPass_->render(
-			frame,
-			fogUBO
-		);
-
-		compositePassPost_->setInput(
-			*postBaseColor,
-			fogPass_->getOutputImage()
-		);
-		compositePassPost_->render(frame);
-
-		postBaseColor = &compositePassPost_->getOutColorImage();
+		GodRayUBOs ubos
+		{
+			.ubo = {
+				.u_invViewProj = glm::inverse(proj * view),
+				.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix(),
+				.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f),
+				.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f),
+				.u_lightDir = in.light->getDirection(),
+				.u_maxDistance = rs_->godRaySettings.maxDistance,
+				.u_stepSize = rs_->godRaySettings.stepSize,
+			}
+		};
+		godRayPass_->render(ubos, frame);
 	}
+	else
+	{
+		godRayPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 0 });
+	}
+
+	// POST COMPOSITE
+	compositePassPost_->setInput(
+		fogPass_->getOutputImage(),
+		godRayPass_->getOutputImage(),
+		*currentColor
+	);
+	compositePassPost_->render(frame);
+	currentColor = &compositePassPost_->getOutColorImage();
+
 
 	// FXAA
 	if (rs_->useFXAA)
 	{
-		fxaaPass_->setInput(*postBaseColor);
+		fxaaPass_->setInput(*currentColor);
 		fxaaPass_->render(frame);
 
-		postBaseColor = &fxaaPass_->getOutputImage();
+		currentColor = &fxaaPass_->getOutputImage();
 	}
-
-	postColor = postBaseColor;
 	// --------------- END POST-PROCESSING --------------- //
 
 	// swap swapchain color image to color attachment
@@ -650,7 +680,7 @@ void RendererVk::renderFrame(
 	// ----------------- PRESENT PASS ----------------- //
 	if (presentPass_)
 	{
-		presentPass_->setInput(*postColor);
+		presentPass_->setInput(*currentColor);
 		presentPass_->render(frame);
 	}
 	// --------------- END PRESENT PASS --------------- //

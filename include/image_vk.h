@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <string>
+#include <array>
 
 class VulkanMain;
 
@@ -23,6 +24,13 @@ public:
     ImageVk& operator=(ImageVk&&) noexcept = default;
 
     void setDebugName(const std::string& name);
+
+    void clearColorThenShaderRead(vk::CommandBuffer cmd, const std::array<float, 4>& color);
+    void clearDepthThenShaderRead(
+        vk::CommandBuffer cmd,
+        float depth = 1.0f,
+        uint32_t stencil = 0
+    );
 
     void createImage(
         uint32_t width,
@@ -135,6 +143,24 @@ public:
             mipLevels_
         );
     } // end of transitionToGeneral()
+
+    void transitionToTransferDst(
+        vk::CommandBuffer cmd,
+        vk::ImageAspectFlags aspect = vk::ImageAspectFlagBits::eColor
+    )
+    {
+        if (!image_) return;
+
+        VkUtils::TransitionImageLayout(
+            cmd,
+            image_.get(),
+            aspect,
+            layout_,
+            vk::ImageLayout::eTransferDstOptimal,
+            layers_,
+            mipLevels_
+        );
+    } // end of transitionToTransferDst()
 
     vk::ImageLayout layout() const { return layout_; }
 

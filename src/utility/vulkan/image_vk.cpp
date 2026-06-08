@@ -32,6 +32,58 @@ void ImageVk::setDebugName(const std::string& name)
     );
 } // end of setDebugName()
 
+void ImageVk::clearColorThenShaderRead(vk::CommandBuffer cmd, const std::array<float, 4>& color)
+{
+    transitionToTransferDst(cmd);
+
+    vk::ClearColorValue clearColor{ color };
+
+    vk::ImageSubresourceRange range{};
+    range.aspectMask = vk::ImageAspectFlagBits::eColor;
+    range.baseMipLevel = 0;
+    range.levelCount = mipLevels_;
+    range.baseArrayLayer = 0;
+    range.layerCount = layers_;
+
+    cmd.clearColorImage(
+        *image_,
+        layout_,
+        clearColor,
+        range
+    );
+
+    transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eColor);
+} // end of clearColorThenShaderRead()
+
+void ImageVk::clearDepthThenShaderRead(
+    vk::CommandBuffer cmd,
+    float depth,
+    uint32_t stencil
+)
+{
+    transitionToTransferDst(cmd, vk::ImageAspectFlagBits::eDepth);
+
+    vk::ClearDepthStencilValue clear{};
+    clear.depth = depth;
+    clear.stencil = stencil;
+
+    vk::ImageSubresourceRange range{};
+    range.aspectMask = vk::ImageAspectFlagBits::eDepth;
+    range.baseMipLevel = 0;
+    range.levelCount = 1;
+    range.baseArrayLayer = 0;
+    range.layerCount = layers_;
+
+    cmd.clearDepthStencilImage(
+        *image_,
+        layout_,
+        clear,
+        range
+    );
+
+    transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
+} // end of clearDepthThenShaderRead()
+
 void ImageVk::createImage(
     uint32_t width,
     uint32_t height,

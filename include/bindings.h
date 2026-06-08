@@ -96,6 +96,13 @@ enum class FogPassBinding : uint32_t
 {
     UBO = 0,
     ForwardDepthTex = 1,
+    OutColorTex = 2
+};
+
+enum class GodRayPassBinding : uint32_t
+{
+    UBO = 0,
+    ForwardDepthTex = 1,
     ShadowMapTex = 2,
     OutColorTex = 3
 };
@@ -160,8 +167,9 @@ enum class HybridCompositePassBinding : uint32_t
 enum class PostCompositePassBinding : uint32_t
 {
     UBO = 0,
-    FogColorTex = 1,
-    SceneColorTex = 2,
+    FogTex = 1,
+    GodRayTex = 2,
+    SceneColorTex = 3,
 };
 
 #endif
