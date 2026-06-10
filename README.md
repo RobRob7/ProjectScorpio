@@ -1,8 +1,38 @@
 # Project Scorpio
 C++20 voxel rendering engine built for Windows featuring a dual backend architecture supporting Vulkan 1.4 (hpp + Unique, Dynamic Rendering) and OpenGL 4.6 Core. Uses custom rendering pipelines in Vulkan to support traditional graphics, ray-tracing, and compute pipelines.
 
-<h3>
-Features:
+![Volumetric Fog](./milestones/demo/volumetric_fog.gif)
+
+![Volumetric Fog 2](./milestones/demo/volumetric_fog_2.gif)
+
+![RT Shadows](./milestones/demo/rt_shadows.gif)
+
+## Table of Contents
+
+- [Features](#features)
+- [Controls](#controls)
+- [Debugging & Validation](#debugging--validation)
+- [Rendering & Engine Techniques](#rendering--engine-techniques)
+  - [Rendering Pipeline Overview](#rendering-pipeline-overview)
+  - [Physically-Inspired Surface Water Rendering](#physically-inspired-surface-water-rendering)
+  - [Screen-Space Volumetric Fog + God Rays](#screen-space-volumetric-fog--god-rays)
+  - [Screen-Space Ambient Occlusion (SSAO)](#screen-space-ambient-occlusion-ssao)
+  - [Fast Approximate Anti-Aliasing (FXAA)](#fast-approximate-anti-aliasing-fxaa)
+  - [View Frustum Culling](#view-frustum-culling)
+  - [Greedy Meshing](#greedy-meshing)
+  - [Memory-Efficient Vertex Storage](#memory-efficient-vertex-storage)
+  - [Procedural Terrain Generation](#procedural-terrain-generation)
+  - [World State Persistence System](#world-state-persistence-system)
+  - [Directional Shadow Mapping](#directional-shadow-mapping)
+  - [Custom Compute Pipeline](#custom-compute-pipeline)
+  - [Custom Ray Tracing Pipeline](#custom-ray-tracing-pipeline)
+- [Milestones](#milestones)
+- [Requirements](#requirements)
+- [Build](#build)
+- [Run](#run)
+
+<h3 id="features">
+Features
 </h3>
 
 - Ray Traced Ambient Occlusion (RTAO), RT Shadows, and RT Reflections
@@ -22,7 +52,9 @@ Features:
     - Auto-Saving World State
     - Manual Save System
 
-## Controls
+<h3 id="controls">
+Controls
+</h3>
 - WASD – Move
 - Mouse – Free-look camera (when in camera mode)
 - Left Click – Break block
@@ -35,18 +67,8 @@ Features:
 - **`-`** — Enable cursor mode
   - Releases the mouse cursor for interaction with UI.
 
-<h2>
-Preview
-</h2>
-
-![Volumetric Fog](./milestones/demo/volumetric_fog.gif)
-
-![Volumetric Fog 2](./milestones/demo/volumetric_fog_2.gif)
-
-![RT Shadows](./milestones/demo/rt_shadows.gif)
-
 <!--  -->
-<h2>
+<h2 id="debugging--validation">
 Debugging & Validation
 </h2>
 
@@ -55,7 +77,7 @@ Debugging & Validation
 - Used RenderDoc and NVIDIA Nsight Graphics to capture and analyze GPU frames across both Vulkan and OpenGL backends, verifying correctness of multi-pass rendering.
 - Developed a custom in-engine debug system to visualize pass output textures, enabling real-time validation outside of frame captures.
 
-<h2>
+<h2 id="rendering--engine-techniques">
 Rendering & Engine Techniques
 </h2>
 
@@ -63,7 +85,10 @@ Rendering & Engine Techniques
 
 This project focuses on implementing real-time rendering techniques that are commonly used in modern game engines. The techniques were implemented from scratch with explicit control over GPU resources and pipeline state.
 
-### Rendering Pipeline Overview
+<h2 id="rendering-pipeline-overview">
+Rendering Pipeline Overview
+</h2>
+
 > Vulkan backend utilizes dynamic rendering, and hybrid rendering approach combining rasterization and ray tracing.
 
 Vulkan:
@@ -101,7 +126,7 @@ OpenGL:
 
 <!--  -->
 ---
-<h4>
+<h4 id="physically-inspired-surface-water-rendering">
 Physically-Inspired Surface Water Rendering
 </h4>
 
@@ -115,7 +140,7 @@ Previous versions of the engine rendered water as flat textured surfaces with li
 
 <!--  -->
 ---
-<h4>
+<h4 id="screen-space-volumetric-fog--god-rays">
 Screen-Space Volumetric Fog + God Rays
 </h4>
 
@@ -129,7 +154,7 @@ Demonstrates the ability to implement additional post-processing effects that in
 
 <!--  -->
 ---
-<h4>
+<h4 id="screen-space-ambient-occlusion-ssao">
 Screen-Space Ambient Occlusion (SSAO)
 </h4>
 
@@ -143,7 +168,7 @@ SSAO adds depth perception and contact shadows without the cost of full global i
 
 <!--  -->
 ---
-<h4>
+<h4 id="fast-approximate-anti-aliasing-fxaa">
 Fast Approximate Anti-Aliasing (FXAA)
 </h4>
 
@@ -157,7 +182,7 @@ FXAA is a cost-efficient method for anti-aliasing with minimal performance cost 
 
 <!--  -->
 ---
-<h4>
+<h4 id="view-frustum-culling">
 View Frustum Culling
 </h4>
 
@@ -173,7 +198,7 @@ Frustum culling drastically reduces GPU workload by efficiently rendering only t
 
 <!--  -->
 ---
-<h4>
+<h4 id="greedy-meshing">
 Greedy Meshing
 </h4>
 
@@ -192,7 +217,7 @@ Greedy meshing reduces the number of draw calls and triangles sent to the GPU, i
 
 <!--  -->
 ---
-<h4>
+<h4 id="memory-efficient-vertex-storage">
 Memory-Efficient Vertex Storage
 </h4>
 
@@ -211,7 +236,7 @@ Smaller vertices reduce CPU memory pressure, improve cache efficiency, and allow
 
 <!--  -->
 ---
-<h4>
+<h4 id="procedural-terrain-generation">
 Procedural Terrain Generation
 </h4>
 
@@ -223,7 +248,7 @@ Procedural generation allows for large, varied worlds without having to worry ab
 
 <!--  -->
 ---
-<h4>
+<h4 id="world-state-persistence-system">
 World State Persistence System
 </h4>
 
@@ -236,7 +261,7 @@ Persistent world state demonstrates data-oriented design beyond real-time render
 
 ---
 <!--  -->
-<h4>
+<h4 id="directional-shadow-mapping">
 Directional Shadow Mapping
 </h4>
 
@@ -250,7 +275,7 @@ Adds depth cues and spatial realism while demonstrating understanding of multi-p
 ---
 
 <!--  -->
-<h4>
+<h4 id="custom-compute-pipeline">
 Custom Compute Pipeline
 </h4>
 
@@ -263,7 +288,7 @@ Demonstrates understanding of compute-driven rendering workflows and how compute
 ---
 
 <!--  -->
-<h4>
+<h4 id="custom-ray-tracing-pipeline">
 Custom Ray Tracing Pipeline
 </h4>
 
@@ -277,7 +302,7 @@ Demonstrates understanding of the three major GPU rendering pipelines: rasteriza
 ---
 
 <!--  -->
-<h2>
+<h2 id="milestones">
 Milestones
 </h2>
 
@@ -358,7 +383,7 @@ Milestones
 | *Scene rendered with SSAO, shadow mapping, reflection/refraction textures for water.* | *Scene rendered with RTAO, RT shadows, RT reflections.* |
 | ![](milestones/15a_Rasterization.png) | ![](milestones/15b_RT.png) |
 
-<h2>
+<h2 id="requirements">
 Requirements
 </h2>
 
@@ -369,7 +394,7 @@ Requirements
 > -- Install workloads: *Desktop development with C++*.
 > - [Download](https://cmake.org/download/) and install CMake (>= v3.31.0).
 
-<h2>
+<h2 id="build">
 Build
 </h2>
 
@@ -383,7 +408,7 @@ cd ProjectScorpio
 cmake --preset release
 cmake --build --preset release
 ```
-<h2>
+<h2 id="run">
 Run
 </h2>
 
