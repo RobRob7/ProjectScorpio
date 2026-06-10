@@ -73,7 +73,7 @@ struct RenderSettings
 	bool useShadowMap{ true };
 	bool useSSAO{ true };
 	bool useFXAA{ false };
-	bool useFog{ true };
+	bool useFog{ false };
 	bool useGodRays{ true };
 
 	FogSettings fogSettings;
