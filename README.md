@@ -1,12 +1,12 @@
 # Project Scorpio
-C++17 voxel rendering engine built for Windows featuring a dual backend architecture supporting Vulkan 1.4 (hpp + Unique, Dynamic Rendering) and OpenGL 4.6 Core. Uses custom rendering pipelines in Vulkan to support traditional rasterization, ray-tracing, and compute pipelines.
+C++20 voxel rendering engine built for Windows featuring a dual backend architecture supporting Vulkan 1.4 (hpp + Unique, Dynamic Rendering) and OpenGL 4.6 Core. Uses custom rendering pipelines in Vulkan to support traditional graphics, ray-tracing, and compute pipelines.
 
 <h3>
 Features:
 </h3>
 
-- Ray-Traced Ambient Occlusion (RTAO), RT Shadows, and RT Reflections
-- Ray-Tracing Shader Support (Raygen, Miss, Closest-Hit, Any-Hit)
+- Ray Traced Ambient Occlusion (RTAO), RT Shadows, and RT Reflections
+- Ray Tracing Shader Support (Raygen, Miss, Closest-Hit, Any-Hit)
 - Compute Shader Support
 - Volumetric Fog + God Rays (Compute Shaders)
 - Directional Shadow Mapping with Percentage-Closer Filtering (PCF)
@@ -68,33 +68,36 @@ This project focuses on implementing real-time rendering techniques that are com
 
 Vulkan:
 1. G-buffer pass (normals + depth)
-2. RT pass (TLAS/BLAS build/rebuild)
-3. RTAO pass (using TLAS)
-4. Shadow Map pass (shadow map depth)
-5. SSAO pass
-6. Water pass (reflection/refraction)
-7. Debug pass (visualize pass outputs)
-8. Forward render (rasterization)
-9. Ray-Tracing Pass
-10. Hybrid Composite Pass (rasterization + RT components combined)
-11. Volumetric Fog + God Rays
-12. Post Composite Pass (fog + scene combined)
-13. FXAA
-14. Present Pass (render to frame)
-15. UI Elements (render to frame)
+1. RT pass (TLAS/BLAS build/rebuild)
+1. RTAO pass
+1. RT Shadow pass
+1. Shadow Map pass (shadow map depth)
+1. SSAO pass
+1. Water pass (reflection/refraction)
+1. Debug pass (visualize pass outputs)
+1. Forward render
+1. RT render
+1. Hybrid Composite Pass (rasterization + RT components combined)
+1. Volumetric Fog Pass
+1. God Rays Pass
+1. Post Composite Pass (post-process + scene combined)
+1. FXAA pass
+1. Present Pass (final frame)
+1. UI Elements (UI added to final frame)
 
 OpenGL:
 1. G-buffer pass (normals + depth)
-2. Shadow Map pass (shadow map depth)
-3. SSAO pass
-4. Water pass (reflection/refraction)
-5. Debug pass (visualize pass outputs)
-6. Forward render (rasterization)
-7. Volumetric Fog + God Rays
-8. Post Composite Pass (fog + scene combined)
-9. FXAA
-10. Present Pass (render to frame)
-11. UI Elements (render to frame)
+1. Shadow Map pass (shadow map depth)
+1. SSAO pass
+1. Water pass (reflection/refraction)
+1. Debug pass (visualize pass outputs)
+1. Forward render (rasterization)
+1. Volumetric Fog Pass
+1. God Rays Pass
+1. Post Composite Pass (post-process + scene combined)
+1. FXAA Pass
+1. Present Pass (final frame)
+1. UI Elements (UI added to final frame)
 
 <!--  -->
 ---
@@ -108,7 +111,7 @@ Physically-Inspired Surface Water Rendering
 - Refraction depth texture used to make shallow water appear lighter in color.
 
 **Importance:**  
-Previous versions of this engine showcased flat and boring water blocks. Water is now more visually appealing and takes into account other objects in the scene.
+Previous versions of the engine rendered water as flat textured surfaces with limited visual fidelity. Water is now more visually appealing and takes into account other objects in the scene.
 
 <!--  -->
 ---
@@ -118,7 +121,7 @@ Screen-Space Volumetric Fog + God Rays
 
 - Screen-space, depth-based fog applied as a post-processing pass.
 - Ray marching is performed from the camera through the depth-reconstructed scene to accumulate volumetric lighting and fog density.
-- Utilizes shadow map to generate god rays.
+- Utilizes a shadow map to generate volumetric light shafts (god rays).
 - Integrates seamlessly with other post-processing effects like FXAA.
 
 **Importance:**  
@@ -261,7 +264,7 @@ Demonstrates understanding of compute-driven rendering workflows and how compute
 
 <!--  -->
 <h4>
-Custom Ray-Tracing Pipeline
+Custom Ray Tracing Pipeline
 </h4>
 
 - Implemented systems for creation of bottom/top layer acceleration structure (BLAS/TLAS) for world.
@@ -295,12 +298,12 @@ Milestones
 
 | G-buffer Normal | G-buffer Depth |
 |----------------------------|--------------------------------|
-| *Working on implementing SSAO. Implemented G-buffer with debug view for surface normals.* | *Working on implementing SSAO. Implemented G-buffer with debug view for depth.* |
+| *Implemented G-buffer with debug view for surface normals.* | *Implemented G-buffer with debug view for depth.* |
 | ![](milestones/4a_normals.png) | ![](milestones/4b_depth.png) |
 
 | SSAO (Off) | SSAO (On) |
 |----------------------------|--------------------------------|
-| *Previous version of engine before implementation of SSAO.* | *SSAO significantly improves scene depth by enhancing contact shadows at the intersections where blocks meet. This helps improve the detail of the geometry.* |
+| *Previous version of engine before implementation of SSAO.* | *SSAO significantly improves scene depth by enhancing contact shadows at the intersections where blocks meet. This improves perceived geometric detail and depth.* |
 | ![](milestones/5a_SSAO_OFF.png) | ![](milestones/5b_SSAO_ON.png) |
 
 | Frustum Culling (Off) | Frustum Culling (On) |
@@ -315,7 +318,7 @@ Milestones
 | ![](milestones/7a_FXAA_OFF.png) | ![](milestones/7a_FXAA_ON.png) | 
 ![](milestones/7a_FXAA_OFF_Enh.png) | ![](milestones/7a_FXAA_ON_Enh.png) |
 
-| Flat Water | Beautiful Water |
+| Flat Water | Enhanced Water |
 |----------------------------|--------------------------------|
 | *Previous version of engine using static water textures.* | *Enhanced water using reflection/refraction textures, and DuDv distortion.* |
 | ![](milestones/8b_RTXWATER_OFF.png) | ![](milestones/8a_RTXWATER_ON.png) |
@@ -350,7 +353,7 @@ Milestones
 |----------------------------|--------------------------------|
 | ![](milestones/14a_VolumetricFog_OFF.png) | ![](milestones/14b_VolumetricFog_ON.png) |
 
-| Traditional Rasterization | Ray-Tracing |
+| Traditional Rasterization | Ray Tracing |
 |----------------------------|--------------------------------|
 | *Scene rendered with SSAO, shadow mapping, reflection/refraction textures for water.* | *Scene rendered with RTAO, RT shadows, RT reflections.* |
 | ![](milestones/15a_Rasterization.png) | ![](milestones/15b_RT.png) |
@@ -377,25 +380,22 @@ git clone https://github.com/RobRob7/ProjectScorpio.git
 - Then run commands:
 ```
 cd ProjectScorpio
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+cmake --preset release
+cmake --build --preset release
 ```
 <h2>
 Run
 </h2>
 
-- For Command Prompt:
+- Git Bash:
+```
+./build/release/Scorpio
+```
+
+- Command Prompt:
 
 ```
-cd Release
-Scorpio.exe
-```
-- For Git Bash:
-```
-cd Release
-./Scorpio.exe
+build\release\Scorpio.exe
 ```
 
 
@@ -454,9 +454,10 @@ Project layout:
         - **opengl/**
             - chunk_pass_gl.cpp → opaque chunk render
             - debug_pass.cpp → G-buffer normal + depth view
-            - fog_pass.cpp → fog pass
+            - fog_pass_gl.cpp → fog pass
             - fxaa_pass.cpp → FXAA pass
             - gbuffer_pass.cpp → G-buffer pass
+            - god_ray_pass_gl.cpp → God Ray pass
             - post_composite_pass_gl.cpp → fog + scene combine pass
             - present_pass.cpp → final image pass
             - renderer_gl.cpp → main render loop
@@ -472,7 +473,8 @@ Project layout:
             - debug_pass_vk.cpp → G-buffer normal + depth view
             - fog_pass_vk.cpp → fog pass
             - fxaa_pass_vk.cpp → FXAA pass
-            - gbuffer_pass_vk.cpp → G-buffer 
+            - gbuffer_pass_vk.cpp → G-buffer pass
+            - god_ray_pass_vk.cpp → God Ray pass 
             - hybrid_composite_pass_vk.cpp → Rasterization + RT combine pass 
             - post_composite_pass_vk.cpp → fog + scene combine pass
             - present_pass_vk.cpp → final image pass
