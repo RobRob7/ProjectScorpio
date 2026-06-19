@@ -1,10 +1,6 @@
 #ifndef DX12_MAIN_H
 #define DX12_MAIN_H
 
-#include "image_vk.h"
-#include "buffer_vk.h"
-#include "acceleration_structure_vk.h"
-
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
@@ -14,6 +10,10 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 #include <wrl/client.h>
+
+#include "image_dx12.h"
+#include "buffer_dx12.h"
+//#include "acceleration_structure_vk.h"
 
 #include <vector>
 #include <cstdint>
@@ -30,14 +30,14 @@ struct PendingUpload
     ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList4> cmd;
     uint64_t fenceValue{};
-    std::vector<BufferVk> uploadBuffers;
+    std::vector<BufferDX12> uploadBuffers;
 };
 
 struct RetiredFrameResources
 {
-    std::vector<BufferVk> buffers;
-    std::vector<ImageVk> images;
-    std::vector<AccelerationStructureVk> accelStructures;
+    std::vector<BufferDX12> buffers;
+    std::vector<ImageDX12> images;
+    //std::vector<AccelerationStructureVk> accelStructures;
 };
 
 class DX12Main
@@ -58,7 +58,7 @@ public:
     void submitUpload(
         ComPtr<ID3D12CommandAllocator>&& allocator,
         ComPtr<ID3D12GraphicsCommandList4>&& cmd,
-        std::vector<BufferVk>&& uploadBuffers
+        std::vector<BufferDX12>&& uploadBuffers
     );
 
     void processPendingUploads();
@@ -98,27 +98,27 @@ public:
 
     bool supportsRayTracing() const { return supportsRayTracing_; }
 
-    void retireBuffer(uint32_t frameIndex, BufferVk&& buffer)
+    void retireBuffer(uint32_t frameIndex, BufferDX12&& buffer)
     {
         if (buffer.valid())
         {
             retired_[frameIndex].buffers.push_back(std::move(buffer));
         }
     } // end of retireBuffer()
-    void retireImage(uint32_t frameIndex, ImageVk&& image)
+    void retireImage(uint32_t frameIndex, ImageDX12&& image)
     {
         if (image.valid())
         {
             retired_[frameIndex].images.push_back(std::move(image));
         }
     } // end of retireImage()
-    void retireAccelerationStructure(uint32_t frameIndex, AccelerationStructureVk&& as)
-    {
-        if (as.valid())
-        {
-            retired_[frameIndex].accelStructures.push_back(std::move(as));
-        }
-    } // end of retireAccelerationStructure()
+    //void retireAccelerationStructure(uint32_t frameIndex, AccelerationStructureVk&& as)
+    //{
+    //    if (as.valid())
+    //    {
+    //        retired_[frameIndex].accelStructures.push_back(std::move(as));
+    //    }
+    //} // end of retireAccelerationStructure()
 
 private:
     void enableDebugLayer();

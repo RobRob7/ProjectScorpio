@@ -80,7 +80,10 @@ target_compile_definitions("${CMAKE_PROJECT_NAME}" PUBLIC
 )
 
 # link libs
-target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE 
+target_link_libraries("${CMAKE_PROJECT_NAME}" PRIVATE
+	d3d12
+	dxgi
+	dxguid
 	Vulkan::Vulkan
 	Threads::Threads
 	glm 
