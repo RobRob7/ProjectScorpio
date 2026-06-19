@@ -5,20 +5,11 @@
 #include <GLFW/glfw3.h>
 #include <GLFW/glfw3native.h>
 
+#include "utils_dx12.h"
 #include "frame_context_dx12.h"
 
 #include <stdexcept>
 #include <algorithm>
-
-//--- HELPER ---//
-static void ThrowIfFailed(HRESULT hr, const char* message)
-{
-    if (FAILED(hr))
-    {
-        throw std::runtime_error(message);
-    }
-} // end of ThrowIfFailed()
-
 
 //--- PUBLIC ---//
 DX12Main::DX12Main(GLFWwindow* window)
@@ -93,16 +84,16 @@ void DX12Main::waitIdle()
 
     const uint64_t fenceValue = nextFenceValue_;
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         graphicsQueue_->Signal(frameFence_.Get(), fenceValue),
-        "failed to signal waitIdle fence."
+        "DX12Main::waitIdle - failed to signal waitIdle fence"
     );
 
     if (frameFence_->GetCompletedValue() < fenceValue)
     {
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             frameFence_->SetEventOnCompletion(fenceValue, frameFenceEvent_),
-            "failed to set waitIdle fence event."
+            "DX12Main::waitIdle - failed to set waitIdle fence event"
         );
 
         WaitForSingleObject(frameFenceEvent_, INFINITE);
@@ -121,9 +112,9 @@ bool DX12Main::beginFrame(FrameContextDX12& out)
 
     if (fenceValue != 0 && frameFence_->GetCompletedValue() < fenceValue)
     {
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             frameFence_->SetEventOnCompletion(fenceValue, frameFenceEvent_),
-            "failed to set fence event."
+            "DX12Main::beginFrame - failed to set fence event"
         );
 
         WaitForSingleObject(frameFenceEvent_, INFINITE);
@@ -134,14 +125,14 @@ bool DX12Main::beginFrame(FrameContextDX12& out)
 
     currentBackBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         commandAllocators_[currentFrame_]->Reset(),
-        "failed to reset command allocator."
+        "DX12Main::beginFrame - failed to reset command allocator"
     );
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         commandList_->Reset(commandAllocators_[currentFrame_].Get(), nullptr),
-        "failed to reset command list."
+        "DX12Main::beginFrame - failed to reset command list"
     );
 
     if (swapChainStates_[currentBackBufferIndex_] != D3D12_RESOURCE_STATE_RENDER_TARGET)
@@ -182,9 +173,9 @@ bool DX12Main::endFrame(const FrameContextDX12& frame)
         swapChainStates_[currentBackBufferIndex_] = D3D12_RESOURCE_STATE_PRESENT;
     }
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         commandList_->Close(),
-        "failed to close command list."
+        "DX12Main::endFrame - failed to close command list"
     );
 
     ID3D12CommandList* commandLists[] =
@@ -208,14 +199,14 @@ bool DX12Main::endFrame(const FrameContextDX12& frame)
 
     if (FAILED(presentResult))
     {
-        throw std::runtime_error("failed to present swapchain.");
+        throw std::runtime_error("DX12Main::endFrame - failed to present swapchain");
     }
 
     const uint64_t fenceValue = nextFenceValue_++;
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         graphicsQueue_->Signal(frameFence_.Get(), fenceValue),
-        "failed to signal frame fence."
+        "DX12Main::endFrame - failed to signal frame fence"
     );
 
     frameFenceValues_[currentFrame_] = fenceValue;
@@ -228,12 +219,12 @@ bool DX12Main::endFrame(const FrameContextDX12& frame)
 void DX12Main::submitUpload(
     ComPtr<ID3D12CommandAllocator>&& allocator,
     ComPtr<ID3D12GraphicsCommandList4>&& cmd,
-    std::vector<BufferVk>&& uploadBuffers
+    std::vector<BufferDX12>&& uploadBuffers
 )
 {
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         cmd->Close(),
-        "failed to close upload command list."
+        "DX12Main::submitUpload - failed to close upload command list"
     );
 
     ID3D12CommandList* commandLists[] =
@@ -245,9 +236,9 @@ void DX12Main::submitUpload(
 
     const uint64_t fenceValue = nextFenceValue_++;
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         graphicsQueue_->Signal(frameFence_.Get(), fenceValue),
-        "failed to signal upload fence."
+        "DX12Main::submitUpload - failed to signal upload fence"
     );
 
     pendingUploads_.push_back(PendingUpload{
@@ -300,9 +291,9 @@ void DX12Main::createFactory()
     flags |= DXGI_CREATE_FACTORY_DEBUG;
 #endif
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         CreateDXGIFactory2(flags, IID_PPV_ARGS(&factory_)),
-        "failed to create DXGI factory."
+        "DX12Main::createFactory - failed to create DXGI factory"
     );
 } // end of createFactory()
 
@@ -332,27 +323,27 @@ void DX12Main::pickAdapter()
             __uuidof(ID3D12Device),
             nullptr)))
         {
-            ThrowIfFailed(
+            DX12Utils::ThrowIfFailed(
                 candidate.As(&adapter_),
-                "failed to cast adapter to IDXGIAdapter4."
+                "DX12Main::pickAdapter - failed to cast adapter to IDXGIAdapter4"
             );
 
             return;
         }
     }
 
-    throw std::runtime_error("failed to find a suitable DX12 adapter.");
+    throw std::runtime_error("fDX12Main::pickAdapter - failed to find a suitable DX12 adapter");
 } // end of pickAdapter()
 
 void DX12Main::createDevice()
 {
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         D3D12CreateDevice(
             adapter_.Get(),
             D3D_FEATURE_LEVEL_12_2,
             IID_PPV_ARGS(&device_)
         ),
-        "failed to create D3D12 device."
+        "DX12Main::createDevice - failed to create D3D12 device"
     );
 
     setDebugName(device_.Get(), L"DX12 Device");
@@ -401,9 +392,9 @@ void DX12Main::createCommandQueue()
         .NodeMask = 0
     };
 
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             device_->CreateCommandQueue(&desc, IID_PPV_ARGS(&graphicsQueue_)),
-            "failed to create graphics command queue."
+            "DX12Main::createCommandQueue - failed to create graphics command queue"
         );
 
     setDebugName(graphicsQueue_.Get(), L"Graphics Command Queue");
@@ -439,7 +430,7 @@ void DX12Main::createSwapChain()
 
     ComPtr<IDXGISwapChain1> swapChain;
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         factory_->CreateSwapChainForHwnd(
             graphicsQueue_.Get(),
             hwnd,
@@ -448,17 +439,17 @@ void DX12Main::createSwapChain()
             nullptr,
             &swapChain
         ),
-        "failed to create swapchain."
+        "DX12Main::createSwapChain - failed to create swapchain"
     );
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         factory_->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER),
-        "failed to disable DXGI alt+enter."
+        "DX12Main::createSwapChain - failed to disable DXGI alt+enter"
     );
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         swapChain.As(&swapChain_),
-        "failed to cast swapchain to IDXGISwapChain3."
+        "DX12Main::createSwapChain - failed to cast swapchain to IDXGISwapChain3"
     );
 
     currentBackBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
@@ -476,9 +467,9 @@ void DX12Main::createDescriptorHeaps()
             .NodeMask = 0
         };
 
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rtvHeap_)),
-            "failed to create RTV descriptor heap."
+            "DX12Main::createDescriptorHeaps - failed to create RTV descriptor heap"
         );
 
         rtvDescriptorSize_ =
@@ -493,9 +484,9 @@ void DX12Main::createDescriptorHeaps()
             .NodeMask = 0
         };
 
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&dsvHeap_)),
-            "failed to create DSV descriptor heap."
+            "DX12Main::createDescriptorHeaps - failed to create DSV descriptor heap"
         );
 
         dsvDescriptorSize_ =
@@ -510,9 +501,9 @@ void DX12Main::createDescriptorHeaps()
             .NodeMask = 0
         };
 
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&srvUavCbvHeap_)),
-            "failed to create CBV/SRV/UAV descriptor heap."
+            "DX12Main::createDescriptorHeaps - failed to create CBV/SRV/UAV descriptor heap"
         );
 
         srvUavCbvDescriptorSize_ =
@@ -530,9 +521,9 @@ void DX12Main::createRenderTargetViews()
 
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainBuffers_[i])),
-            "failed to get swapchain back buffer."
+            "DX12Main::createRenderTargetViews - failed to get swapchain back buffer"
         );
 
         device_->CreateRenderTargetView(
@@ -581,7 +572,7 @@ void DX12Main::createDepthResources()
         }
     };
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         device_->CreateCommittedResource(
             &heapProps,
             D3D12_HEAP_FLAG_NONE,
@@ -590,7 +581,7 @@ void DX12Main::createDepthResources()
             &clearValue,
             IID_PPV_ARGS(&depthImage_)
         ),
-        "failed to create depth image."
+        "DX12Main::createDepthResources - failed to create depth image"
     );
 
     device_->CreateDepthStencilView(
@@ -608,19 +599,19 @@ void DX12Main::createCommandAllocators()
 {
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
-        ThrowIfFailed(
+        DX12Utils::ThrowIfFailed(
             device_->CreateCommandAllocator(
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 IID_PPV_ARGS(&commandAllocators_[i])
             ),
-            "failed to create command allocator."
+            "DX12Main::createCommandAllocators - failed to create command allocator"
         );
     } // end for
 } // end of createCommandAllocators()
 
 void DX12Main::createCommandLists()
 {
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         device_->CreateCommandList(
             0,
             D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -628,31 +619,31 @@ void DX12Main::createCommandLists()
             nullptr,
             IID_PPV_ARGS(&commandList_)
         ),
-        "failed to create command list."
+        "DX12Main::createCommandLists - failed to create command list"
     );
 
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         commandList_->Close(),
-        "failed to close initial command list."
+        "DX12Main::createCommandLists - failed to close initial command list"
     );
 } // end of createCommandLists()
 
 void DX12Main::createSyncObjects()
 {
-    ThrowIfFailed(
+    DX12Utils::ThrowIfFailed(
         device_->CreateFence(
             0,
             D3D12_FENCE_FLAG_NONE,
             IID_PPV_ARGS(&frameFence_)
         ),
-        "failed to create frame fence."
+        "DX12Main::createSyncObjects - failed to create frame fence."
     );
 
     frameFenceEvent_ = CreateEvent(nullptr, FALSE, FALSE, nullptr);
 
     if (!frameFenceEvent_)
     {
-        throw std::runtime_error("failed to create fence event.");
+        throw std::runtime_error("DX12Main::createSyncObjects - failed to create fence event");
     }
 
     frameFenceValues_.fill(0);
@@ -701,7 +692,7 @@ void DX12Main::flushRetiredResources(uint32_t frameIndex)
 {
     retired_[frameIndex].buffers.clear();
     retired_[frameIndex].images.clear();
-    retired_[frameIndex].accelStructures.clear();
+    //retired_[frameIndex].accelStructures.clear();
 } // end of flushRetiredResources()
 
 void DX12Main::flushAllRetiredResources()

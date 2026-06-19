@@ -8,6 +8,8 @@
 #include <Windows.h>
 #include <d3d12.h>
 
+#include "utils_dx12.h"
+
 #include <cstdint>
 
 struct FrameContextDX12
@@ -28,31 +30,25 @@ struct FrameContextDX12
     D3D12_CPU_DESCRIPTOR_HANDLE depthDSV{};
     D3D12_RESOURCE_STATES* depthState{ nullptr };
 
-    //void transitionColorImageToAttachment(vk::CommandBuffer cmd)
-    //{
-    //    VkUtils::TransitionImageLayout(
-    //        cmd,
-    //        colorImage,
-    //        vk::ImageAspectFlagBits::eColor,
-    //        *colorLayout,
-    //        vk::ImageLayout::eColorAttachmentOptimal,
-    //        1,
-    //        1
-    //    );
-    //} // end of transitionColorImageToAttachment()
+    void transitionColorImageToAttachment(ID3D12GraphicsCommandList4* cmd)
+    {
+        DX12Utils::TransitionResource(
+            cmd,
+            colorImage,
+            *colorState,
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
+    } // end of transitionColorImageToAttachment()
 
-    //void transitionColorImageToPresent(vk::CommandBuffer cmd)
-    //{
-    //    VkUtils::TransitionImageLayout(
-    //        cmd,
-    //        colorImage,
-    //        vk::ImageAspectFlagBits::eColor,
-    //        *colorLayout,
-    //        vk::ImageLayout::ePresentSrcKHR,
-    //        1,
-    //        1
-    //    );
-    //} // end of transitionColorImageToPresent()
+    void transitionColorImageToPresent(ID3D12GraphicsCommandList4* cmd)
+    {
+        DX12Utils::TransitionResource(
+            cmd,
+            colorImage,
+            *colorState,
+            D3D12_RESOURCE_STATE_PRESENT
+        );
+    } // end of transitionColorImageToPresent()
 };
 
 #endif
