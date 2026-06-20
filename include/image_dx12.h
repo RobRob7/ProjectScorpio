@@ -48,12 +48,6 @@ public:
         uint32_t sampleCount = 1
     );
 
-    void createSRV(
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = {},
-        D3D12_SRV_DIMENSION dimension = D3D12_SRV_DIMENSION_TEXTURE2D
-    );
-
     void createRTV(
         D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
         D3D12_RTV_DIMENSION dimension = D3D12_RTV_DIMENSION_TEXTURE2D
@@ -62,12 +56,6 @@ public:
     void createDSV(
         D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
         D3D12_DSV_DIMENSION dimension = D3D12_DSV_DIMENSION_TEXTURE2D
-    );
-
-    void createUAV(
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle = {},
-        D3D12_UAV_DIMENSION dimension = D3D12_UAV_DIMENSION_TEXTURE2D
     );
 
     void destroy();
@@ -156,17 +144,8 @@ public:
 
     ID3D12Resource* resource() const { return image_.Get(); }
 
-    D3D12_CPU_DESCRIPTOR_HANDLE srvCPU() const { return srvCpu_; }
-    D3D12_GPU_DESCRIPTOR_HANDLE srvGPU() const { return srvGpu_; }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE rtvCPU() const { return rtvCpu_; }
-    D3D12_CPU_DESCRIPTOR_HANDLE dsvCPU() const { return dsvCpu_; }
-
-    D3D12_CPU_DESCRIPTOR_HANDLE uavCPU() const { return uavCpu_; }
-    D3D12_GPU_DESCRIPTOR_HANDLE uavGPU() const { return uavGpu_; }
-
     D3D12_RESOURCE_STATES state() const { return state_; }
-    D3D12_RESOURCE_STATES& stateRef() { return state_; }
+    D3D12_RESOURCE_STATES& state() { return state_; }
 
     DXGI_FORMAT format() const { return format_; }
 
@@ -174,6 +153,10 @@ public:
     uint32_t height() const { return height_; }
     uint32_t layers() const { return layers_; }
     uint32_t mipLevels() const { return mipLevels_; }
+    uint32_t sampleCount() const { return sampleCount_; }
+
+    D3D12_CPU_DESCRIPTOR_HANDLE rtvCPU() const { return rtvCpu_; }
+    D3D12_CPU_DESCRIPTOR_HANDLE dsvCPU() const { return dsvCpu_; }
 
 private:
     DX12Main* dx_{ nullptr };
@@ -189,14 +172,8 @@ private:
     uint32_t mipLevels_{ 1 };
     uint32_t sampleCount_{ 1 };
 
-    D3D12_CPU_DESCRIPTOR_HANDLE srvCpu_{};
-    D3D12_GPU_DESCRIPTOR_HANDLE srvGpu_{};
-
     D3D12_CPU_DESCRIPTOR_HANDLE rtvCpu_{};
     D3D12_CPU_DESCRIPTOR_HANDLE dsvCpu_{};
-
-    D3D12_CPU_DESCRIPTOR_HANDLE uavCpu_{};
-    D3D12_GPU_DESCRIPTOR_HANDLE uavGpu_{};
 };
 
 #endif

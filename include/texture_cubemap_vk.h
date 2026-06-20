@@ -1,5 +1,5 @@
-#ifndef TEXTURE_CUBEMAP_H
-#define TEXTURE_CUBEMAP_H
+#ifndef TEXTURE_CUBEMAP_VK_H
+#define TEXTURE_CUBEMAP_VK_H
 
 #include "image_vk.h"
 

@@ -13,6 +13,7 @@
 #include <cstdint>
 
 class DX12Main;
+class ImageDX12;
 
 namespace DX12Utils 
 {
@@ -32,11 +33,6 @@ namespace DX12Utils
 		D3D12_RESOURCE_STATES newState
 	);
 
-	void UAVBarrier(
-		ID3D12GraphicsCommandList* cmd,
-		ID3D12Resource* resource
-	);
-
 	void CopyBufferToTexture(
 		ID3D12Device* device,
 		ID3D12GraphicsCommandList* cmd,
@@ -52,6 +48,17 @@ namespace DX12Utils
 		ID3D12Resource* texture,
 		uint32_t layers,
 		uint32_t mipLevels
+	);
+
+	void UploadTexture2DArrayImmediate(
+		DX12Main& dx,
+		ImageDX12& image,
+		const void* tightData,
+		uint32_t width,
+		uint32_t height,
+		uint32_t layers,
+		uint32_t bytesPerPixel,
+		D3D12_RESOURCE_STATES finalState
 	);
 }
 
