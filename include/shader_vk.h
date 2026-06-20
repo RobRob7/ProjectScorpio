@@ -10,8 +10,12 @@
 class ShaderModuleVk
 {
 public:
-	ShaderModuleVk(vk::Device device, std::string_view vertexPathFile, std::string_view fragPathFile);
-	~ShaderModuleVk() noexcept;
+	ShaderModuleVk(
+		vk::Device device, 
+		std::string_view vertexPathFile, 
+		std::string_view fragPathFile
+	);
+	~ShaderModuleVk();
 
 	ShaderModuleVk(const ShaderModuleVk&) = delete;
 	ShaderModuleVk& operator=(const ShaderModuleVk&) = delete;
