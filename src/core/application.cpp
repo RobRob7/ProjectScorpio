@@ -13,6 +13,7 @@
 #include "scene_dx12.h"
 #include "renderer_gl.h"
 #include "renderer_vk.h"
+#include "renderer_dx12.h"
 
 #include <GLFW/glfw3.h>
 
@@ -175,7 +176,7 @@ void Application::run()
 		{
 			ui_->beginFrame();
 
-			scene_->render(*renderer_, in_, {}, nullptr);
+			scene_->render(*renderer_, in_, nullptr, nullptr, nullptr);
 
 			ui_->buildUI(deltaTime_, *scene_);
 			ui_->renderGL();
@@ -208,7 +209,7 @@ void Application::run()
 
 			ui_->buildUI(deltaTime_, *scene_);
 
-			scene_->render(*renderer_, in_, &frame, ui_.get());
+			scene_->render(*renderer_, in_, &frame, nullptr, ui_.get());
 
 			if (!vulkanMain_->endFrame(frame))
 			{
@@ -241,7 +242,13 @@ void Application::run()
 
 			ui_->buildUI(deltaTime_, *scene_);
 
-			//scene_->render(*renderer_, in_, &frame, ui_.get());
+			scene_->render(
+				*renderer_,
+				in_,
+				nullptr,
+				&frame,
+				ui_.get()
+			);
 
 			if (!dx12Main_->endFrame(frame))
 			{
@@ -327,20 +334,20 @@ void Application::initDX12()
 	// setup scene + renderer
 	scene_ = std::make_unique<SceneDX12>(*dx12Main_, width_, height_);
 	scene_->init();
-	//renderer_ = std::make_unique<RendererVk>(*vulkanMain_);
-	//renderer_->init();
-	//renderer_->resize(width_, height_);
+	renderer_ = std::make_unique<RendererDX12>(*dx12Main_);
+	renderer_->init();
+	renderer_->resize(width_, height_);
 
 	setCallbacks();
 
 	// setup UI
-	//ui_ = std::make_unique<UI>(
-	//	nullptr,
-	//	window_,
-	//	renderer_->settings(),
-	//	backend_,
-	//	*dx12Main_
-	//);
+	ui_ = std::make_unique<UI>(
+		nullptr,
+		window_,
+		renderer_->settings(),
+		backend_,
+		dx12Main_.get()
+	);
 } // end of initDX12()
 
 void Application::initVk()

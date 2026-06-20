@@ -9,6 +9,7 @@ class ICubemap;
 class ChunkManager;
 class ILight;
 struct FrameContext;
+struct FrameContextDX12;
 class UI;
 
 struct InputState
@@ -41,7 +42,8 @@ public:
 	virtual void render(
 		IRenderer& renderer, 
 		RenderInputs& in, 
-		const FrameContext* frame, 
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		UI* ui
 	) = 0;
 

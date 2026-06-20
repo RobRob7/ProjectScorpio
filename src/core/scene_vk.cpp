@@ -45,7 +45,8 @@ void SceneVk::init()
 void SceneVk::render(
 	IRenderer& renderer,
 	RenderInputs& in,
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	UI* ui
 )
 {
@@ -57,7 +58,7 @@ void SceneVk::render(
 	in.skybox = skybox_.get();
 	in.crosshair = crosshair_.get();
 
-	renderer.renderFrame(in, frame, ui);
+	renderer.renderFrame(in, frameVk, frameDX12, ui);
 } // end of render()
 
 void SceneVk::update(float dt, const InputState& in)

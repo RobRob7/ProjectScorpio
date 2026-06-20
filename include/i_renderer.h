@@ -4,6 +4,7 @@
 struct RenderInputs;
 struct RenderSettings;
 struct FrameContext;
+struct FrameContextDX12;
 class UI;
 
 class IRenderer
@@ -16,7 +17,8 @@ public:
 
 	virtual void renderFrame(
 		const RenderInputs& in, 
-		const FrameContext* frame, 
+		const FrameContext* frameVk, 
+		const FrameContextDX12* frameDX12, 
 		UI* ui
 	) = 0;
 	

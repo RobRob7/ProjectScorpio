@@ -35,6 +35,8 @@ void SceneDX12::init()
 {
 	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
 
+	world_ = std::make_unique<ChunkManager>();
+
 	//skybox_ = std::make_unique<CubemapVk>(vk_);
 	//skybox_->init();
 } // end of init
@@ -42,7 +44,8 @@ void SceneDX12::init()
 void SceneDX12::render(
 	IRenderer& renderer,
 	RenderInputs& in,
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	UI* ui
 )
 {
@@ -50,8 +53,9 @@ void SceneDX12::render(
 
 	in.camera = camera_.get();
 	//in.skybox = skybox_.get();
+	in.world = world_.get();
 
-	renderer.renderFrame(in, frame, ui);
+	renderer.renderFrame(in, frameVk, frameDX12, ui);
 } // end of render()
 
 void SceneDX12::update(float dt, const InputState& in)
