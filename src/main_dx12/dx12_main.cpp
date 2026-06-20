@@ -268,9 +268,55 @@ void DX12Main::processPendingUploads()
     } // end while
 } // end of processPendingUploads()
 
+void DX12Main::allocateImGuiDescriptor(
+    D3D12_CPU_DESCRIPTOR_HANDLE& outCpu,
+    D3D12_GPU_DESCRIPTOR_HANDLE& outGpu
+)
+{
+    for (uint32_t i = 0; i < IMGUI_DESCRIPTOR_COUNT; ++i)
+    {
+        if (!imguiDescriptorUsed_[i])
+        {
+            imguiDescriptorUsed_[i] = true;
+
+            const uint32_t descriptorIndex = IMGUI_DESCRIPTOR_START + i;
+
+            outCpu = srvUavCbvHeap_->GetCPUDescriptorHandleForHeapStart();
+            outGpu = srvUavCbvHeap_->GetGPUDescriptorHandleForHeapStart();
+
+            outCpu.ptr += descriptorIndex * srvUavCbvDescriptorSize_;
+            outGpu.ptr += descriptorIndex * srvUavCbvDescriptorSize_;
+
+            return;
+        }
+    } // end for
+
+    throw std::runtime_error("DX12Main::allocateImGuiDescriptor - no free ImGui descriptors");
+} // end of allocateImGuiDescriptor()
+
+void DX12Main::freeImGuiDescriptor(
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu,
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu
+)
+{
+    const D3D12_CPU_DESCRIPTOR_HANDLE heapStart =
+        srvUavCbvHeap_->GetCPUDescriptorHandleForHeapStart();
+
+    const uint32_t descriptorIndex =
+        static_cast<uint32_t>((cpu.ptr - heapStart.ptr) / srvUavCbvDescriptorSize_);
+
+    if (descriptorIndex < IMGUI_DESCRIPTOR_START ||
+        descriptorIndex >= IMGUI_DESCRIPTOR_START + IMGUI_DESCRIPTOR_COUNT)
+    {
+        return;
+    }
+
+    const uint32_t localIndex = descriptorIndex - IMGUI_DESCRIPTOR_START;
+    imguiDescriptorUsed_[localIndex] = false;
+} // end of freeImGuiDescriptor()
+
 
 //--- PRIVATE ---//
-
 void DX12Main::enableDebugLayer()
 {
 #ifdef _DEBUG

@@ -63,6 +63,16 @@ public:
 
     void processPendingUploads();
 
+    void allocateImGuiDescriptor(
+        D3D12_CPU_DESCRIPTOR_HANDLE& outCpu,
+        D3D12_GPU_DESCRIPTOR_HANDLE& outGpu
+    );
+
+    void freeImGuiDescriptor(
+        D3D12_CPU_DESCRIPTOR_HANDLE cpu,
+        D3D12_GPU_DESCRIPTOR_HANDLE gpu
+    );
+
     void notifyFramebufferResized() { framebufferResized_ = true; }
 
     DXGI_FORMAT getDepthFormat() const { return depthFormat_; }
@@ -86,6 +96,8 @@ public:
     } // end of getCurrentRTV()
 
     D3D12_CPU_DESCRIPTOR_HANDLE getDSV() const { return dsvHeap_->GetCPUDescriptorHandleForHeapStart(); }
+
+    ID3D12DescriptorHeap* getImguiSrvHeap() const { return srvUavCbvHeap_.Get(); }
 
     uint32_t getSwapChainImageCount() const { return static_cast<uint32_t>(swapChainBuffers_.size()); }
 
@@ -191,6 +203,11 @@ private:
 
     std::vector<PendingUploadDX12> pendingUploads_;
     std::array<RetiredFrameResourcesDX12, MAX_FRAMES_IN_FLIGHT> retired_;
+
+    static constexpr uint32_t IMGUI_DESCRIPTOR_START = 0;
+    static constexpr uint32_t IMGUI_DESCRIPTOR_COUNT = 64;
+
+    std::array<bool, IMGUI_DESCRIPTOR_COUNT> imguiDescriptorUsed_{};
 };
 
 #endif

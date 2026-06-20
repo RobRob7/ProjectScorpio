@@ -1,13 +1,16 @@
 ﻿#include "application.h"
 
 #include "frame_context_vk.h"
+#include "frame_context_dx12.h"
 
 #include "opengl_main.h"
 #include "vulkan_main.h"
+#include "dx12_main.h"
 
 #include "ui.h"
 #include "scene.h"
 #include "scene_vk.h"
+#include "scene_dx12.h"
 #include "renderer_gl.h"
 #include "renderer_vk.h"
 
@@ -113,6 +116,10 @@ Application::Application(
 	{
 		initVk();
 	}
+	else if (backend == Backend::DX12)
+	{
+		initDX12();
+	}
 	else
 	{
 		throw std::runtime_error("BACKEND not supported!");
@@ -163,6 +170,7 @@ void Application::run()
 		///////////// RENDER ///////////////
 		in_.time = static_cast<float>(glfwGetTime());
 
+		// OPENGL
 		if (openglMain_)
 		{
 			ui_->beginFrame();
@@ -181,6 +189,7 @@ void Application::run()
 
 			glfwSwapBuffers(window_);
 		}
+		// VULKAN
 		if (vulkanMain_)
 		{
 			FrameContext frame{};
@@ -203,12 +212,39 @@ void Application::run()
 
 			if (!vulkanMain_->endFrame(frame))
 			{
+				continue;
+			}
+
+			Backend requestedBackend{};
+			if (ui_ && ui_->applyBackendRequest(requestedBackend))
+			{
+				switchBackend(requestedBackend);
+				continue;
+			}
+		}
+		// DX12
+		if (dx12Main_)
+		{
+			FrameContextDX12 frame{};
+			if (!dx12Main_->beginFrame(frame))
+			{
 				if (width_ > 0 && height_ > 0)
 				{
 					if (scene_)		scene_->onResize(width_, height_);
 					if (renderer_)	renderer_->resize(width_, height_);
 					if (ui_)		ui_->onSwapchainRecreated();
 				}
+				continue;
+			}
+
+			ui_->beginFrame();
+
+			ui_->buildUI(deltaTime_, *scene_);
+
+			//scene_->render(*renderer_, in_, &frame, ui_.get());
+
+			if (!dx12Main_->endFrame(frame))
+			{
 				continue;
 			}
 
@@ -244,6 +280,10 @@ void Application::switchBackend(Backend newBackend)
 	{
 		initVk();
 	}
+	else if (backend_ == Backend::DX12)
+	{
+		initDX12();
+	}
 	else
 	{
 		throw std::runtime_error("BACKEND not supported!");
@@ -257,11 +297,17 @@ void Application::shutdownBackend()
 		vulkanMain_->waitIdle();
 	}
 
+	if (dx12Main_)
+	{
+		dx12Main_->waitIdle();
+	}
+
 	ui_.reset();
 	renderer_.reset();
 	scene_.reset();
 	openglMain_.reset();
 	vulkanMain_.reset();
+	dx12Main_.reset();
 
 	if (window_)
 	{
@@ -269,6 +315,33 @@ void Application::shutdownBackend()
 		window_ = nullptr;
 	}
 } // end of shutdownBackend()
+
+void Application::initDX12()
+{
+	WarmupOpenGLContext();
+
+	initWindowDX12();
+	dx12Main_ = std::make_unique<DX12Main>(window_);
+	dx12Main_->init();
+
+	// setup scene + renderer
+	scene_ = std::make_unique<SceneDX12>(*dx12Main_, width_, height_);
+	scene_->init();
+	//renderer_ = std::make_unique<RendererVk>(*vulkanMain_);
+	//renderer_->init();
+	//renderer_->resize(width_, height_);
+
+	setCallbacks();
+
+	// setup UI
+	//ui_ = std::make_unique<UI>(
+	//	nullptr,
+	//	window_,
+	//	renderer_->settings(),
+	//	backend_,
+	//	*dx12Main_
+	//);
+} // end of initDX12()
 
 void Application::initVk()
 {
@@ -343,6 +416,14 @@ void Application::setCallbacks()
 			if (self->vulkanMain_)
 			{
 				self->vulkanMain_->notifyFramebufferResized();
+
+				return;
+			}
+
+			// DX12 path
+			if (self->dx12Main_)
+			{
+				self->dx12Main_->notifyFramebufferResized();
 
 				return;
 			}
@@ -427,6 +508,29 @@ void Application::initWindowVk()
 	// tell GLFW to capture our mouse
 	glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 } // end of initWindowVk()
+
+void Application::initWindowDX12()
+{
+	glfwDefaultWindowHints();
+	// disable top bar
+	glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+	// allow resizing
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+
+	// vulkan glfw
+	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+
+	// WINDOW CREATION + CHECK
+	window_ = glfwCreateWindow(width_, height_, "Scorpio", nullptr, nullptr);
+	if (!window_)
+	{
+		glfwTerminate();
+		throw std::runtime_error("GLFW window creation failure!");
+	} // end if
+
+	// tell GLFW to capture our mouse
+	glfwSetInputMode(window_, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+} // end of initWindowDX12()
 
 InputState Application::buildInputState()
 {
