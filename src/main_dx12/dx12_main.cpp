@@ -315,6 +315,48 @@ void DX12Main::freeImGuiDescriptor(
     imguiDescriptorUsed_[localIndex] = false;
 } // end of freeImGuiDescriptor()
 
+std::string DX12Main::getAdapterName() const
+{
+    if (!adapter_)
+    {
+        return "Unknown DX12 adapter";
+    }
+
+    DXGI_ADAPTER_DESC3 desc{};
+    adapter_->GetDesc3(&desc);
+
+    int size = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        desc.Description,
+        -1,
+        nullptr,
+        0,
+        nullptr,
+        nullptr
+    );
+
+    std::string result(size, '\0');
+
+    WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        desc.Description,
+        -1,
+        result.data(),
+        size,
+        nullptr,
+        nullptr
+    );
+
+    if (!result.empty() && result.back() == '\0')
+    {
+        result.pop_back();
+    }
+
+    return result;
+} // end of getAdapterName()
+
 
 //--- PRIVATE ---//
 void DX12Main::enableDebugLayer()
