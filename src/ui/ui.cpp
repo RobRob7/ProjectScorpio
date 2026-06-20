@@ -919,7 +919,7 @@ void UI::drawStatsFPS(IScene& scene, float dt)
 		// DX12
 		if (dx_)
 		{
-			ImGui::Text("Device: %s", "DX12");
+			ImGui::Text("Device: %s", dx_->getAdapterName().c_str());
 		}
 		// vulkan
 		else if (vk_)

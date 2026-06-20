@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <array>
 #include <utility>
+#include <string>
 
 struct GLFWwindow;
 struct FrameContextDX12;
@@ -72,6 +73,8 @@ public:
         D3D12_CPU_DESCRIPTOR_HANDLE cpu,
         D3D12_GPU_DESCRIPTOR_HANDLE gpu
     );
+
+    std::string getAdapterName() const;
 
     void notifyFramebufferResized() { framebufferResized_ = true; }
 
