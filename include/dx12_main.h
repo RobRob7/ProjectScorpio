@@ -25,7 +25,7 @@ struct FrameContextDX12;
 
 using Microsoft::WRL::ComPtr;
 
-struct PendingUpload
+struct PendingUploadDX12
 {
     ComPtr<ID3D12CommandAllocator> allocator;
     ComPtr<ID3D12GraphicsCommandList4> cmd;
@@ -33,7 +33,7 @@ struct PendingUpload
     std::vector<BufferDX12> uploadBuffers;
 };
 
-struct RetiredFrameResources
+struct RetiredFrameResourcesDX12
 {
     std::vector<BufferDX12> buffers;
     std::vector<ImageDX12> images;
@@ -189,8 +189,8 @@ private:
     uint64_t nextFenceValue_{ 1 };
     HANDLE frameFenceEvent_{ nullptr };
 
-    std::vector<PendingUpload> pendingUploads_;
-    std::array<RetiredFrameResources, MAX_FRAMES_IN_FLIGHT> retired_;
+    std::vector<PendingUploadDX12> pendingUploads_;
+    std::array<RetiredFrameResourcesDX12, MAX_FRAMES_IN_FLIGHT> retired_;
 };
 
 #endif

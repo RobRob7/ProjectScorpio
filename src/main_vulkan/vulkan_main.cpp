@@ -445,7 +445,7 @@ void VulkanMain::submitUpload(
 		throw std::runtime_error("submitUpload: submit failed: " + vk::to_string(res));
 	}
 
-	PendingUpload upload{};
+	PendingUploadVk upload{};
 	upload.cmd = cmd;
 	upload.fence = fence;
 	upload.stagingBuffers = std::move(stagingBuffers);
@@ -455,7 +455,7 @@ void VulkanMain::submitUpload(
 
 void VulkanMain::processPendingUploads()
 {
-	for (size_t i = 0; i < pendingUploads_.size(); )
+	for (size_t i = 0; i < pendingUploads_.size();)
 	{
 		auto& upload = pendingUploads_[i];
 

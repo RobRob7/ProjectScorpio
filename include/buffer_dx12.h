@@ -47,7 +47,7 @@ public:
 	
 	ID3D12Resource* getResource() const { return buffer_.Get(); }
 
-	D3D12_GPU_VIRTUAL_ADDRESS getGPUVirtualAddress() const { !buffer_ ? 0 : buffer_->GetGPUVirtualAddress(); }
+	D3D12_GPU_VIRTUAL_ADDRESS getGPUVirtualAddress() const { return buffer_ ? buffer_->GetGPUVirtualAddress() : 0; }
 
 	uint64_t size() const { return size_; }
 

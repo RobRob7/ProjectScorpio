@@ -241,7 +241,7 @@ void DX12Main::submitUpload(
         "DX12Main::submitUpload - failed to signal upload fence"
     );
 
-    pendingUploads_.push_back(PendingUpload{
+    pendingUploads_.push_back(PendingUploadDX12{
         std::move(allocator),
         std::move(cmd),
         fenceValue,
