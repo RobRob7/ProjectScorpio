@@ -12,6 +12,9 @@ add_library(imgui
 
     # Vulkan backend
     backends/imgui_impl_vulkan.cpp
+
+    # DX12 backend
+    backends/imgui_impl_dx12.cpp
 )
 
 # include directories for ImGui (core + backends)

@@ -12,9 +12,11 @@ class IScene;
 class TextureGL;
 class Texture2DVk;
 class VulkanMain;
+class DX12Main;
 struct FrameContext;
 struct GLFWwindow;
 struct RenderSettings;
+struct ID3D12GraphicsCommandList;
 
 class UI
 {
@@ -23,7 +25,8 @@ public:
 		VulkanMain* vk,
 		GLFWwindow* window, 
 		RenderSettings& rs, 
-		Backend activeBackend
+		Backend activeBackend,
+		DX12Main* dx = nullptr
 	);
 	~UI();
 
@@ -32,6 +35,7 @@ public:
 
 	void renderGL();
 	void renderVk(FrameContext& frame);
+	void renderDX12(ID3D12GraphicsCommandList* cmd);
 
 	std::string_view backendToString(Backend backend) const;
 	void setActiveBackend(Backend backend);
@@ -51,6 +55,7 @@ private:
 	bool backendApplyRequested_{ false };
 
 	VulkanMain* vk_{ nullptr };
+	DX12Main* dx_{ nullptr };
 
 	GLFWwindow* window_;
 	RenderSettings& renderSettings_;

@@ -1,5 +1,7 @@
 #include "ui.h"
 
+#include "dx12_main.h"
+
 #include "vulkan_main.h"
 #include "render_settings.h"
 #include "frame_context_vk.h"
@@ -19,6 +21,7 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 #include <imgui_impl_vulkan.h>
+#include <imgui_impl_dx12.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -72,9 +75,11 @@ UI::UI(
 	VulkanMain* vk, 
 	GLFWwindow* window, 
 	RenderSettings& rs, 
-	Backend activeBackend
+	Backend activeBackend,
+	DX12Main* dx
 )
-	: vk_(vk), 
+	: vk_(vk),
+	dx_(dx),
 	window_(window), 
 	renderSettings_(rs),
 	activeBackend_(activeBackend),
@@ -97,8 +102,48 @@ UI::UI(
 
 	setDarkTheme();
 
+	// DX12
+	if (dx_)
+	{
+		renderSettings_.enableVsync = dx_->getVSync();
+
+		ImGui_ImplGlfw_InitForOther(window_, true);
+
+		ImGui_ImplDX12_InitInfo initInfo{};
+		initInfo.Device = dx_->getDevice();
+		initInfo.CommandQueue = dx_->getGraphicsQueue();
+		initInfo.NumFramesInFlight = dx_->getMaxFramesInFlight();
+		initInfo.RTVFormat = dx_->getSwapChainImageFormat();
+		initInfo.DSVFormat = DXGI_FORMAT_UNKNOWN;
+		initInfo.SrvDescriptorHeap = dx_->getImguiSrvHeap();
+
+		initInfo.SrvDescriptorAllocFn =
+			[](ImGui_ImplDX12_InitInfo* info,
+				D3D12_CPU_DESCRIPTOR_HANDLE* outCpuHandle,
+				D3D12_GPU_DESCRIPTOR_HANDLE* outGpuHandle)
+			{
+				DX12Main* dx = static_cast<DX12Main*>(info->UserData);
+				//dx->allocate
+			};
+
+		initInfo.SrvDescriptorFreeFn =
+			[](ImGui_ImplDX12_InitInfo* info,
+				D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+				D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle)
+			{
+				DX12Main* dx = static_cast<DX12Main*>(info->UserData);
+				//dx->freeImGuiDescriptor(cpuHandle, gpuHandle);
+			};
+
+		initInfo.UserData = dx_;
+
+		ImGui_ImplDX12_Init(&initInfo);
+
+		// logo
+		
+	}
 	// vulkan
-	if (vk_)
+	else if (vk_)
 	{
 		renderSettings_.enableVsync = vk_->getVSync();
 
@@ -160,8 +205,11 @@ UI::UI(
 
 UI::~UI()
 {
-	// imgui shutdown
-	if (vk_)
+	if (dx_)
+	{
+		ImGui_ImplDX12_Shutdown();
+	}
+	else if (vk_)
 	{
 		ImGui_ImplVulkan_Shutdown();
 	}
@@ -175,7 +223,11 @@ UI::~UI()
 
 void UI::beginFrame()
 {
-	if (vk_)
+	if (dx_)
+	{
+		ImGui_ImplDX12_NewFrame();
+	}
+	else if (vk_)
 	{
 		ImGui_ImplVulkan_NewFrame();
 	}
@@ -189,7 +241,7 @@ void UI::beginFrame()
 
 void UI::buildUI(float dt, IScene& scene)
 {
-	if (!vk_)
+	if (!vk_ && !dx_)
 	{
 		glDisable(GL_FRAMEBUFFER_SRGB);
 	}
@@ -213,7 +265,7 @@ void UI::buildUI(float dt, IScene& scene)
 
 void UI::renderGL()
 {
-	if (!vk_)
+	if (!vk_ && !dx_)
 	{
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -261,6 +313,23 @@ void UI::renderVk(FrameContext& frame)
 		cmd.endDebugUtilsLabelEXT();
 	}
 } // end of renderVk()
+
+void UI::renderDX12(ID3D12GraphicsCommandList* cmd)
+{
+	if (!dx_) return;
+
+	ID3D12DescriptorHeap* heaps[] =
+	{
+		dx_->getImguiSrvHeap()
+	};
+
+	cmd->SetDescriptorHeaps(1, heaps);
+
+	ImGui_ImplDX12_RenderDrawData(
+		ImGui::GetDrawData(),
+		cmd
+	);
+} // end of renderDX12()
 
 std::string_view UI::backendToString(Backend backend) const
 {
@@ -337,7 +406,7 @@ void UI::drawTitleBar()
 
 	if (vk_)
 		ImGui::Image(logoIdVk_, ImVec2(h * aspect, h));
-	else
+	else if (!dx_)
 		ImGui::Image((void*)(intptr_t)logoTexGL_->ID(), ImVec2(h * aspect, h));
 
 	ImGui::SameLine();
@@ -459,7 +528,11 @@ void UI::drawMenuBar(IScene& scene)
 		// DISPLAY OPTIONS
 		if (ImGui::BeginMenu("Display"))
 		{
-			if (vk_)
+			if (dx_)
+			{
+				dx_->setVSync(renderSettings_.enableVsync);
+			}
+			else if (vk_)
 			{
 				std::string vsyncLabel = "VSync [" + vk::to_string(vk_->getVsyncMode()) + "]";
 				if (ImGui::Checkbox(vsyncLabel.c_str(), &renderSettings_.enableVsync))
@@ -725,6 +798,9 @@ void UI::drawMenuBar(IScene& scene)
 			if (ImGui::BeginMenu("API"))
 			{
 
+				if (ImGui::Selectable("DX12", selectedBackend_ == Backend::DX12, ImGuiSelectableFlags_DontClosePopups))
+					selectedBackend_ = Backend::DX12;
+
 				if (ImGui::Selectable("Vulkan", selectedBackend_ == Backend::Vulkan, ImGuiSelectableFlags_DontClosePopups))
 					selectedBackend_ = Backend::Vulkan;
 
@@ -832,8 +908,13 @@ void UI::drawStatsFPS(IScene& scene, float dt)
 
 		ImGui::Separator();
 		
+		// DX12
+		if (dx_)
+		{
+			ImGui::Text("Device: %s", "DX12");
+		}
 		// vulkan
-		if (vk_)
+		else if (vk_)
 		{
 			vk::PhysicalDeviceProperties props = vk_->getPhysicalDeviceProperties();
 			ImGui::Text("Device: %s", props.deviceName);

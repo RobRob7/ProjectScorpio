@@ -11,6 +11,7 @@
 
 class OpenGLMain;
 class VulkanMain;
+class DX12Main;
 class UI;
 struct InputState;
 struct GLFWwindow;
@@ -30,11 +31,13 @@ public:
 private:
 	void switchBackend(Backend newBackend);
 	void shutdownBackend();
+	void initDX12();
 	void initVk();
 	void initOpenGL();
 	void setCallbacks();
 	void initWindowGL();
 	void initWindowVk();
+	void initWindowDX12();
 	InputState buildInputState();
 private:
 	RenderInputs in_;
@@ -56,6 +59,7 @@ private:
 
 	std::unique_ptr<OpenGLMain> openglMain_;
 	std::unique_ptr<VulkanMain> vulkanMain_;
+	std::unique_ptr<DX12Main> dx12Main_;
 
 	std::unique_ptr<IScene> scene_;
 	std::unique_ptr<IRenderer> renderer_;
