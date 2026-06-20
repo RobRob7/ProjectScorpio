@@ -146,69 +146,6 @@ void ImageDX12::createImage(
     );
 } // end of createImage()
 
-void ImageDX12::createSRV(
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
-    D3D12_SRV_DIMENSION dimension
-)
-{
-    if (!image_)
-    {
-        throw std::runtime_error("ImageDX12::createSRV - invalid image");
-    }
-
-    srvCpu_ = cpuHandle;
-    srvGpu_ = gpuHandle;
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC desc{
-        .Format = format_,
-        .ViewDimension = dimension,
-        .Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
-    };
-
-    if (dimension == D3D12_SRV_DIMENSION_TEXTURE2D)
-    {
-        desc.Texture2D =
-        {
-            .MostDetailedMip = 0,
-            .MipLevels = mipLevels_,
-            .PlaneSlice = 0,
-            .ResourceMinLODClamp = 0.0f
-        };
-    }
-    else if (dimension == D3D12_SRV_DIMENSION_TEXTURE2DARRAY)
-    {
-        desc.Texture2DArray =
-        {
-            .MostDetailedMip = 0,
-            .MipLevels = mipLevels_,
-            .FirstArraySlice = 0,
-            .ArraySize = layers_,
-            .PlaneSlice = 0,
-            .ResourceMinLODClamp = 0.0f
-        };
-    }
-    else if (dimension == D3D12_SRV_DIMENSION_TEXTURECUBE)
-    {
-        desc.TextureCube =
-        {
-            .MostDetailedMip = 0,
-            .MipLevels = mipLevels_,
-            .ResourceMinLODClamp = 0.0f
-        };
-    }
-    else
-    {
-        throw std::runtime_error("ImageDX12::createSRV - unsupported SRV dimension");
-    }
-
-    dx_->getDevice()->CreateShaderResourceView(
-        image_.Get(),
-        &desc,
-        srvCpu_
-    );
-} // end of createSRV()
-
 void ImageDX12::createRTV(
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
     D3D12_RTV_DIMENSION dimension
@@ -288,49 +225,6 @@ void ImageDX12::createDSV(
     );
 } // end of createDSV()
 
-void ImageDX12::createUAV(
-    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
-    D3D12_UAV_DIMENSION dimension
-)
-{
-    if (!image_)
-    {
-        throw std::runtime_error("ImageDX12::createUAV - invalid image");
-    }
-
-    uavCpu_ = cpuHandle;
-    uavGpu_ = gpuHandle;
-
-    D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
-    desc.Format = format_;
-    desc.ViewDimension = dimension;
-
-    if (dimension == D3D12_UAV_DIMENSION_TEXTURE2D)
-    {
-        desc.Texture2D.MipSlice = 0;
-        desc.Texture2D.PlaneSlice = 0;
-    }
-    else if (dimension == D3D12_UAV_DIMENSION_TEXTURE2DARRAY)
-    {
-        desc.Texture2DArray.MipSlice = 0;
-        desc.Texture2DArray.FirstArraySlice = 0;
-        desc.Texture2DArray.ArraySize = layers_;
-        desc.Texture2DArray.PlaneSlice = 0;
-    }
-    else
-    {
-        throw std::runtime_error("ImageDX12::createUAV - unsupported UAV dimension");
-    }
-
-    dx_->getDevice()->CreateUnorderedAccessView(
-        image_.Get(),
-        nullptr,
-        &desc,
-        uavCpu_
-    );
-} // end of createUAV()
-
 void ImageDX12::destroy()
 {
     image_.Reset();
@@ -344,10 +238,6 @@ void ImageDX12::destroy()
     mipLevels_ = 1;
     sampleCount_ = 1;
 
-    srvCpu_ = {};
-    srvGpu_ = {};
     rtvCpu_ = {};
     dsvCpu_ = {};
-    uavCpu_ = {};
-    uavGpu_ = {};
 } // end of destroy()

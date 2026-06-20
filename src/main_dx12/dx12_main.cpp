@@ -229,7 +229,7 @@ void DX12Main::submitUpload(
 
     ID3D12CommandList* commandLists[] =
     {
-        commandList_.Get()
+        cmd.Get()
     };
 
     graphicsQueue_->ExecuteCommandLists(1, commandLists);
