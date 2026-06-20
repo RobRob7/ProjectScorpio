@@ -33,14 +33,14 @@ struct SwapChainSupportDetails
     std::vector<vk::PresentModeKHR> presentModes;
 };
 
-struct PendingUpload
+struct PendingUploadVk
 {
     vk::CommandBuffer cmd{};
     vk::Fence fence{};
     std::vector<BufferVk> stagingBuffers;
 };
 
-struct RetiredFrameResources
+struct RetiredFrameResourcesVk
 {
     std::vector<BufferVk> buffers;
     std::vector<ImageVk> images;
@@ -227,9 +227,9 @@ private:
 
     static constexpr uint32_t MAX_FRAMES_IN_FLIGHT = 3;
 
-    std::vector<PendingUpload> pendingUploads_;
+    std::vector<PendingUploadVk> pendingUploads_;
 
-    std::array<RetiredFrameResources, MAX_FRAMES_IN_FLIGHT> retired_;
+    std::array<RetiredFrameResourcesVk, MAX_FRAMES_IN_FLIGHT> retired_;
 
     bool framebufferResized_{ false };
     uint32_t currentFrame_ = 0;
