@@ -40,7 +40,11 @@ static std::vector<uint32_t> ReadFile(const std::filesystem::path& pathFile)
 
 
 //--- PUBLIC ---//
-ShaderModuleVk::ShaderModuleVk(vk::Device device, std::string_view vertexPathFile, std::string_view fragPathFile)
+ShaderModuleVk::ShaderModuleVk(
+	vk::Device device, 
+	std::string_view vertexPathFile, 
+	std::string_view fragPathFile
+)
 	: device_(device)
 {
 	if (!device_)
@@ -55,7 +59,7 @@ ShaderModuleVk::ShaderModuleVk(vk::Device device, std::string_view vertexPathFil
 	fragShaderModule_ = createShaderModule(ReadFile(fragFullPath));
 } // end of constructor
 
-ShaderModuleVk::~ShaderModuleVk() noexcept = default;
+ShaderModuleVk::~ShaderModuleVk() = default;
 
 
 //--- PRIVATE ---//
