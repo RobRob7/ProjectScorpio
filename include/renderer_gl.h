@@ -40,7 +40,8 @@ public:
 	void resize(int w, int h) override;
 	void renderFrame(
 		const RenderInputs& in,
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		UI* ui
 	) override;
 

@@ -49,7 +49,8 @@ public:
 
 	void renderFrame(
 		const RenderInputs& in,
-		const FrameContext* pFrame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		UI* ui
 	) override;
 

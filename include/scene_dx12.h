@@ -8,6 +8,7 @@
 class DX12Main;
 class Camera;
 class CubemapDX12;
+class ChunkManager;
 
 class UI;
 class IRenderer;
@@ -28,7 +29,8 @@ public:
 	void render(
 		IRenderer& renderer,
 		RenderInputs& in,
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		UI* ui
 	) override;
 
@@ -54,6 +56,7 @@ private:
 
 	// objects
 	std::unique_ptr<Camera> camera_;
+	std::unique_ptr<ChunkManager> world_;
 	//std::unique_ptr<CubemapVk> skybox_;
 };
 

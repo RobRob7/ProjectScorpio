@@ -123,7 +123,7 @@ UI::UI(
 				D3D12_GPU_DESCRIPTOR_HANDLE* outGpuHandle)
 			{
 				DX12Main* dx = static_cast<DX12Main*>(info->UserData);
-				//dx->allocate
+				dx->allocateImGuiDescriptor(*outCpuHandle, *outGpuHandle);
 			};
 
 		initInfo.SrvDescriptorFreeFn =
@@ -132,7 +132,7 @@ UI::UI(
 				D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle)
 			{
 				DX12Main* dx = static_cast<DX12Main*>(info->UserData);
-				//dx->freeImGuiDescriptor(cpuHandle, gpuHandle);
+				dx->freeImGuiDescriptor(cpuHandle, gpuHandle);
 			};
 
 		initInfo.UserData = dx_;
@@ -395,21 +395,26 @@ void UI::drawTitleBar()
 	ImGui::PopStyleVar();
 
 	// ----- logo -----
-	float h = barHeight - 4.0f;
-	float logoWidth = vk_
-		? static_cast<float>(logoTexVk_->width())
-		: static_cast<float>(logoTexGL_->getWidth());
-	float logoHeight = vk_
-		? static_cast<float>(logoTexVk_->height())
-		: static_cast<float>(logoTexGL_->getHeight());
-	float aspect = logoWidth / logoHeight;
-
 	if (vk_)
-		ImGui::Image(logoIdVk_, ImVec2(h * aspect, h));
-	else if (!dx_)
-		ImGui::Image((void*)(intptr_t)logoTexGL_->ID(), ImVec2(h * aspect, h));
+	{
+		float h = barHeight - 4.0f;
+		float logoWidth = static_cast<float>(logoTexVk_->width());
+		float logoHeight = static_cast<float>(logoTexVk_->height());
+		float aspect = logoWidth / logoHeight;
 
-	ImGui::SameLine();
+		ImGui::Image(logoIdVk_, ImVec2(h * aspect, h));
+		ImGui::SameLine();
+	}
+	else if (!dx_)
+	{
+		float h = barHeight - 4.0f;
+		float logoWidth = static_cast<float>(logoTexGL_->getWidth());
+		float logoHeight = static_cast<float>(logoTexGL_->getHeight());
+		float aspect = logoWidth / logoHeight;
+
+		ImGui::Image((void*)(intptr_t)logoTexGL_->ID(), ImVec2(h * aspect, h));
+		ImGui::SameLine();
+	}
 
 	// ----- title -----
 	std::string title = "Project Scorpio - " + std::string(backendToString(activeBackend_));
@@ -530,7 +535,10 @@ void UI::drawMenuBar(IScene& scene)
 		{
 			if (dx_)
 			{
-				dx_->setVSync(renderSettings_.enableVsync);
+				if (ImGui::Checkbox("VSync", &renderSettings_.enableVsync))
+				{
+					dx_->setVSync(renderSettings_.enableVsync);
+				}
 			}
 			else if (vk_)
 			{
@@ -1067,7 +1075,7 @@ void UI::drawInspector(IScene& scene)
 	}
 
 	// ------- sun -------
-	if (ImGui::CollapsingHeader("Sun", ImGuiTreeNodeFlags_DefaultOpen))
+	if (!dx_ && ImGui::CollapsingHeader("Sun", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ILight& light = scene.getLight();
 		float speed = light.getSpeed();

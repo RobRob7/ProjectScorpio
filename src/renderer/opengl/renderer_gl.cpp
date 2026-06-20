@@ -94,7 +94,8 @@ void RendererGL::resize(int w, int h)
 
 void RendererGL::renderFrame(
     const RenderInputs& in,
-    const FrameContext* frame,
+    const FrameContext* frameVk,
+    const FrameContextDX12* frameDX12,
     UI* ui
 )
 {

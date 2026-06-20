@@ -219,11 +219,12 @@ void RendererVk::resize(int w, int h)
 
 void RendererVk::renderFrame(
 	const RenderInputs& in,
-	const FrameContext* pFrame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	UI* ui
 )
 {
-	FrameContext& frame = *const_cast<FrameContext*>(pFrame);
+	FrameContext& frame = *const_cast<FrameContext*>(frameVk);
 
 	if (frame.extent.width != width_ || frame.extent.height != height_)
 	{

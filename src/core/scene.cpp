@@ -43,7 +43,8 @@ void Scene::init()
 void Scene::render(
 	IRenderer& renderer,
 	RenderInputs& in,
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	UI* ui
 )
 {
@@ -55,7 +56,7 @@ void Scene::render(
 	in.skybox = skybox_.get();
 	in.crosshair = crosshair_.get();
 
-	renderer.renderFrame(in, frame, nullptr);
+	renderer.renderFrame(in, frameVk, frameDX12, nullptr);
 } // end of render()
 
 void Scene::update(float dt, const InputState& in)

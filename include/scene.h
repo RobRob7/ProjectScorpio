@@ -27,7 +27,8 @@ public:
 	void render(
 		IRenderer& renderer,
 		RenderInputs& in,
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		UI* ui
 	) override;
 
