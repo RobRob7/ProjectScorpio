@@ -45,8 +45,8 @@ struct GraphicsPipelineDescVk
 		vk::ColorComponentFlagBits::eA;
 
 	// depth
-	bool depthTestEnable = true;
-	bool depthWriteEnable = true;
+	bool depthTestEnable{ true };
+	bool depthWriteEnable{ true };
 	vk::CompareOp depthCompareOp{ vk::CompareOp::eLessOrEqual };
 
 	// dyn rendering formats
@@ -80,7 +80,7 @@ public:
 	bool valid() const { return static_cast<bool>(pipeline_); }
 
 	vk::Pipeline getPipeline() const { return pipeline_.get(); }
-	vk::PipelineLayout getLayout() const{ return layout_.get(); }
+	vk::PipelineLayout getLayout() const { return layout_.get(); }
 
 private:
 	void destroy();
