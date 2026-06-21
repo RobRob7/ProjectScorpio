@@ -49,6 +49,14 @@ public:
     );
 
     void createRTV(
+        D3D12_RTV_DIMENSION dimension = D3D12_RTV_DIMENSION_TEXTURE2D
+    );
+
+    void createDSV(
+        D3D12_DSV_DIMENSION dimension = D3D12_DSV_DIMENSION_TEXTURE2D
+    );
+
+    void createRTV(
         D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
         D3D12_RTV_DIMENSION dimension = D3D12_RTV_DIMENSION_TEXTURE2D
     );
@@ -174,6 +182,9 @@ private:
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvCpu_{};
     D3D12_CPU_DESCRIPTOR_HANDLE dsvCpu_{};
+
+    ComPtr<ID3D12DescriptorHeap> rtvHeap_;
+    ComPtr<ID3D12DescriptorHeap> dsvHeap_;
 };
 
 #endif

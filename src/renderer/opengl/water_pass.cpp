@@ -344,7 +344,8 @@ void WaterPass::waterReflectionPass(
         height_
     );
     in.skybox->render(
-        nullptr, 
+        nullptr,
+        nullptr,
         reflView, 
         proj,
         in.light->getDirection(),

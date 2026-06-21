@@ -3,7 +3,7 @@
 
 #include "i_renderer.h"
 
-//#include "image_vk.h"
+#include "image_dx12.h"
 
 #include <memory>
 
@@ -62,7 +62,13 @@ private:
 	int width_{};
 	int height_{};
 
-	DX12Main& dx_;
+	DX12Main* dx_{ nullptr };
+
+	ImageDX12 sceneColor_;
+	ImageDX12 sceneDepth_;
+
+	DXGI_FORMAT sceneColorFormat_{ DXGI_FORMAT_R16G16B16A16_FLOAT };
+	DXGI_FORMAT sceneDepthFormat_{ DXGI_FORMAT_D32_FLOAT };
 
 	std::unique_ptr<RenderSettings> rs_;
 

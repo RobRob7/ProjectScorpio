@@ -327,6 +327,8 @@ void Application::initDX12()
 {
 	WarmupOpenGLContext();
 
+	RunShaderCompilerScript();
+
 	initWindowDX12();
 	dx12Main_ = std::make_unique<DX12Main>(window_);
 	dx12Main_->init();

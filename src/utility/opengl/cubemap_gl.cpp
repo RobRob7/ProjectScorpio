@@ -58,7 +58,8 @@ void CubemapGL::init()
 
 // render CubemapGL
 void CubemapGL::render(
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	const glm::mat4& view,
 	const glm::mat4& projection,
 	const glm::vec3& sunDir,

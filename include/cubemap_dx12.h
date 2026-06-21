@@ -1,15 +1,14 @@
-#ifndef CUBEMAP_VK_H
-#define CUBEMAP_VK_H
+#ifndef CUBEMAP_DX12_H
+#define CUBEMAP_DX12_H
 
 #include "constants.h"
 
 #include "i_cubemap.h"
 
-#include "shader_vk.h"
-#include "buffer_vk.h"
-#include "descriptor_set_vk.h"
-#include "graphics_pipeline_vk.h"
-#include "texture_cubemap_vk.h"
+#include "buffer_dx12.h"
+#include "descriptor_set_dx12.h"
+#include "graphics_pipeline_dx12.h"
+#include "texture_cubemap_dx12.h"
 
 #include <glm/glm.hpp>
 
@@ -19,16 +18,17 @@
 #include <cstdint>
 #include <vector>
 
-class VulkanMain;
+class DX12Main;
+class ShaderDX12;
 
-class CubemapVk final : public ICubemap
+class CubemapDX12 final : public ICubemap
 {
 public:
-    CubemapVk(
-		VulkanMain& vk, 
+    CubemapDX12(
+		DX12Main& dx, 
 		const std::array<std::string_view, 6>& textures = Cubemap_Constants::DEFAULT_FACES
 	);
-    ~CubemapVk() override;
+    ~CubemapDX12() override;
 
     void init() override;
 
@@ -51,8 +51,8 @@ public:
 		const float time
 	);
 
-	TextureCubemapVk& getNightTexture() { return cubemapTextureNight_; }
-	TextureCubemapVk& getDayTexture() { return cubemapTextureDay_; }
+	TextureCubemapDX12& getNightTexture() { return cubemapTextureNight_; }
+	TextureCubemapDX12& getDayTexture() { return cubemapTextureDay_; }
 
 private:
 	void createVertexBuffer();
@@ -60,27 +60,27 @@ private:
 	void createDescriptorSets();
 	void createPipeline();
 private:
-	VulkanMain& vk_;
+	DX12Main* dx_{ nullptr };
 
 	std::array<std::string_view, 6> faces_;
 
-	std::unique_ptr<ShaderModuleVk> shader_;
+	std::unique_ptr<ShaderDX12> shader_;
 
-	TextureCubemapVk cubemapTextureNight_;
-	TextureCubemapVk cubemapTextureDay_;
+	TextureCubemapDX12 cubemapTextureNight_;
+	TextureCubemapDX12 cubemapTextureDay_;
 
-	BufferVk vertexBuffer_;
+	BufferDX12 vertexBuffer_;
 
-	std::vector<BufferVk> uboBuffers_;
-	std::vector<BufferVk> uboBuffersOffscreen_;
+	std::vector<BufferDX12> uboBuffers_;
+	std::vector<BufferDX12> uboBuffersOffscreen_;
 
 	uint32_t vertexCount_{};
 
-	std::vector<DescriptorSetVk> descriptorSets_;
-	std::vector<DescriptorSetVk> descriptorSetsOffscreen_;
+	std::vector<DescriptorSetDX12> descriptorSets_;
+	std::vector<DescriptorSetDX12> descriptorSetsOffscreen_;
 
-	GraphicsPipelineVk pipeline_;
-	GraphicsPipelineVk pipelineOffscreen_;
+	GraphicsPipelineDX12 pipeline_;
+	GraphicsPipelineDX12 pipelineOffscreen_;
 };
 
 #endif

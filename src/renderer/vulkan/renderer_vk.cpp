@@ -507,6 +507,7 @@ void RendererVk::renderFrame(
 		{
 			in.skybox->render(
 				&frame,
+				nullptr,
 				view,
 				proj,
 				in.light->getDirection(),

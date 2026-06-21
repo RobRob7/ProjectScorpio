@@ -57,7 +57,7 @@ private:
 	// objects
 	std::unique_ptr<Camera> camera_;
 	std::unique_ptr<ChunkManager> world_;
-	//std::unique_ptr<CubemapVk> skybox_;
+	std::unique_ptr<CubemapDX12> skybox_;
 };
 
 #endif
