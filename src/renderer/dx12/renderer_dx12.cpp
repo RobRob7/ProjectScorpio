@@ -35,7 +35,7 @@
 //#include "fxaa_pass_vk.h"
 //#include "fog_pass_vk.h"
 //#include "god_ray_pass_vk.h"
-//#include "present_pass_vk.h"
+#include "present_pass_dx12.h"
 
 #include <glm/glm.hpp>
 
@@ -159,10 +159,10 @@ void RendererDX12::init()
 	//	fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
 	//}
 
-	//if (!presentPass_)
-	//{
-	//	presentPass_ = std::make_unique<PresentPassVk>(vk_);
-	//}
+	if (!presentPass_)
+	{
+		presentPass_ = std::make_unique<PresentPassDX12>(*dx_);
+	}
 
 	//gbufferPass_->init();
 	//shadowMapPass_->init();
@@ -182,7 +182,7 @@ void RendererDX12::init()
 	//fogPass_->init();
 	//godRayPass_->init();
 	//fxaaPass_->init();
-	//presentPass_->init();
+	presentPass_->init();
 } // end of init()
 
 void RendererDX12::resize(int w, int h)
@@ -211,7 +211,7 @@ void RendererDX12::resize(int w, int h)
 	//if (godRayPass_)	godRayPass_->resize();
 	//if (fxaaPass_)		fxaaPass_->resize();
 
-	//if (presentPass_)	presentPass_->resize();
+	if (presentPass_)	presentPass_->resize();
 
 	createSceneAttachments();
 } // end of resize()
@@ -239,9 +239,8 @@ void RendererDX12::renderFrame(
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
 	// --------------- FORWARD RENDER --------------- //
-
-	//sceneColor_.transitionToRenderTarget(cmd);
-	//sceneDepth_.transitionToDepthWrite(cmd);
+	sceneColor_.transitionToRenderTarget(cmd);
+	sceneDepth_.transitionToDepthWrite(cmd);
 
 	D3D12_VIEWPORT viewport{};
 	viewport.TopLeftX = 0.0f;
@@ -260,10 +259,9 @@ void RendererDX12::renderFrame(
 	cmd->RSSetViewports(1, &viewport);
 	cmd->RSSetScissorRects(1, &scissor);
 
-	//D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = sceneColor_.rtvCPU();
-	//D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = sceneDepth_.dsvCPU();
-	D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
-	D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = frame.depthDSV;
+	D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = sceneColor_.rtvCPU();
+	D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = sceneDepth_.dsvCPU();
+
 	cmd->OMSetRenderTargets(
 		1,
 		&colorRTV,
@@ -292,14 +290,47 @@ void RendererDX12::renderFrame(
 		nullptr
 	);
 
-	in.skybox->render(
-		nullptr,
-		&frame,
-		view,
-		proj
-	);
+	{
+		in.skybox->render(
+			nullptr,
+			&frame,
+			view,
+			proj
+		);
+	}
 
 	// --------------- END FORWARD RENDER --------------- //
+
+	// scene color + depth transition to shader read
+	sceneColor_.transitionToShaderRead(cmd);
+	sceneDepth_.transitionToDepthWrite(cmd);
+
+	// ----------------- POST-PROCESSING ----------------- //
+	ImageDX12* sceneColor = nullptr;
+	ImageDX12* sceneDepth = nullptr;
+	ImageDX12* currentColor = &sceneColor_;
+	//if (vk_.supportsRayTracing() && rs_->useRT)
+	//{
+	//	sceneColor = &compositePassHybrid_->getOutColorImage();
+	//	sceneDepth = &compositePassHybrid_->getOutDepthImage();
+	//}
+	//else
+	//{
+	//	sceneColor = &sceneColor_;
+	//	sceneDepth = &sceneDepth_;
+	//}
+	// --------------- END POST-PROCESSING --------------- //
+
+	// swap swapchain color image to color attachment
+	frame.transitionColorImageToAttachment(cmd);
+
+	// ----------------- PRESENT PASS ----------------- //
+	if (presentPass_)
+	{
+		presentPass_->setInput(*currentColor);
+		presentPass_->render(frame);
+	}
+	// --------------- END PRESENT PASS --------------- //
 
 
 	// ----------------- UI ELEMENTS ----------------- //
@@ -309,10 +340,6 @@ void RendererDX12::renderFrame(
 		ui->renderDX12(frame);
 	}
 	// --------------- END UI ELEMENTS --------------- //
-
-	// PRESENT TO SCREEN
-	//frame.transitionColorImageToPresent(cmd);
-	//dx_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
 } // end of renderFrame()
 
 
