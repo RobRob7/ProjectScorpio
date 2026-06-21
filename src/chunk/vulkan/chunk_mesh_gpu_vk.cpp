@@ -4,6 +4,7 @@
 
 #include "vulkan_main.h"
 #include "chunk_mesh_data.h"
+#include <frame_context_vk.h>
 
 #include <vector>
 #include <utility>
@@ -37,10 +38,18 @@ ChunkMeshGPUVk::~ChunkMeshGPUVk()
 } // end of destructor
 
 void ChunkMeshGPUVk::upload(
-	vk::CommandBuffer cmd,
-	const ChunkMeshData& data
+	const ChunkMeshData& data,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
 )
 {
+	vk::CommandBuffer cmd = frameVk->cmd;
+
+	if (!cmd)
+	{
+		return;
+	}
+	
 	const bool rtEnabled = vk_->supportsRayTracing();
 
 	BufferVk newOpaqueRTVB(*vk_);
@@ -425,10 +434,17 @@ void ChunkMeshGPUVk::upload(
 	stagingBuffers.clear();
 } // end of upload()
 
-void ChunkMeshGPUVk::drawOpaque(vk::CommandBuffer cmd)
+void ChunkMeshGPUVk::drawOpaque(
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
+)
 {
+	vk::CommandBuffer cmd = frameVk->cmd;
+
 	if (!cmd || opaqueIndexCount_ == 0 || !opaqueVB_.valid() || !opaqueIB_.valid())
+	{
 		return;
+	}
 
 	vk::Buffer vb = opaqueVB_.getBuffer();
 	vk::DeviceSize offset = 0;
@@ -438,8 +454,12 @@ void ChunkMeshGPUVk::drawOpaque(vk::CommandBuffer cmd)
 	cmd.drawIndexed(opaqueIndexCount_, 1, 0, 0, 0);
 } // end of drawOpaque()
 
-void ChunkMeshGPUVk::drawWater(vk::CommandBuffer cmd)
+void ChunkMeshGPUVk::drawWater(
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
+)
 {
+	vk::CommandBuffer cmd = frameVk->cmd;
 	if (!cmd || waterIndexCount_ == 0 || !waterVB_.valid() || !waterIB_.valid())
 		return;
 

@@ -21,7 +21,9 @@
 struct ChunkEntry;
 struct ChunkDrawList;
 class VulkanMain;
+class DX12Main;
 struct FrameContext;
+struct FrameContextDX12;
 
 using namespace World;
 
@@ -38,8 +40,15 @@ public:
 	ChunkManager(int viewRadiusInChunks = 15);
 	~ChunkManager();
 
-	void init(VulkanMain* vk);
-	void updateDynamic(const glm::vec3& cameraPos, FrameContext* frame = nullptr);
+	void init(
+		VulkanMain* vk = nullptr,
+		DX12Main* dx = nullptr
+	);
+	void updateDynamic(
+		const glm::vec3& cameraPos, 
+		FrameContext* frameVk = nullptr,
+		FrameContextDX12* frameDX12 = nullptr
+	);
 
 	bool buildVisibleChunkBounds(
 		glm::vec3& outMin,
@@ -129,6 +138,7 @@ private:
 	std::unordered_set<ChunkCoord, ChunkCoordHash> queuedDirtyChunks_;
 
 	VulkanMain* vk_{ nullptr };
+	DX12Main* dx_{ nullptr };
 
 	ChunkDrawList rtDrawList_{};
 	ChunkDrawList opaqueDrawList_{};

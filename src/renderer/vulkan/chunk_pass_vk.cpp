@@ -179,7 +179,7 @@ void ChunkPassVk::renderOpaque(
 				&pc
 			);
 
-			item.gpu->drawOpaque(cmd);
+			item.gpu->drawOpaque(&frame, nullptr);
 		} // end for
 
 		cmd.endDebugUtilsLabelEXT();
@@ -245,7 +245,7 @@ void ChunkPassVk::renderOpaque(
 				&pc
 			);
 
-			item.gpu->drawOpaque(cmd);
+			item.gpu->drawOpaque(&frame, nullptr);
 		} // end for
 
 		cmd.endDebugUtilsLabelEXT();
@@ -305,7 +305,7 @@ void ChunkPassVk::renderOpaque(
 				&pc
 			);
 
-			item.gpu->drawOpaque(cmd);
+			item.gpu->drawOpaque(&frame, nullptr);
 		} // end for
 
 		cmd.endDebugUtilsLabelEXT();
@@ -348,7 +348,7 @@ void ChunkPassVk::renderOpaque(
 				&pc
 			);
 
-			item.gpu->drawOpaque(cmd);
+			item.gpu->drawOpaque(&frame, nullptr);
 		} // end for
 
 		cmd.endDebugUtilsLabelEXT();
@@ -390,7 +390,7 @@ void ChunkPassVk::renderOpaque(
 				&pc
 			);
 
-			item.gpu->drawOpaque(cmd);
+			item.gpu->drawOpaque(&frame, nullptr);
 		} // end for
 
 		cmd.endDebugUtilsLabelEXT();
@@ -928,7 +928,7 @@ void ChunkPassVk::createDescriptorSets()
 			);
 		}
 
-		// reflection
+		// refraction
 		{
 			vk::DescriptorSetLayoutBinding uboBinding{};
 			uboBinding.binding = TO_API_FORM(ChunkBinding::UBO);

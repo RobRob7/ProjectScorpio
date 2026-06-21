@@ -9,7 +9,7 @@
 #include <cmath>
 #include <utility>
 #include <cfloat>
-#include <iostream>
+#include <stdexcept>
 
 //--- HELPER ---//
 struct Plane
@@ -102,14 +102,27 @@ ChunkManager::ChunkManager(int viewRadiusInChunks)
 
 ChunkManager::~ChunkManager() = default;
 
-void ChunkManager::init(VulkanMain* vk)
+void ChunkManager::init(
+	VulkanMain* vk,
+	DX12Main* dx
+)
 {
+	if (vk && dx)
+	{
+		throw std::runtime_error("ChunkManager::init - can only support ONE main API");
+	}
+
 	vk_ = vk;
+	dx_ = dx;
 
 	streamRecenterThreshold_ = std::max(1, viewRadius_ - 10);
 } // end of init()
 
-void ChunkManager::updateDynamic(const glm::vec3& cameraPos, FrameContext* frame)
+void ChunkManager::updateDynamic(
+	const glm::vec3& cameraPos,
+	FrameContext* frameVk,
+	FrameContextDX12* frameDX12
+)
 {
 	glm::vec3 prevCameraPos = lastCameraPos_;
 	lastCameraPos_ = cameraPos;
@@ -279,7 +292,7 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos, FrameContext* frame
 		}
 
 		std::unique_ptr<ChunkEntry> entry =
-			std::make_unique<ChunkEntry>(coord.x, coord.z, vk_);
+			std::make_unique<ChunkEntry>(coord.x, coord.z, vk_, dx_);
 
 		auto& chunk = entry->cpu->getChunk();
 		saveWorld_.loadChunkFromFile(chunk, coord.x, coord.z, "HelloWorld");
@@ -288,12 +301,17 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos, FrameContext* frame
 
 		if (vk_)
 		{
-			if (!frame) return;
-			entry->uploadGPU(frame->cmd);
+			if (!frameVk) return;
+			entry->uploadGPU(frameVk, nullptr);
+		}
+		else if (dx_)
+		{
+			if (!frameDX12) return;
+			entry->uploadGPU(nullptr, frameDX12);
 		}
 		else
 		{
-			entry->uploadGPU({});
+			entry->uploadGPU();
 		}
 
 		chunks_.emplace(coord, std::move(entry));
@@ -319,12 +337,17 @@ void ChunkManager::updateDynamic(const glm::vec3& cameraPos, FrameContext* frame
 
 		if (vk_)
 		{
-			if (!frame) return;
-			it->second->uploadGPU(frame->cmd);
+			if (!frameVk) return;
+			it->second->uploadGPU(frameVk, nullptr);
+		}
+		else if (dx_)
+		{
+			if (!frameDX12) return;
+			it->second->uploadGPU(nullptr, frameDX12);
 		}
 		else
 		{
-			it->second->uploadGPU({});
+			it->second->uploadGPU();
 		}
 
 		++dirtyUploaded;

@@ -26,7 +26,7 @@ Scene::~Scene() = default;
 void Scene::init()
 {
 	world_ = std::make_unique<ChunkManager>();
-	world_->init(nullptr);
+	world_->init();
 
 	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
 
