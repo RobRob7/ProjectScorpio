@@ -10,6 +10,8 @@
 
 #include <stdexcept>
 #include <algorithm>
+#include <iostream>
+#include <vector>
 
 //--- PUBLIC ---//
 DX12Main::DX12Main(GLFWwindow* window)
@@ -32,6 +34,62 @@ DX12Main::~DX12Main()
         frameFenceEvent_ = nullptr;
     }
 } // end of destructor
+
+void DX12Main::dumpDebugMessages(const char* context)
+{
+    if (!infoQueue_)
+    {
+        return;
+    }
+
+    const UINT64 count = infoQueue_->GetNumStoredMessages();
+
+    if (count == 0)
+    {
+        return;
+    }
+
+    if (context)
+    {
+        std::cerr << "\n[D3D12 Debug] " << context << "\n";
+    }
+    else
+    {
+        std::cerr << "\n[D3D12 Debug]\n";
+    }
+
+    for (UINT64 i = 0; i < count; ++i)
+    {
+        SIZE_T messageLength = 0;
+        HRESULT hr = infoQueue_->GetMessage(i, nullptr, &messageLength);
+
+        if (FAILED(hr) || messageLength == 0)
+        {
+            continue;
+        }
+
+        std::vector<char> storage(messageLength);
+        auto* message = reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+
+        hr = infoQueue_->GetMessage(i, message, &messageLength);
+
+        if (FAILED(hr))
+        {
+            continue;
+        }
+
+        std::cerr
+            << "[D3D12] "
+            << "Severity=" << static_cast<int>(message->Severity)
+            << " Category=" << static_cast<int>(message->Category)
+            << " ID=" << message->ID
+            << "\n"
+            << message->pDescription
+            << "\n\n";
+    } // end for
+
+    infoQueue_->ClearStoredMessages();
+} // end of dumpDebugMessages()
 
 void DX12Main::setDebugName(ID3D12Object* object, const wchar_t* name) const
 {
@@ -137,10 +195,12 @@ bool DX12Main::beginFrame(FrameContextDX12& out)
 
     if (swapChainStates_[currentBackBufferIndex_] != D3D12_RESOURCE_STATE_RENDER_TARGET)
     {
-        //D3D12_RESOURCE_BARRIER barrier =
-
-        //commandList_->ResourceBarrier(1, &barrier);
-        swapChainStates_[currentBackBufferIndex_] = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        DX12Utils::TransitionResource(
+            commandList_.Get(),
+            swapChainBuffers_[currentBackBufferIndex_].Get(),
+            swapChainStates_[currentBackBufferIndex_],
+            D3D12_RESOURCE_STATE_RENDER_TARGET
+        );
     }
 
     // fill in frame contents
@@ -167,16 +227,22 @@ bool DX12Main::endFrame(const FrameContextDX12& frame)
 {
     if (swapChainStates_[currentBackBufferIndex_] != D3D12_RESOURCE_STATE_PRESENT)
     {
-        //D3D12_RESOURCE_BARRIER barrier = 
-
-        //commandList_->ResourceBarrier(1, &barrier);
-        swapChainStates_[currentBackBufferIndex_] = D3D12_RESOURCE_STATE_PRESENT;
+        DX12Utils::TransitionResource(
+            commandList_.Get(),
+            swapChainBuffers_[currentBackBufferIndex_].Get(),
+            swapChainStates_[currentBackBufferIndex_],
+            D3D12_RESOURCE_STATE_PRESENT
+        );
     }
 
     DX12Utils::ThrowIfFailed(
         commandList_->Close(),
         "DX12Main::endFrame - failed to close command list"
     );
+
+#ifdef _DEBUG
+    dumpDebugMessages();
+#endif
 
     ID3D12CommandList* commandLists[] =
     {
@@ -359,6 +425,18 @@ std::string DX12Main::getAdapterName() const
 
 
 //--- PRIVATE ---//
+void DX12Main::setupDebugInfoQueue()
+{
+    if (SUCCEEDED(device_.As(&infoQueue_)))
+    {
+        infoQueue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, FALSE);
+        infoQueue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, FALSE);
+        infoQueue_->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, FALSE);
+
+        infoQueue_->SetMessageCountLimit(1024);
+    }
+} // end of setupDebugInfoQueue()
+
 void DX12Main::enableDebugLayer()
 {
 #ifdef _DEBUG
@@ -367,6 +445,12 @@ void DX12Main::enableDebugLayer()
     if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugController))))
     {
         debugController->EnableDebugLayer();
+
+        ComPtr<ID3D12Debug1> debugController1;
+        if (SUCCEEDED(debugController.As(&debugController1)))
+        {
+            debugController1->SetEnableGPUBasedValidation(TRUE);
+        }
     }
 #endif
 } // end of enableDebugLayer()
@@ -433,6 +517,10 @@ void DX12Main::createDevice()
         ),
         "DX12Main::createDevice - failed to create D3D12 device"
     );
+
+#ifdef _DEBUG
+    setupDebugInfoQueue();
+#endif
 
     setDebugName(device_.Get(), L"DX12 Device");
 } // end of createDevice()

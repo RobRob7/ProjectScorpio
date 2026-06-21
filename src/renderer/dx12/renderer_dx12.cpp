@@ -12,10 +12,9 @@
 #include "render_inputs.h"
 //#include "render_target_vk.h"
 
-//#include "camera.h"
+#include "camera.h"
 //#include "i_light.h"
-//#include "i_cubemap.h"
-//#include "cubemap_vk.h"
+#include "cubemap_dx12.h"
 //#include "i_crosshair.h"
 //#include "chunk_manager.h"
 #include "ui.h"
@@ -42,7 +41,9 @@
 
 //--- PUBLIC ---//
 RendererDX12::RendererDX12(DX12Main& dx)
-	: dx_(dx)
+	: dx_(&dx),
+	sceneColor_(dx),
+	sceneDepth_(dx)
 {
 } // end of constructor
 
@@ -227,46 +228,63 @@ void RendererDX12::renderFrame(
 		return;
 	}
 
-	ID3D12GraphicsCommandList* cmd = frameDX12->cmd;
+	FrameContextDX12& frame = *const_cast<FrameContextDX12*>(frameDX12);
+
+	const glm::mat4 view = in.camera->getViewMatrix();
+	const float aspect = (height_ > 0)
+		? (static_cast<float>(width_) / static_cast<float>(height_))
+		: 1.0f;
+	glm::mat4 proj = in.camera->getProjectionMatrix(aspect);
+
+	ID3D12GraphicsCommandList* cmd = frame.cmd;
+
+	// --------------- FORWARD RENDER --------------- //
+
+	//sceneColor_.transitionToRenderTarget(cmd);
+	//sceneDepth_.transitionToDepthWrite(cmd);
 
 	D3D12_VIEWPORT viewport{};
 	viewport.TopLeftX = 0.0f;
 	viewport.TopLeftY = 0.0f;
-	viewport.Width = static_cast<float>(frameDX12->width);
-	viewport.Height = static_cast<float>(frameDX12->height);
+	viewport.Width = static_cast<float>(frame.width);
+	viewport.Height = static_cast<float>(frame.height);
 	viewport.MinDepth = 0.0f;
 	viewport.MaxDepth = 1.0f;
 
 	D3D12_RECT scissor{};
 	scissor.left = 0;
 	scissor.top = 0;
-	scissor.right = static_cast<LONG>(frameDX12->width);
-	scissor.bottom = static_cast<LONG>(frameDX12->height);
+	scissor.right = static_cast<LONG>(frame.width);
+	scissor.bottom = static_cast<LONG>(frame.height);
 
 	cmd->RSSetViewports(1, &viewport);
 	cmd->RSSetScissorRects(1, &scissor);
 
+	//D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = sceneColor_.rtvCPU();
+	//D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = sceneDepth_.dsvCPU();
+	D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
+	D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = frame.depthDSV;
 	cmd->OMSetRenderTargets(
 		1,
-		&frameDX12->colorRTV,
+		&colorRTV,
 		FALSE,
-		&frameDX12->depthDSV
+		&depthDSV
 	);
 
 	const float clearColor[4] =
 	{
-		0.05f, 0.07f, 0.10f, 1.0f
+		0.0f, 0.0f, 0.0f, 1.0f
 	};
 
 	cmd->ClearRenderTargetView(
-		frameDX12->colorRTV,
+		colorRTV,
 		clearColor,
 		0,
 		nullptr
 	);
 
 	cmd->ClearDepthStencilView(
-		frameDX12->depthDSV,
+		depthDSV,
 		D3D12_CLEAR_FLAG_DEPTH,
 		1.0f,
 		0,
@@ -274,84 +292,72 @@ void RendererDX12::renderFrame(
 		nullptr
 	);
 
+	in.skybox->render(
+		nullptr,
+		&frame,
+		view,
+		proj
+	);
+
+	// --------------- END FORWARD RENDER --------------- //
+
+
+	// ----------------- UI ELEMENTS ----------------- //
+	// UI RENDER
 	if (ui)
 	{
-		cmd->OMSetRenderTargets(
-			1,
-			&frameDX12->colorRTV,
-			FALSE,
-			nullptr
-		);
-
-		ui->renderDX12(cmd);
+		ui->renderDX12(frame);
 	}
+	// --------------- END UI ELEMENTS --------------- //
+
+	// PRESENT TO SCREEN
+	//frame.transitionColorImageToPresent(cmd);
+	//dx_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
 } // end of renderFrame()
 
 
 //--- PRIVATE ---//
 void RendererDX12::createSceneAttachments()
 {
-	//// SCENE COLOR
-	//sceneColor_.createImage(
-	//	width_,
-	//	height_,
-	//	1,
-	//	false,
-	//	vk::SampleCountFlagBits::e1,
-	//	sceneColorFormat_,
-	//	vk::ImageTiling::eOptimal,
-	//	vk::ImageUsageFlagBits::eColorAttachment |
-	//	vk::ImageUsageFlagBits::eSampled |
-	//	vk::ImageUsageFlagBits::eTransferDst,
-	//	vk::MemoryPropertyFlagBits::eDeviceLocal
-	//);
+	// SCENE COLOR
+	D3D12_CLEAR_VALUE colorClear{
+		.Format = sceneColorFormat_,
+		.Color = {0.0f, 0.0f, 0.0f, 1.0f}
+	};
 
-	//sceneColor_.createImageView(
-	//	sceneColorFormat_,
-	//	vk::ImageAspectFlagBits::eColor,
-	//	vk::ImageViewType::e2D,
-	//	1
-	//);
+	sceneColor_.createImage(
+		static_cast<uint32_t>(width_),
+		static_cast<uint32_t>(height_),
+		1,
+		false,
+		sceneColorFormat_,
+		D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_RENDER_TARGET,
+		&colorClear
+	);
+	sceneColor_.createRTV();
+	sceneColor_.setDebugName(L"RendererDX12-SceneColor");
 
-	//sceneColor_.createSampler(
-	//	vk::Filter::eNearest,
-	//	vk::Filter::eNearest,
-	//	vk::SamplerMipmapMode::eNearest,
-	//	vk::SamplerAddressMode::eClampToEdge,
-	//	vk::False
-	//);
+	// SCENE DEPTH
+	D3D12_CLEAR_VALUE depthClear{
+		.Format = sceneDepthFormat_,
+		.DepthStencil = 
+		{
+			.Depth = 1.0f,
+			.Stencil = 0
+		}
+	};
 
-	//sceneColor_.setDebugName("RendererDX12-SceneColor");
-
-
-	//// SCENE DEPTH
-	//sceneDepth_.createImage(
-	//	width_,
-	//	height_,
-	//	1,
-	//	false,
-	//	vk::SampleCountFlagBits::e1,
-	//	sceneDepthFormat_,
-	//	vk::ImageTiling::eOptimal,
-	//	vk::ImageUsageFlagBits::eDepthStencilAttachment |
-	//	vk::ImageUsageFlagBits::eSampled,
-	//	vk::MemoryPropertyFlagBits::eDeviceLocal
-	//);
-
-	//sceneDepth_.createImageView(
-	//	sceneDepthFormat_,
-	//	vk::ImageAspectFlagBits::eDepth,
-	//	vk::ImageViewType::e2D,
-	//	1
-	//);
-
-	//sceneDepth_.createSampler(
-	//	vk::Filter::eNearest,
-	//	vk::Filter::eNearest,
-	//	vk::SamplerMipmapMode::eNearest,
-	//	vk::SamplerAddressMode::eClampToEdge,
-	//	vk::False
-	//);
-
-	//sceneDepth_.setDebugName("RendererDX12-SceneDepth");
+	sceneDepth_.createImage(
+		static_cast<uint32_t>(width_),
+		static_cast<uint32_t>(height_),
+		1,
+		false,
+		sceneDepthFormat_,
+		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
+		D3D12_RESOURCE_STATE_DEPTH_WRITE,
+		&depthClear
+	);
+	sceneDepth_.createDSV();
+	sceneDepth_.setDebugName(L"RendererDX12-SceneDepth");
 } // end of createSceneAttachments()

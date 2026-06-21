@@ -87,11 +87,27 @@ void DescriptorSetDX12::createLayout(const std::vector<DescriptorBindingDX12>& b
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	};
 
+	D3D12_STATIC_SAMPLER_DESC staticSampler{
+		.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+		.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		.MipLODBias = 0.0f,
+		.MaxAnisotropy = 1,
+		.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS,
+		.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+		.MinLOD = 0.0f,
+		.MaxLOD = D3D12_FLOAT32_MAX,
+		.ShaderRegister = 0, // register(s0)
+		.RegisterSpace = 0,
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+	};
+	
 	D3D12_ROOT_SIGNATURE_DESC rootDesc{
 		.NumParameters = 1,
 		.pParameters = &rootParam,
-		.NumStaticSamplers = 0,
-		.pStaticSamplers = nullptr,
+		.NumStaticSamplers = 1,
+		.pStaticSamplers = &staticSampler,
 		.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
 	};
 

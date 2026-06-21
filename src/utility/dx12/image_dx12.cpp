@@ -147,6 +147,66 @@ void ImageDX12::createImage(
 } // end of createImage()
 
 void ImageDX12::createRTV(
+    D3D12_RTV_DIMENSION dimension
+)
+{
+    if (!image_)
+    {
+        throw std::runtime_error("ImageDX12::createRTV - invalid image");
+    }
+
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc{
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+        .NumDescriptors = 1,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 0
+    };
+
+    DX12Utils::ThrowIfFailed(
+        dx_->getDevice()->CreateDescriptorHeap(
+            &heapDesc,
+            IID_PPV_ARGS(&rtvHeap_)
+        ),
+        "ImageDX12::createRTV - failed to create RTV heap"
+    );
+
+    createRTV(
+        rtvHeap_->GetCPUDescriptorHandleForHeapStart(),
+        dimension
+    );
+} // end of createRTV()
+
+void ImageDX12::createDSV(
+    D3D12_DSV_DIMENSION dimension
+)
+{
+    if (!image_)
+    {
+        throw std::runtime_error("ImageDX12::createDSV - invalid image");
+    }
+
+    D3D12_DESCRIPTOR_HEAP_DESC heapDesc{
+        .Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+        .NumDescriptors = 1,
+        .Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
+        .NodeMask = 0
+    };
+
+    DX12Utils::ThrowIfFailed(
+        dx_->getDevice()->CreateDescriptorHeap(
+            &heapDesc,
+            IID_PPV_ARGS(&dsvHeap_)
+        ),
+        "ImageDX12::createDSV - failed to create DSV heap"
+    );
+
+    createDSV(
+        dsvHeap_->GetCPUDescriptorHandleForHeapStart(),
+        dimension
+    );
+} // end of createDSV()
+
+void ImageDX12::createRTV(
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
     D3D12_RTV_DIMENSION dimension
 )
@@ -228,6 +288,9 @@ void ImageDX12::createDSV(
 void ImageDX12::destroy()
 {
     image_.Reset();
+
+    rtvHeap_.Reset();
+    dsvHeap_.Reset();
 
     state_ = D3D12_RESOURCE_STATE_COMMON;
     format_ = DXGI_FORMAT_UNKNOWN;

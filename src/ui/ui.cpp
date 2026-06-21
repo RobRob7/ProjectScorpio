@@ -5,6 +5,7 @@
 #include "vulkan_main.h"
 #include "render_settings.h"
 #include "frame_context_vk.h"
+#include "frame_context_dx12.h"
 
 #include "i_scene.h"
 #include "i_light.h"
@@ -314,14 +315,23 @@ void UI::renderVk(FrameContext& frame)
 	}
 } // end of renderVk()
 
-void UI::renderDX12(ID3D12GraphicsCommandList* cmd)
+void UI::renderDX12(FrameContextDX12& frame)
 {
 	if (!dx_) return;
+
+	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
 	ID3D12DescriptorHeap* heaps[] =
 	{
 		dx_->getImguiSrvHeap()
 	};
+
+	cmd->OMSetRenderTargets(
+		1,
+		&frame.colorRTV,
+		FALSE,
+		nullptr
+	);
 
 	cmd->SetDescriptorHeaps(1, heaps);
 

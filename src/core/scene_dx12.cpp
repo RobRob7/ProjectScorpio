@@ -11,7 +11,7 @@
 #include "chunk_manager.h"
 
 #include "light_vk.h"
-#include "cubemap_vk.h"
+#include "cubemap_dx12.h"
 
 #include <glm/glm.hpp>
 
@@ -37,8 +37,8 @@ void SceneDX12::init()
 
 	world_ = std::make_unique<ChunkManager>();
 
-	//skybox_ = std::make_unique<CubemapVk>(vk_);
-	//skybox_->init();
+	skybox_ = std::make_unique<CubemapDX12>(*dx_);
+	skybox_->init();
 } // end of init
 
 void SceneDX12::render(
@@ -52,7 +52,7 @@ void SceneDX12::render(
 	//if (!camera_ || !world_ || !light_ || !skybox_ || !crosshair_) return;
 
 	in.camera = camera_.get();
-	//in.skybox = skybox_.get();
+	in.skybox = skybox_.get();
 	in.world = world_.get();
 
 	renderer.renderFrame(in, frameVk, frameDX12, ui);
@@ -60,20 +60,20 @@ void SceneDX12::render(
 
 void SceneDX12::update(float dt, const InputState& in)
 {
-	//if (!camera_ || !world_) return;
+	if (!camera_ || !world_) return;
 
 	saveTimer_ += dt;
-	//if (saveTimer_ >= (autoSaveTime_ * 60.0f))
-	//{
-	//	world_->saveWorld();
-	//	saveTimer_ = 0.0f;
-	//}
+	if (saveTimer_ >= (autoSaveTime_ * 60.0f))
+	{
+		world_->saveWorld();
+		saveTimer_ = 0.0f;
+	}
 
-	//if (in.quitRequested)
-	//{
-	//	world_->saveWorld();
-	//	return;
-	//}
+	if (in.quitRequested)
+	{
+		world_->saveWorld();
+		return;
+	}
 
 	if (in.disableCameraPressed)
 	{
@@ -95,19 +95,19 @@ void SceneDX12::update(float dt, const InputState& in)
 		if (in.s) camera_->processKeyboard(CameraMovement::BACKWARD, dt);
 		if (in.d) camera_->processKeyboard(CameraMovement::RIGHT, dt);
 
-	//	if (in.removeBlockPressed)
-	//	{
-	//		world_->placeOrRemoveBlock(false,
-	//			camera_->getCameraPosition(),
-	//			camera_->getCameraDirection());
-	//	}
+		if (in.removeBlockPressed)
+		{
+			world_->placeOrRemoveBlock(false,
+				camera_->getCameraPosition(),
+				camera_->getCameraDirection());
+		}
 
-	//	if (in.placeBlockPressed)
-	//	{
-	//		world_->placeOrRemoveBlock(true,
-	//			camera_->getCameraPosition(),
-	//			camera_->getCameraDirection());
-	//	}
+		if (in.placeBlockPressed)
+		{
+			world_->placeOrRemoveBlock(true,
+				camera_->getCameraPosition(),
+				camera_->getCameraDirection());
+		}
 	}
 } // end of update()
 
@@ -145,14 +145,12 @@ Camera& SceneDX12::getCamera()
 
 ICubemap& SceneDX12::getSkybox()
 {
-	CubemapVk* foo = nullptr;
-	return *foo;
+	return *skybox_;
 } // end of getSkybox()
 
 ChunkManager& SceneDX12::getWorld()
 {
-	ChunkManager* foo = new ChunkManager();
-	return *foo;
+	return *world_;
 } // end of getWorld()
 
 ILight& SceneDX12::getLight()

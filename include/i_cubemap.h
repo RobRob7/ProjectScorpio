@@ -8,6 +8,7 @@
 #include <cstdint>
 
 struct FrameContext;
+struct FrameContextDX12;
 
 class ICubemap
 {
@@ -23,14 +24,16 @@ public:
 
 	virtual void init() = 0;
 	virtual void render(
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		const glm::mat4& view, 
 		const glm::mat4& projection, 
 		const glm::vec3& sunDir = glm::vec3(0.0f, -1.0f, 0.0f),
 		const float time = -1.0
 	) = 0;
 	virtual void renderOffscreen(
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		const glm::mat4& view,
 		const glm::mat4& projection,
 		uint32_t width,

@@ -213,7 +213,8 @@ void RendererGL::renderFrame(
     );
 
     in.skybox->render(
-        nullptr, 
+        nullptr,
+        nullptr,
         view, 
         proj, 
         in.light->getDirection(),

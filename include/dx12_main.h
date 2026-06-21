@@ -11,6 +11,8 @@
 #include <dxgi1_6.h>
 #include <wrl/client.h>
 
+#include <d3d12sdklayers.h>
+
 #include "image_dx12.h"
 #include "buffer_dx12.h"
 //#include "acceleration_structure_vk.h"
@@ -46,6 +48,8 @@ class DX12Main
 public:
     explicit DX12Main(GLFWwindow* window);
     ~DX12Main();
+
+    void dumpDebugMessages(const char* context = nullptr);
 
     void setDebugName(ID3D12Object* object, const wchar_t* name) const;
     void setDebugName(IDXGIObject* object, const char* name) const;
@@ -136,6 +140,7 @@ public:
     //} // end of retireAccelerationStructure()
 
 private:
+    void setupDebugInfoQueue();
     void enableDebugLayer();
     void createFactory();
     void pickAdapter();
@@ -211,6 +216,8 @@ private:
     static constexpr uint32_t IMGUI_DESCRIPTOR_COUNT = 64;
 
     std::array<bool, IMGUI_DESCRIPTOR_COUNT> imguiDescriptorUsed_{};
+
+    ComPtr<ID3D12InfoQueue> infoQueue_;
 };
 
 #endif

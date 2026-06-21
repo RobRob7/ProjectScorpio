@@ -69,21 +69,22 @@ void CubemapVk::init()
 } // end of init()
 
 void CubemapVk::render(
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	const glm::mat4& view,
 	const glm::mat4& projection,
 	const glm::vec3& sunDir,
 	const float time
 )
 {
-	assert(frame->cmd && "Must be valid Vulkan frame context!");
+	assert(frameVk->cmd && "Must be valid Vulkan frame context!");
 
-	if (!descriptorSets_[frame->frameIndex].valid() || 
-		!uboBuffers_[frame->frameIndex].valid() || 
+	if (!descriptorSets_[frameVk->frameIndex].valid() || 
+		!uboBuffers_[frameVk->frameIndex].valid() || 
 		!vertexBuffer_.valid() || 
 		!pipeline_.valid()) return;
 
-	vk::CommandBuffer cmd = frame->cmd;
+	vk::CommandBuffer cmd = frameVk->cmd;
 
 	cmd.beginDebugUtilsLabelEXT({ "CubemapVk-Default::cmd" });
 
@@ -110,9 +111,9 @@ void CubemapVk::render(
 	ubo.u_view = viewStrippedTranslation;
 	ubo.u_proj = projection;
 
-	uboBuffers_[frame->frameIndex].upload(&ubo, sizeof(CubemapUBO));
+	uboBuffers_[frameVk->frameIndex].upload(&ubo, sizeof(CubemapUBO));
 
-	vk::DescriptorSet descSet = descriptorSets_[frame->frameIndex].getSet();
+	vk::DescriptorSet descSet = descriptorSets_[frameVk->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipeline_.getLayout(),
@@ -127,7 +128,8 @@ void CubemapVk::render(
 } // end of render()
 
 void CubemapVk::renderOffscreen(
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	const glm::mat4& view,
 	const glm::mat4& projection,
 	uint32_t width,
@@ -136,14 +138,14 @@ void CubemapVk::renderOffscreen(
 	const float time
 )
 {
-	assert(frame->cmd && "Must be valid Vulkan frame context!");
+	assert(frameVk->cmd && "Must be valid Vulkan frame context!");
 
-	if (!descriptorSetsOffscreen_[frame->frameIndex].valid() ||
-		!uboBuffersOffscreen_[frame->frameIndex].valid() ||
+	if (!descriptorSetsOffscreen_[frameVk->frameIndex].valid() ||
+		!uboBuffersOffscreen_[frameVk->frameIndex].valid() ||
 		!vertexBuffer_.valid() || 
 		!pipelineOffscreen_.valid()) return;
 
-	vk::CommandBuffer cmd = frame->cmd;
+	vk::CommandBuffer cmd = frameVk->cmd;
 
 	cmd.beginDebugUtilsLabelEXT({ "CubemapVk-Offscreen::cmd" });
 
@@ -185,9 +187,9 @@ void CubemapVk::renderOffscreen(
 	ubo.u_view = viewStrippedTranslation;
 	ubo.u_proj = projection;
 
-	uboBuffersOffscreen_[frame->frameIndex].upload(&ubo, sizeof(CubemapUBO));
+	uboBuffersOffscreen_[frameVk->frameIndex].upload(&ubo, sizeof(CubemapUBO));
 
-	vk::DescriptorSet descSet = descriptorSetsOffscreen_[frame->frameIndex].getSet();
+	vk::DescriptorSet descSet = descriptorSetsOffscreen_[frameVk->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipelineOffscreen_.getLayout(),

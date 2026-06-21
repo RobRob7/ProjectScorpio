@@ -14,6 +14,7 @@ class Texture2DVk;
 class VulkanMain;
 class DX12Main;
 struct FrameContext;
+struct FrameContextDX12;
 struct GLFWwindow;
 struct RenderSettings;
 struct ID3D12GraphicsCommandList;
@@ -35,7 +36,7 @@ public:
 
 	void renderGL();
 	void renderVk(FrameContext& frame);
-	void renderDX12(ID3D12GraphicsCommandList* cmd);
+	void renderDX12(FrameContextDX12& frame);
 
 	std::string_view backendToString(Backend backend) const;
 	void setActiveBackend(Backend backend);

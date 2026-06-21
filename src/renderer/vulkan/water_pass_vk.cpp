@@ -661,6 +661,7 @@ void WaterPassVk::waterReflectionPass(
 		{
 			in.skybox->renderOffscreen(
 				&frame,
+				nullptr,
 				reflView,
 				proj,
 				width_,
