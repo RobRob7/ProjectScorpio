@@ -23,11 +23,18 @@ public:
 	~ChunkMeshGPUVk() override;
 
 	void upload(
-		vk::CommandBuffer cmd,
-		const ChunkMeshData& data
+		const ChunkMeshData& data,
+		const FrameContext* frameVk = nullptr,
+		const FrameContextDX12* frameDX12 = nullptr
 	) override;
-	void drawOpaque(vk::CommandBuffer cmd) override;
-	void drawWater(vk::CommandBuffer cmd) override;
+	void drawOpaque(
+		const FrameContext* frameVk = nullptr,
+		const FrameContextDX12* frameDX12 = nullptr
+	) override;
+	void drawWater(
+		const FrameContext* frameVk = nullptr,
+		const FrameContextDX12* frameDX12 = nullptr
+	) override;
 
 	const std::vector<World::RTVertex>& getOpaqueRTVerticesCPU() const { return opaqueRTVerticesCPU_; }
 	const std::vector<uint32_t>& getOpaqueRTIndicesCPU() const { return opaqueRTIndicesCPU_; }
@@ -46,7 +53,7 @@ private:
 	void retireCurrentBuffers(uint32_t frameIndex);
 	void retireCurrentBLAS(uint32_t frameIndex);
 private:
-	VulkanMain* vk_{};
+	VulkanMain* vk_{ nullptr };
 
 	AccelerationStructureVk opaqueBLAS_;
 	AccelerationStructureVk waterBLAS_;

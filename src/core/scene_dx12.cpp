@@ -36,6 +36,7 @@ void SceneDX12::init()
 	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
 
 	world_ = std::make_unique<ChunkManager>();
+	world_->init(nullptr, dx_);
 
 	skybox_ = std::make_unique<CubemapDX12>(*dx_);
 	skybox_->init();

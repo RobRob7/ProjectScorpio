@@ -168,7 +168,7 @@ void WaterPassVk::render(
 			&pc
 		);
 
-		item.gpu->drawWater(cmd);
+		item.gpu->drawWater(&frame, nullptr);
 	} // end for
 
 	cmd.endDebugUtilsLabelEXT();

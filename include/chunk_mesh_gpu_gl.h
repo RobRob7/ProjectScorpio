@@ -12,11 +12,18 @@ public:
 	~ChunkMeshGPUGL() override;
 
 	void upload(
-        vk::CommandBuffer,
-        const ChunkMeshData& data
+        const ChunkMeshData& data,
+        const FrameContext* frameVk = nullptr,
+        const FrameContextDX12* frameDX12 = nullptr
     ) override;
-	void drawOpaque(vk::CommandBuffer cmd) override;
-	void drawWater(vk::CommandBuffer cmd) override;
+	void drawOpaque(
+        const FrameContext* frameVk = nullptr,
+        const FrameContextDX12* frameDX12 = nullptr
+    ) override;
+	void drawWater(
+        const FrameContext* frameVk = nullptr,
+        const FrameContextDX12* frameDX12 = nullptr
+    ) override;
 
 private:
     // opaque

@@ -25,7 +25,7 @@ struct ChunkDrawList;
 //class DebugPassVk;
 //class SSAOPassVk;
 //
-//class ChunkPassVk;
+class ChunkPassDX12;
 //class WaterPassVk;
 //
 //class HybridCompositePassVk;
@@ -78,7 +78,7 @@ private:
 	//std::unique_ptr<SSAOPassVk> ssaoPass_;
 
 	//std::unique_ptr<WaterPassVk> waterPass_;
-	//std::unique_ptr<ChunkPassVk> chunkPass_;
+	std::unique_ptr<ChunkPassDX12> chunkPass_;
 
 	//std::unique_ptr<RayTracingWorldVk> rtWorld_;
 	//std::unique_ptr<RTAOPassVk> rtaoPass_;

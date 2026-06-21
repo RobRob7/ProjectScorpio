@@ -1,7 +1,7 @@
 #include "renderer_dx12.h"
 
 #include "chunk_draw_list.h"
-//#include "chunk_mesh_gpu_vk.h"
+#include "chunk_mesh_gpu_dx12.h"
 
 #include "frame_context_dx12.h"
 
@@ -10,13 +10,13 @@
 
 #include "render_settings.h"
 #include "render_inputs.h"
-//#include "render_target_vk.h"
+#include "render_target_dx12.h"
 
 #include "camera.h"
 //#include "i_light.h"
 #include "cubemap_dx12.h"
 //#include "i_crosshair.h"
-//#include "chunk_manager.h"
+#include "chunk_manager.h"
 #include "ui.h"
 //
 //#include "ray_tracing_world_vk.h"
@@ -29,7 +29,7 @@
 //#include "debug_pass_vk.h"
 //#include "ssao_pass_vk.h"
 //#include "water_pass_vk.h"
-//#include "chunk_pass_vk.h"
+#include "chunk_pass_dx12.h"
 //#include "hybrid_composite_pass_vk.h"
 //#include "post_composite_pass_vk.h"
 //#include "fxaa_pass_vk.h"
@@ -131,10 +131,10 @@ void RendererDX12::init()
 	//{
 	//	waterPass_ = std::make_unique<WaterPassVk>(vk_, *rs_);
 	//}
-	//if (!chunkPass_)
-	//{
-	//	chunkPass_ = std::make_unique<ChunkPassVk>(vk_, *rs_);
-	//}
+	if (!chunkPass_)
+	{
+		chunkPass_ = std::make_unique<ChunkPassDX12>(*dx_, *rs_);
+	}
 
 	//if (!compositePassHybrid_)
 	//{
@@ -170,11 +170,13 @@ void RendererDX12::init()
 	//ssaoPass_->init();
 
 	//waterPass_->init();
-	//chunkPass_->init(
-	//	{sceneColorFormat_, sceneDepthFormat_},
-	//	{gbufferPass_->getNormalImage().format(), gbufferPass_->getDepthImage().format()},
-	//	{vk::Format::eUndefined, shadowMapPass_->getDepthImage().format()}
-	//);
+	chunkPass_->init(
+		{sceneColorFormat_, sceneDepthFormat_},
+		{ sceneColorFormat_, sceneDepthFormat_ },
+		{ sceneColorFormat_, sceneDepthFormat_ }
+		//{gbufferPass_->getNormalImage().format(), gbufferPass_->getDepthImage().format()},
+		//{vk::Format::eUndefined, shadowMapPass_->getDepthImage().format()}
+	);
 
 	//compositePassHybrid_->init();
 	//compositePassPost_->init();
@@ -202,7 +204,7 @@ void RendererDX12::resize(int w, int h)
 	//if (ssaoPass_)		ssaoPass_->resize();
 
 	//if (waterPass_)		waterPass_->resize();
-	//if (chunkPass_)		chunkPass_->resize();
+	if (chunkPass_)		chunkPass_->resize();
 
 	//if (compositePassHybrid_)	compositePassHybrid_->resize();
 	//if (compositePassPost_)	compositePassPost_->resize();
@@ -237,6 +239,17 @@ void RendererDX12::renderFrame(
 	glm::mat4 proj = in.camera->getProjectionMatrix(aspect);
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
+
+	// update world state
+	in.world->updateDynamic(in.camera->getCameraPosition(), nullptr, &frame);
+	//if (vk_.supportsRayTracing() && rs_->useRT)
+	//{
+	//	in.world->buildRTDrawList(view, proj);
+	//}
+	//else
+	//{
+	//	in.world->buildWaterDrawList(view, proj);
+	//}
 
 	// --------------- FORWARD RENDER --------------- //
 	sceneColor_.transitionToRenderTarget(cmd);
@@ -289,6 +302,24 @@ void RendererDX12::renderFrame(
 		0,
 		nullptr
 	);
+
+	if (chunkPass_ && !rs_->useRT)
+	{
+		chunkPass_->setInput(
+			sceneColor_,
+			sceneColor_
+		);
+
+		chunkPass_->renderOpaque(
+			RenderTargetDX12::Default,
+			in,
+			frame,
+			view,
+			proj,
+			glm::mat4(1.0)
+			//shadowMapPass_->getLightSpaceMatrix()
+		);
+	}
 
 	{
 		in.skybox->render(

@@ -36,14 +36,19 @@ void DescriptorSetDX12::setDebugName(const std::wstring& name)
 	}
 } // end of setDebugName()
 
-void DescriptorSetDX12::createLayout(const std::vector<DescriptorBindingDX12>& bindings)
+void DescriptorSetDX12::createLayout(
+	const std::vector<DescriptorBindingDX12>& bindings,
+	const std::vector<PushConstantRangeDX12>& pushConstants
+)
 {
-	if (bindings.empty())
+	if (bindings.empty() && pushConstants.empty())
 	{
-		throw std::runtime_error("DescriptorSetDX12::createLayout - bindings cannot be empty");
+		throw std::runtime_error("DescriptorSetDX12::createLayout - layout cannot be empty");
 	}
 
 	bindings_ = bindings;
+	pushConstants_ = pushConstants;
+	pushConstantBindingToRootIndex_.clear();
 
 	std::vector<D3D12_DESCRIPTOR_RANGE> ranges;
 	ranges.reserve(bindings_.size());
@@ -77,15 +82,35 @@ void DescriptorSetDX12::createLayout(const std::vector<DescriptorBindingDX12>& b
 		ranges.push_back(range);
 	} // end for
 
-	D3D12_ROOT_PARAMETER rootParam{
-		.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-		.DescriptorTable =
-		{
-			.NumDescriptorRanges = static_cast<UINT>(ranges.size()),
-			.pDescriptorRanges = ranges.data()
-		},
-		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
-	};
+	std::vector<D3D12_ROOT_PARAMETER> rootParams;
+
+	if (!ranges.empty())
+	{
+		descriptorTableRootIndex_ = static_cast<uint32_t>(rootParams.size());
+
+		D3D12_ROOT_PARAMETER tableParam{};
+		tableParam.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+		tableParam.DescriptorTable.NumDescriptorRanges = static_cast<UINT>(ranges.size());
+		tableParam.DescriptorTable.pDescriptorRanges = ranges.data();
+		tableParam.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+
+		rootParams.push_back(tableParam);
+	}
+
+	for (const auto& pc : pushConstants_)
+	{
+		const uint32_t rootIndex = static_cast<uint32_t>(rootParams.size());
+		pushConstantBindingToRootIndex_[pc.binding] = rootIndex;
+
+		D3D12_ROOT_PARAMETER param{};
+		param.ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
+		param.ShaderVisibility = pc.visibility;
+		param.Constants.ShaderRegister = pc.binding;
+		param.Constants.RegisterSpace = pc.registerSpace;
+		param.Constants.Num32BitValues = pc.num32BitValues;
+
+		rootParams.push_back(param);
+	} // end for
 
 	D3D12_STATIC_SAMPLER_DESC staticSampler{
 		.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -104,8 +129,8 @@ void DescriptorSetDX12::createLayout(const std::vector<DescriptorBindingDX12>& b
 	};
 	
 	D3D12_ROOT_SIGNATURE_DESC rootDesc{
-		.NumParameters = 1,
-		.pParameters = &rootParam,
+		.NumParameters = static_cast<UINT>(rootParams.size()),
+		.pParameters = rootParams.data(),
 		.NumStaticSamplers = 1,
 		.pStaticSamplers = &staticSampler,
 		.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
@@ -200,6 +225,10 @@ void DescriptorSetDX12::destroy()
 
 	bindings_.clear();
 	bindingToSlot_.clear();
+
+	pushConstants_.clear();
+	pushConstantBindingToRootIndex_.clear();
+	descriptorTableRootIndex_ = 0;
 } // end of destroy()
 
 void DescriptorSetDX12::writeUniformBuffer(
@@ -444,3 +473,15 @@ uint32_t DescriptorSetDX12::getSlot(uint32_t binding) const
 
 	return it->second;
 } // end of getSlot()
+
+uint32_t DescriptorSetDX12::getPushConstantRootIndex(uint32_t binding) const
+{
+	auto it = pushConstantBindingToRootIndex_.find(binding);
+
+	if (it == pushConstantBindingToRootIndex_.end())
+	{
+		throw std::runtime_error("DescriptorSetDX12::getPushConstantRootIndex - binding not found");
+	}
+
+	return it->second;
+} // end of getPushConstantRootIndex()

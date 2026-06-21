@@ -77,8 +77,9 @@ ChunkMeshGPUGL::~ChunkMeshGPUGL()
 } // end of destructor
 
 void ChunkMeshGPUGL::upload(
-	vk::CommandBuffer,
-	const ChunkMeshData& data
+	const ChunkMeshData& data,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
 )
 {
 	// OPAQUE reupload into vbo
@@ -119,7 +120,10 @@ void ChunkMeshGPUGL::upload(
 	waterIndexCount_ = static_cast<int32_t>(data.waterIndices.size());
 } // end of upload()
 
-void ChunkMeshGPUGL::drawOpaque(vk::CommandBuffer cmd)
+void ChunkMeshGPUGL::drawOpaque(
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
+)
 {
 	if (opaqueIndexCount_ <= 0) return;
 
@@ -135,7 +139,10 @@ void ChunkMeshGPUGL::drawOpaque(vk::CommandBuffer cmd)
 		glDisable(GL_DEPTH_TEST);
 } // end of drawOpaque()
 
-void ChunkMeshGPUGL::drawWater(vk::CommandBuffer cmd)
+void ChunkMeshGPUGL::drawWater(
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
+)
 {
 	if (waterIndexCount_ <= 0) return;
 
