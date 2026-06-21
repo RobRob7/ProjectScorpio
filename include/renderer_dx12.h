@@ -34,7 +34,7 @@ struct ChunkDrawList;
 //class FXAAPassVk;
 //class FogPassVk;
 //class GodRayPassVk;
-//class PresentPassVk;
+class PresentPassDX12;
 
 class UI;
 
@@ -92,7 +92,7 @@ private:
 	//std::unique_ptr<GodRayPassVk> godRayPass_;
 	//std::unique_ptr<FXAAPassVk> fxaaPass_;
 
-	//std::unique_ptr<PresentPassVk> presentPass_;
+	std::unique_ptr<PresentPassDX12> presentPass_;
 };
 
 #endif

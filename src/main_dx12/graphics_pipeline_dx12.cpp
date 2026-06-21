@@ -161,11 +161,20 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 	psoDesc.NodeMask = 0;
 	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
 
+	HRESULT hr = dx_->getDevice()->CreateGraphicsPipelineState(
+		&psoDesc,
+		IID_PPV_ARGS(&pipelineState_)
+	);
+
+#ifdef _DEBUG
+	if (FAILED(hr))
+	{
+		dx_->dumpDebugMessages("CreateGraphicsPipelineState failed");
+	}
+#endif
+
 	DX12Utils::ThrowIfFailed(
-		dx_->getDevice()->CreateGraphicsPipelineState(
-			&psoDesc,
-			IID_PPV_ARGS(&pipelineState_)
-		),
+		hr,
 		"GraphicsPipelineDX12::create - failed to create graphics pipeline state"
 	);
 } // end of create()

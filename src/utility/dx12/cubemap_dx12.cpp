@@ -108,7 +108,7 @@ void CubemapDX12::render(
 		.u_dayNightMix = glm::clamp((sunDir.y + 0.15f) / 0.30f, 0.0f, 1.0f)
 	};
 
-	uboBuffers_[frameDX12->frameIndex].upload(&ubo, sizeof(ubo));
+	uboBuffers_[frameIndex].upload(&ubo, sizeof(ubo));
 
 	ID3D12DescriptorHeap* heaps[] =
 	{
@@ -324,7 +324,7 @@ void CubemapDX12::createDescriptorSets()
 				D3D12_SRV_DIMENSION_TEXTURECUBE
 			);
 		}
-
+		
 		// offscreen descriptor set
 		{
 			DescriptorBindingDX12 uboBinding{
@@ -404,7 +404,6 @@ void CubemapDX12::createPipeline()
 			}
 		},
 
-
 		.cullMode = D3D12_CULL_MODE_FRONT,
 		.frontCCW = FALSE,
 
@@ -412,10 +411,8 @@ void CubemapDX12::createPipeline()
 		.depthWriteEnable = FALSE,
 		.depthCompareFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
 
-		//.colorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT,
-		//.depthFormat = DXGI_FORMAT_D32_FLOAT,
-		.colorFormat = dx_->getSwapChainImageFormat(),
-		.depthFormat = dx_->getDepthFormat(),
+		.colorFormat = DXGI_FORMAT_R16G16B16A16_FLOAT,
+		.depthFormat = DXGI_FORMAT_D32_FLOAT,
 	};
 	
 	pipeline_.create(desc);
