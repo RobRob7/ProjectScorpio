@@ -8,10 +8,11 @@
 #include "render_inputs.h"
 
 #include "camera.h"
-#include "chunk_manager.h"
-
-#include "light_vk.h"
 #include "cubemap_dx12.h"
+//#include "crosshair_dx12.h"
+#include "chunk_manager.h"
+#include "light_dx12.h"
+
 
 #include <glm/glm.hpp>
 
@@ -33,13 +34,19 @@ SceneDX12::~SceneDX12() = default;
 
 void SceneDX12::init()
 {
-	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
-
 	world_ = std::make_unique<ChunkManager>();
 	world_->init(nullptr, dx_);
 
+	camera_ = std::make_unique<Camera>(width_, height_, glm::vec3(0.0f, CHUNK_SIZE_Y, 3.0f));
+
+	light_ = std::make_unique<LightDX12>(*dx_);
+	light_->init();
+
 	skybox_ = std::make_unique<CubemapDX12>(*dx_);
 	skybox_->init();
+
+	//crosshair_ = std::make_unique<CrosshairVk>(vk_);
+	//crosshair_->init();
 } // end of init
 
 void SceneDX12::render(
@@ -52,9 +59,11 @@ void SceneDX12::render(
 {
 	//if (!camera_ || !world_ || !light_ || !skybox_ || !crosshair_) return;
 
-	in.camera = camera_.get();
-	in.skybox = skybox_.get();
 	in.world = world_.get();
+	in.camera = camera_.get();
+	in.light = light_.get();
+	in.skybox = skybox_.get();
+	//in.crosshair = crosshair_.get();
 
 	renderer.renderFrame(in, frameVk, frameDX12, ui);
 } // end of render()
@@ -156,6 +165,5 @@ ChunkManager& SceneDX12::getWorld()
 
 ILight& SceneDX12::getLight()
 {
-	LightVk* foo = nullptr;
-	return *foo;
+	return *light_;
 } // end of getLight()

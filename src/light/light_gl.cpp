@@ -28,7 +28,8 @@ void LightGL::init()
 } // end of init()
 
 void LightGL::render(
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	const glm::mat4& view,
 	const glm::mat4& proj
 )

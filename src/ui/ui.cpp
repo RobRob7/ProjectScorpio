@@ -1110,7 +1110,7 @@ void UI::drawInspector(IScene& scene)
 	}
 
 	// ------- sun -------
-	if (!dx_ && ImGui::CollapsingHeader("Sun", ImGuiTreeNodeFlags_DefaultOpen))
+	if (ImGui::CollapsingHeader("Sun", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ILight& light = scene.getLight();
 		float speed = light.getSpeed();

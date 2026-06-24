@@ -9,6 +9,7 @@
 #include <cmath>
 
 struct FrameContext;
+struct FrameContextDX12;
 
 using namespace Light_Constants;
 
@@ -20,12 +21,14 @@ public:
 	virtual void init() = 0;
 
 	virtual void render(
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		const glm::mat4& view, 
 		const glm::mat4& proj
 	) = 0;
 	virtual void renderOffscreen(
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		const glm::mat4& view,
 		const glm::mat4& proj,
 		uint32_t width,

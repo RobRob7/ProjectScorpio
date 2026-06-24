@@ -545,7 +545,7 @@ void DX12Main::checkFeatureSupport()
 
 void DX12Main::checkTearingSupport()
 {
-    bool allowTearing = false;
+    BOOL allowTearing = FALSE;
 
     if (factory_)
     {

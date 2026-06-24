@@ -25,12 +25,14 @@ public:
 	void init() override;
 
 	void render(
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		const glm::mat4& view,
 		const glm::mat4& proj
 	) override;
 	void renderOffscreen(
-		const FrameContext* frame,
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12,
 		const glm::mat4& view,
 		const glm::mat4& proj,
 		uint32_t width,
