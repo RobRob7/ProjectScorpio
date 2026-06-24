@@ -571,18 +571,42 @@ void UI::drawMenuBar(IScene& scene)
 		}
 
 		// GRAPHICS OPTIONS
-		bool enabledRT = renderSettings_.useRT;
+		const bool enabledRT = renderSettings_.useRT;
 		const bool supportsRT = vk_ && vk_->supportsRayTracing();
+		const bool supportsVRS = vk_ && vk_->supportsVRS();
 		if (ImGui::BeginMenu("Graphics"))
 		{
 			if (vk_)
 			{
+				//ImGui::BeginDisabled(!supportsVRS);
+				//if (ImGui::Checkbox("VRS##graphics", &renderSettings_.useVRS))
+				//{
+				//}
+				//ImGui::EndDisabled();
+				//if (!supportsVRS)
+				//{
+				//	ImGui::SameLine();
+				//	ImGui::TextDisabled("(?)");
+
+				//	if (ImGui::IsItemHovered())
+				//	{
+				//		ImGui::BeginTooltip();
+				//		ImGui::PushTextWrapPos(ImGui::GetFontSize() * 22.0f);
+				//		ImGui::TextUnformatted(
+				//			"Variable Rate Shading is unavailable because this GPU does not support "
+				//			"the required Vulkan VRS extensions."
+				//		);
+				//		ImGui::PopTextWrapPos();
+				//		ImGui::EndTooltip();
+				//	}
+				//}
+				
+
 				ImGui::BeginDisabled(!supportsRT);
 				if (ImGui::Checkbox("RT Mode##graphics", &renderSettings_.useRT))
 				{
 				}
 				ImGui::EndDisabled();
-
 				if (!supportsRT)
 				{
 					ImGui::SameLine();

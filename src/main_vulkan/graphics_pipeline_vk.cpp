@@ -76,8 +76,8 @@ void GraphicsPipelineVk::create(const GraphicsPipelineDescVk& desc)
 
 	// color blend
 	vk::PipelineColorBlendAttachmentState cba{};
-	cba.colorWriteMask = desc.colorWriteMask;
 	cba.blendEnable = desc.blendEnable;
+	cba.colorWriteMask = desc.colorWriteMask;
 
 	vk::PipelineColorBlendStateCreateInfo cb{};
 	const bool hasColorAttachment = (desc.colorFormat != vk::Format::eUndefined);

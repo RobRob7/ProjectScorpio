@@ -166,6 +166,12 @@ public:
     } // end of setVSync
 
     bool supportsRayTracing() const { return supportsRayTracing_; }
+    bool getRTStatus() const { return rtEnabled_; }
+    void setRTStatus(bool enable) { rtEnabled_ = enable; }
+
+    bool supportsVRS() const { return supportsVRS_; }
+    bool getVRSStatus() const { return vrsEnabled_; }
+    void setVRSStatus(bool enable) { vrsEnabled_ = enable; }
 
 private:
     void createInstance();
@@ -221,6 +227,10 @@ private:
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
     };
+    const std::vector<const char*> vrsDeviceExtensions_ = 
+    {
+        VK_KHR_FRAGMENT_SHADING_RATE_EXTENSION_NAME
+    };
 
     bool enableValidationLayers_{ false };
     bool initialized_{ false };
@@ -232,9 +242,9 @@ private:
     std::array<RetiredFrameResourcesVk, MAX_FRAMES_IN_FLIGHT> retired_;
 
     bool framebufferResized_{ false };
-    uint32_t currentFrame_ = 0;
+    uint32_t currentFrame_{ 0 };
 
-    bool vsyncEnabled_ = true;
+    bool vsyncEnabled_{ true };
     vk::PresentModeKHR vsyncMode_;
 
     vk::SampleCountFlagBits msaaSamples_{ vk::SampleCountFlagBits::e1 };
@@ -242,6 +252,10 @@ private:
     GLFWwindow* window_{};
 
     bool supportsRayTracing_{ false };
+    bool supportsVRS_{ false };
+
+    bool rtEnabled_{ false };
+    bool vrsEnabled_{ false };
 
     vk::UniqueInstance instance_{};
     vk::UniqueDebugUtilsMessengerEXT debugMessenger_{};

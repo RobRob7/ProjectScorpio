@@ -49,7 +49,7 @@ struct GraphicsPipelineDescVk
 	bool depthWriteEnable{ true };
 	vk::CompareOp depthCompareOp{ vk::CompareOp::eLessOrEqual };
 
-	// dyn rendering formats
+	// render target + depth formats
 	vk::Format colorFormat{ vk::Format::eUndefined };
 	vk::Format depthFormat{ vk::Format::eUndefined };
 
