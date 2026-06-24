@@ -14,7 +14,7 @@ int main()
 {
 	try
 	{
-		Application app(width, height, Backend::DX12);
+		Application app(width, height, Backend::Vulkan);
 		app.run();
 	}
 	catch (const std::exception& e)
