@@ -699,7 +699,7 @@ void RendererVk::renderFrame(
 	// CROSSHAIR RENDER
 	if (in.crosshair)
 	{
-		in.crosshair->render(&frame);
+		in.crosshair->render(&frame, nullptr);
 	}
 
 	// UI RENDER

@@ -46,10 +46,57 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 		);
 	}
 
-	if (!desc.rootSignature)
+	if (desc.rootSignature)
 	{
-		throw std::runtime_error(
-			"GraphicsPipelineDX12::create - root signature is null"
+		rootSignature_ = desc.rootSignature;
+	}
+	else
+	{
+		D3D12_ROOT_SIGNATURE_DESC rootDesc{};
+		rootDesc.NumParameters = 0;
+		rootDesc.pParameters = nullptr;
+		rootDesc.NumStaticSamplers = 0;
+		rootDesc.pStaticSamplers = nullptr;
+		rootDesc.Flags =
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+		Microsoft::WRL::ComPtr<ID3DBlob> signatureBlob;
+		Microsoft::WRL::ComPtr<ID3DBlob> errorBlob;
+
+		HRESULT hr = D3D12SerializeRootSignature(
+			&rootDesc,
+			D3D_ROOT_SIGNATURE_VERSION_1,
+			&signatureBlob,
+			&errorBlob
+		);
+
+		if (FAILED(hr))
+		{
+			if (errorBlob)
+			{
+				std::string error(
+					static_cast<const char*>(errorBlob->GetBufferPointer()),
+					errorBlob->GetBufferSize()
+				);
+				throw std::runtime_error(
+					"GraphicsPipelineDX12::create - failed to serialize empty root signature: " + error
+				);
+			}
+
+			DX12Utils::ThrowIfFailed(
+				hr,
+				"GraphicsPipelineDX12::create - failed to serialize empty root signature"
+			);
+		}
+
+		DX12Utils::ThrowIfFailed(
+			dx_->getDevice()->CreateRootSignature(
+				0,
+				signatureBlob->GetBufferPointer(),
+				signatureBlob->GetBufferSize(),
+				IID_PPV_ARGS(&rootSignature_)
+			),
+			"GraphicsPipelineDX12::create - failed to create empty root signature"
 		);
 	}
 
@@ -66,8 +113,6 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 			"GraphicsPipelineDX12::create - depthFormat is DXGI_FORMAT_UNKNOWN while depth is enabled"
 		);
 	}
-
-	rootSignature_ = desc.rootSignature;
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc{};
 

@@ -14,8 +14,8 @@
 
 #include "camera.h"
 #include "i_light.h"
-#include "cubemap_dx12.h"
-//#include "i_crosshair.h"
+#include "i_cubemap.h"
+#include "i_crosshair.h"
 #include "chunk_manager.h"
 #include "ui.h"
 //
@@ -333,7 +333,8 @@ void RendererDX12::renderFrame(
 			nullptr,
 			&frame,
 			view,
-			proj
+			proj,
+			in.light->getDirection()
 		);
 	}
 
@@ -381,6 +382,12 @@ void RendererDX12::renderFrame(
 
 
 	// ----------------- UI ELEMENTS ----------------- //
+	// CROSSHAIR RENDER
+	if (in.crosshair)
+	{
+		in.crosshair->render(nullptr, &frame);
+	}
+
 	// UI RENDER
 	if (ui)
 	{

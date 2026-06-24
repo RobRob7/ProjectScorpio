@@ -9,7 +9,7 @@
 
 #include "camera.h"
 #include "cubemap_dx12.h"
-//#include "crosshair_dx12.h"
+#include "crosshair_dx12.h"
 #include "chunk_manager.h"
 #include "light_dx12.h"
 
@@ -45,8 +45,8 @@ void SceneDX12::init()
 	skybox_ = std::make_unique<CubemapDX12>(*dx_);
 	skybox_->init();
 
-	//crosshair_ = std::make_unique<CrosshairVk>(vk_);
-	//crosshair_->init();
+	crosshair_ = std::make_unique<CrosshairDX12>(*dx_);
+	crosshair_->init();
 } // end of init
 
 void SceneDX12::render(
@@ -57,13 +57,13 @@ void SceneDX12::render(
 	UI* ui
 )
 {
-	//if (!camera_ || !world_ || !light_ || !skybox_ || !crosshair_) return;
+	if (!camera_ || !world_ || !light_ || !skybox_ || !crosshair_) return;
 
 	in.world = world_.get();
 	in.camera = camera_.get();
 	in.light = light_.get();
 	in.skybox = skybox_.get();
-	//in.crosshair = crosshair_.get();
+	in.crosshair = crosshair_.get();
 
 	renderer.renderFrame(in, frameVk, frameDX12, ui);
 } // end of render()

@@ -107,7 +107,6 @@ void ChunkMeshGPUDX12::upload(
 	if (!frameDX12) return;
 
 	ID3D12GraphicsCommandList* cmd = frameDX12->cmd;
-
 	if (!cmd)
 	{
 		return;

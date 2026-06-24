@@ -379,10 +379,10 @@ vk::CommandBuffer VulkanMain::beginSingleTimeCommands() const
 	return commandBuffer;
 } // end of beginSingleTimeCommands()
 
-void VulkanMain::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const
+void VulkanMain::endSingleTimeCommands(vk::CommandBuffer cmd) const
 {
 	{
-		vk::Result res = commandBuffer.end();
+		vk::Result res = cmd.end();
 		if (res != vk::Result::eSuccess)
 		{
 			throw std::runtime_error("end failed: " + vk::to_string(res));
@@ -391,7 +391,7 @@ void VulkanMain::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const
 
 	vk::SubmitInfo submitInfo{};
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffer;
+	submitInfo.pCommandBuffers = &cmd;
 
 	{
 		vk::Result res = graphicsQueue_.submit(1, &submitInfo, nullptr);
@@ -409,7 +409,7 @@ void VulkanMain::endSingleTimeCommands(vk::CommandBuffer commandBuffer) const
 		}
 	}
 
-	device_->freeCommandBuffers(commandPool_.get(), 1, &commandBuffer);
+	device_->freeCommandBuffers(commandPool_.get(), 1, &cmd);
 } // end of endSingleTimeCommands()
 
 void VulkanMain::submitUpload(

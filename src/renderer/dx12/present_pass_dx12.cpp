@@ -52,25 +52,24 @@ void PresentPassDX12::render(FrameContextDX12& frame)
 
     ID3D12GraphicsCommandList* cmd = frame.cmd;
 
-    D3D12_VIEWPORT viewport{};
-    viewport.TopLeftX = 0.0f;
-    viewport.TopLeftY = 0.0f;
-    viewport.Width = static_cast<float>(frame.width);
-    viewport.Height = static_cast<float>(frame.height);
-    viewport.MinDepth = 0.0f;
-    viewport.MaxDepth = 1.0f;
-
-    D3D12_RECT scissor{};
-    scissor.left = 0;
-    scissor.top = 0;
-    scissor.right = static_cast<LONG>(frame.width);
-    scissor.bottom = static_cast<LONG>(frame.height);
-
+    D3D12_VIEWPORT viewport{
+        .TopLeftX = 0.0f,
+        .TopLeftY = 0.0f,
+        .Width = static_cast<float>(frame.width),
+        .Height = static_cast<float>(frame.height),
+        .MinDepth = 0.0f,
+        .MaxDepth = 1.0f
+    };
+    D3D12_RECT scissor{
+        .left = 0,
+        .top = 0,
+        .right = static_cast<LONG>(frame.width),
+        .bottom = static_cast<LONG>(frame.height)
+    };
     cmd->RSSetViewports(1, &viewport);
     cmd->RSSetScissorRects(1, &scissor);
 
     D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
-
     cmd->OMSetRenderTargets(
         1,
         &colorRTV,

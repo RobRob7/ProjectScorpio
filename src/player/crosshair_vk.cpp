@@ -38,8 +38,12 @@ void CrosshairVk::init()
 	createPipeline();
 } // end of init()
 
-void CrosshairVk::render(const FrameContext* frame)
+void CrosshairVk::render(
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
+)
 {
+	const FrameContext* frame = frameVk;
 	if (!frame->cmd || !vBuffer_.valid())
 		return;
 
