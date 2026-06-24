@@ -626,32 +626,35 @@ void UI::drawMenuBar(IScene& scene)
 				}
 			}
 
-			if (!enabledRT)
+			if (!dx_)
 			{
-				if (ImGui::Checkbox("Shadows##graphics", &renderSettings_.useShadowMap))
+				if (!enabledRT)
+				{
+					if (ImGui::Checkbox("Shadows##graphics", &renderSettings_.useShadowMap))
+					{
+					}
+					if (ImGui::Checkbox("SSAO##graphics", &renderSettings_.useSSAO))
+					{
+					}
+				}
+				if (enabledRT)
+				{
+					if (ImGui::Checkbox("RT Shadows##graphics", &renderSettings_.useRTShadow))
+					{
+					}
+					if (ImGui::Checkbox("RTAO##graphics", &renderSettings_.useRTAO))
+					{
+					}
+				}
+				if (ImGui::Checkbox("FXAA##graphics", &renderSettings_.useFXAA))
 				{
 				}
-				if (ImGui::Checkbox("SSAO##graphics", &renderSettings_.useSSAO))
+				if (ImGui::Checkbox("Volumetric Fog##graphics", &renderSettings_.useFog))
 				{
 				}
-			}
-			if (enabledRT)
-			{
-				if (ImGui::Checkbox("RT Shadows##graphics", &renderSettings_.useRTShadow))
+				if (ImGui::Checkbox("God Rays##graphics", &renderSettings_.useGodRays))
 				{
 				}
-				if (ImGui::Checkbox("RTAO##graphics", &renderSettings_.useRTAO))
-				{
-				}
-			}
-			if (ImGui::Checkbox("FXAA##graphics", &renderSettings_.useFXAA))
-			{
-			}
-			if (ImGui::Checkbox("Volumetric Fog##graphics", &renderSettings_.useFog))
-			{
-			}
-			if (ImGui::Checkbox("God Rays##graphics", &renderSettings_.useGodRays))
-			{
 			}
 			ImGui::EndMenu();
 		}

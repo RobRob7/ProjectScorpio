@@ -15,7 +15,10 @@
 #include <algorithm>
 
 //--- PUBLIC ---//
-GodRayPassVk::GodRayPassVk(VulkanMain& vk, const RenderSettings& rs)
+GodRayPassVk::GodRayPassVk(
+	VulkanMain& vk, 
+	const RenderSettings& rs
+)
 	: vk_(vk),
 	rs_(rs),
 	outputImage_(vk),
@@ -79,7 +82,10 @@ void GodRayPassVk::resize()
 	updateDescriptorSet(vk_.currentFrameIndex());
 } // end of resize()
 
-void GodRayPassVk::render(const GodRayUBOs& ubos, const FrameContext& frame)
+void GodRayPassVk::render(
+	const GodRayUBOs& ubos,
+	const FrameContext& frame
+)
 {
 	syncSettings();
 
