@@ -27,13 +27,19 @@ struct GodRayUBOs
 class GodRayPassVk
 {
 public:
-	explicit GodRayPassVk(VulkanMain& vk, const RenderSettings& rs);
+	explicit GodRayPassVk(
+		VulkanMain& vk, 
+		const RenderSettings& rs
+	);
 	~GodRayPassVk();
 
 	void init();
 	void resize();
 
-	void render(const GodRayUBOs& ubos, const FrameContext& frame);
+	void render(
+		const GodRayUBOs& ubos, 
+		const FrameContext& frame
+	);
 
 	void setInput(
 		ImageVk& inputDepth, 

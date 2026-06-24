@@ -125,7 +125,7 @@ void DescriptorSetDX12::createLayout(
 		.MaxLOD = D3D12_FLOAT32_MAX,
 		.ShaderRegister = 0, // register(s0)
 		.RegisterSpace = 0,
-		.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	};
 	
 	D3D12_ROOT_SIGNATURE_DESC rootDesc{

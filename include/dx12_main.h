@@ -28,6 +28,12 @@ struct FrameContextDX12;
 
 using Microsoft::WRL::ComPtr;
 
+struct Extent2D
+{
+    uint32_t width;
+    uint32_t height;
+};
+
 struct PendingUploadDX12
 {
     ComPtr<ID3D12CommandAllocator> allocator;
@@ -84,6 +90,7 @@ public:
 
     DXGI_FORMAT getDepthFormat() const { return depthFormat_; }
     DXGI_FORMAT getSwapChainImageFormat() const { return swapChainFormat_; }
+    Extent2D getSwapChainExtent() const { return Extent2D{ swapChainWidth_, swapChainHeight_ }; }
 
     ID3D12Device5* getDevice() const { return device_.Get(); }
     ID3D12CommandQueue* getGraphicsQueue() const { return graphicsQueue_.Get(); }
@@ -109,6 +116,7 @@ public:
     uint32_t getSwapChainImageCount() const { return static_cast<uint32_t>(swapChainBuffers_.size()); }
 
     uint32_t getMaxFramesInFlight() const { return MAX_FRAMES_IN_FLIGHT; }
+    uint32_t getPrevFrameIndex() const { return (currentFrame_ + MAX_FRAMES_IN_FLIGHT - 1) % MAX_FRAMES_IN_FLIGHT; }
     uint32_t currentFrameIndex() const { return currentFrame_; }
     uint32_t currentBackBufferIndex() const { return currentBackBufferIndex_; }
 
