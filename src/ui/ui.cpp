@@ -660,7 +660,7 @@ void UI::drawMenuBar(IScene& scene)
 		if (ImGui::BeginMenu("Renderer"))
 		{
 			// Pass Resolution Scale
-			if (ImGui::BeginMenu("Res Scale"))
+			if (vk_ && ImGui::BeginMenu("Res Scale"))
 			{
 				constexpr float LABEL_WIDTH = 200.0f;
 
