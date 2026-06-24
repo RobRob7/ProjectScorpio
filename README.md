@@ -1,5 +1,5 @@
 # Project Scorpio
-C++20 voxel rendering engine built for Windows featuring a dual backend architecture supporting Vulkan 1.4 (hpp + Unique, Dynamic Rendering) and OpenGL 4.6 Core. Uses custom rendering pipelines in Vulkan to support traditional graphics, ray-tracing, and compute pipelines.
+C++20 voxel rendering engine built for Windows featuring a multi-backend architecture supporting Vulkan 1.4, OpenGL 4.6 Core, and an in-progress DirectX 12 backend. Vulkan and OpenGL shaders are written in GLSL, while DirectX 12 shaders are written in HLSL. Uses custom graphics and compute pipeline abstractions across Vulkan and DirectX 12, with Vulkan ray-tracing support and ongoing DX12 backend integration.
 
 ![Volumetric Fog](./milestones/demo/volumetric_fog.gif)
 
@@ -447,8 +447,10 @@ Project layout:
 - **src/**
     - main.cpp → main driver
     - **chunk/**
+        - **dx12/**
+            - chunk_mesh_gpu_dx12.cpp → chunk mesh dx12
         - **opengl/**
-            - chunk_mesh_gpu_gl.cpp → chunk mesh opengl
+            - chunk_mesh_gpu_gl.cpp → chunk mesh opengl        
         - **vulkan/**
             - chunk_mesh_gpu_vk.cpp → chunk mesh vulkan
         - chunk_data.cpp → chunk data
@@ -457,10 +459,18 @@ Project layout:
     - **core/**
         - application.cpp → main application
         - scene.cpp → object setup + renderer call opengl
+        - scene_dx12.cpp → object setup + renderer call dx12
         - scene_vk.cpp → object setup + renderer call vulkan
     - **light/**
-        - light.cpp → light cube object opengl
+        - light_dx12.cpp → light cube object dx12
+        - light_gl.cpp → light cube object opengl
         - light_vk.cpp → light cube object vulkan
+    - **main_dx12/**
+        - buffer_dx12.cpp → buffer helper class
+        - compute_pipeline_dx12.cpp → compute pipeline helper class
+        - descriptor_set_dx12.cpp → descriptor set helper class
+        - dx12_main.cpp → dx12 main instance
+        - graphics_pipeline_dx12.cpp → rasterization pipeline helper class
     - **main_opengl/**
         - opengl_main.cpp → opengl main instance
     - **main_vulkan/**
@@ -474,8 +484,14 @@ Project layout:
         - vulkan_main.cpp → vulkan main instance
     - **player/**
         - crosshair.cpp → crosshair UI icon opengl
+        - crosshair_dx12.cpp → crosshair UI icon dx12
         - crosshair_vk.cpp → crosshair UI icon vulkan
     - **renderer/**
+        - **dx12/**
+            - chunk_pass_dx12.cpp → opaque chunk render
+            - god_ray_pass_dx12.cpp → God Ray pass 
+            - present_pass_dx12.cpp → final image pass
+            - renderer_dx12.cpp → main render loop
         - **opengl/**
             - chunk_pass_gl.cpp → opaque chunk render
             - debug_pass.cpp → G-buffer normal + depth view
@@ -514,6 +530,14 @@ Project layout:
     - **ui/**
         - ui.cpp → UI system
     - **utility/**
+        - **dx12/**
+            - compute_shader_dx12.cpp → compute shader helper
+            - cubemap_dx12.cpp → setup + render cubemap
+            - image_dx12.cpp → texture base
+            - shader_dx12.cpp → rasterization shader helper
+            - texture_2d_dx12.cpp → load texture from file
+            - texture_cubemap_dx12.cpp → load multiple textures from file
+            - utils_dx12.cpp → transition image helpers
         - **opengl/**
             - compute_shader_gl.cpp → compute shader helper
             - cubemap_gl.cpp → setup + render cubemap
