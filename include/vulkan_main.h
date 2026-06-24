@@ -72,7 +72,7 @@ public:
     void discardSingleTimeCommands(vk::CommandBuffer cmd) const;
 
     vk::CommandBuffer beginSingleTimeCommands() const;
-    void endSingleTimeCommands(vk::CommandBuffer commandBuffer) const;
+    void endSingleTimeCommands(vk::CommandBuffer cmd) const;
 
     void submitUpload(
         vk::CommandBuffer cmd,

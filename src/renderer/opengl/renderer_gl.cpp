@@ -308,7 +308,7 @@ void RendererGL::renderFrame(
     // ----------------- UI ELEMENTS ----------------- //
     if (in.crosshair)
     {
-        in.crosshair->render(nullptr);
+        in.crosshair->render(nullptr, nullptr);
     }
     // --------------- END UI ELEMENTS --------------- //
 } // end of renderFrame()

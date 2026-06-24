@@ -36,7 +36,10 @@ void Crosshair::init()
 	glVertexArrayAttribBinding(vao_, 0, 0);
 } // end of init()
 
-void Crosshair::render(const FrameContext* frame)
+void Crosshair::render(
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12
+)
 {
 	if (!crosshairShader_ || vao_ == 0)
 		return;

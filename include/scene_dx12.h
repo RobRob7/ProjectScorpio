@@ -10,6 +10,7 @@ class Camera;
 class CubemapDX12;
 class ChunkManager;
 class LightDX12;
+class CrosshairDX12;
 
 class UI;
 class IRenderer;
@@ -60,6 +61,7 @@ private:
 	std::unique_ptr<CubemapDX12> skybox_;
 	std::unique_ptr<ChunkManager> world_;
 	std::unique_ptr<LightDX12> light_;
+	std::unique_ptr<CrosshairDX12> crosshair_;
 };
 
 #endif

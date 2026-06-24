@@ -19,7 +19,10 @@ public:
 	~CrosshairVk();
 
 	void init() override;
-	void render(const FrameContext* frame) override;
+	void render(
+		const FrameContext* frameVk,
+		const FrameContextDX12* frameDX12
+	) override;
 
 private:
 	void createResources();
