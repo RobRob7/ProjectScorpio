@@ -151,8 +151,10 @@ void ChunkPassDX12::renderOpaque(
 
 		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
 
+		chunkUBOData_.u_lightDir = in.light->getDirection();
 		//chunkUBOData_.u_lightDir = in.light->getDirection();
-		//chunkUBOData_.u_lightColor = in.light->getLightColor();
+		chunkUBOData_.u_lightColor = in.light->getLightColor();
+		//chunkUBOData_.u_lightColor = glm::vec3(1.0f);
 
 		opaqueUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_));
 
@@ -991,37 +993,37 @@ void ChunkPassDX12::createPipelines(
 	// opaque
 	{
 		GraphicsPipelineDescDX12 desc{
-		.vertShader = opaqueShader_->vertShader(),
-		.fragShader = opaqueShader_->fragShader(),
+			.vertShader = opaqueShader_->vertShader(),
+			.fragShader = opaqueShader_->fragShader(),
 
-		.rootSignature = opaqueDescriptorSets_[0].getRootSignature(),
+			.rootSignature = opaqueDescriptorSets_[0].getRootSignature(),
 
-		.inputElements =
-		{
-			D3D12_INPUT_ELEMENT_DESC{
-				.SemanticName = "POSITION",
-				.SemanticIndex = 0,
-				.Format = DXGI_FORMAT_R32_UINT,
-				.InputSlot = 0,
-				.AlignedByteOffset = 0,
-				.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-				.InstanceDataStepRate = 0
-			}
-		},
+			.inputElements =
+			{
+				D3D12_INPUT_ELEMENT_DESC{
+					.SemanticName = "POSITION",
+					.SemanticIndex = 0,
+					.Format = DXGI_FORMAT_R32_UINT,
+					.InputSlot = 0,
+					.AlignedByteOffset = 0,
+					.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+					.InstanceDataStepRate = 0
+				}
+			},
 
-		.cullMode = D3D12_CULL_MODE_NONE,
-		.frontCCW = FALSE,
+			.cullMode = D3D12_CULL_MODE_BACK,
+			.frontCCW = FALSE,
 
-		.depthTestEnable = TRUE,
-		.depthWriteEnable = TRUE,
-		.depthCompareFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			.depthTestEnable = TRUE,
+			.depthWriteEnable = TRUE,
+			.depthCompareFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
 
-		.colorFormat = defaultFormats.colorFormat,
-		.depthFormat = defaultFormats.depthFormat,
+			.colorFormat = defaultFormats.colorFormat,
+			.depthFormat = defaultFormats.depthFormat
 		};
 
-		opaquePipeline_.create(desc);
-		opaquePipeline_.setDebugName(L"CubemapDX12-Default::Pipeline");
+			opaquePipeline_.create(desc);
+			opaquePipeline_.setDebugName(L"CubemapDX12-Default::Pipeline");
 	}
 	
 	//// gbuffer

@@ -37,7 +37,7 @@ cbuffer ChunkPushConstants : register(b0, space1)
 };
 
 struct VSOutput
-{
+{ 
     float4 Position : SV_Position;
 
     nointerpolation uint2 Tile : TEXCOORD0;

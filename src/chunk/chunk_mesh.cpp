@@ -208,34 +208,43 @@ void ChunkMesh::buildChunkMesh()
 						continue; 
 					}
 
-					int w = 1;
-					while (i + w < dims[u]) 
-					{
-						MaskCell c2 = mask[n + w];
-						if (!c2.valid || c2.id != c.id || c2.dir != c.dir ||
-							c2.tileX != c.tileX || c2.tileY != c.tileY)
-						{
-							break;
-						}
-						++w;
-					} // end while
+					const bool isCutout = (c.id == BlockID::Tree_Leaf);
 
-					int h = 1;
-					bool stop = false;
-					while (j + h < dims[v] && !stop) 
+					int w = 1;
+					if (!isCutout)
 					{
-						for (int k = 0; k < w; ++k) 
+						while (i + w < dims[u])
 						{
-							MaskCell c2 = mask[n + k + h * dims[u]];
+							MaskCell c2 = mask[n + w];
 							if (!c2.valid || c2.id != c.id || c2.dir != c.dir ||
 								c2.tileX != c.tileX || c2.tileY != c.tileY)
 							{
-								stop = true;
 								break;
 							}
-						} // end for
-						if (!stop) ++h;
-					} // end while
+							++w;
+						} // end while
+					}
+
+					int h = 1;
+
+					if (!isCutout)
+					{
+						bool stop = false;
+						while (j + h < dims[v] && !stop)
+						{
+							for (int k = 0; k < w; ++k)
+							{
+								MaskCell c2 = mask[n + k + h * dims[u]];
+								if (!c2.valid || c2.id != c.id || c2.dir != c.dir ||
+									c2.tileX != c.tileX || c2.tileY != c.tileY)
+								{
+									stop = true;
+									break;
+								}
+							} // end for
+							if (!stop) ++h;
+						} // end while
+					}
 
 					int du[3] = { 0,0,0 };
 					int dv[3] = { 0,0,0 };

@@ -13,7 +13,6 @@
 
 #include <cstddef>
 #include <array>
-#include <cassert>
 #include <cstdint>
 
 using namespace Light_Constants;
@@ -56,18 +55,17 @@ void LightVk::init()
 } // end of init()
 
 void LightVk::render(
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	const glm::mat4& view,
 	const glm::mat4& proj
 )
 {
-	assert(frame->cmd && "Must be valid Vulkan frame context!");
-
-	if (!descriptorSets_[frame->frameIndex].valid() ||
-		!uboBuffers_[frame->frameIndex].valid() ||
+	if (!descriptorSets_[frameVk->frameIndex].valid() ||
+		!uboBuffers_[frameVk->frameIndex].valid() ||
 		!pipeline_.valid()) return;
 
-	vk::CommandBuffer cmd = frame->cmd;
+	vk::CommandBuffer cmd = frameVk->cmd;
 
 	cmd.beginDebugUtilsLabelEXT({ "LightVk-Default::cmd" });
 
@@ -82,9 +80,9 @@ void LightVk::render(
 	ubo.u_lightVisualColor = visualColor_;
 	ubo.u_sunRadius = SUN_SCALE / 2.0f;
 
-	uboBuffers_[frame->frameIndex].upload(&ubo, sizeof(LightUBO));
+	uboBuffers_[frameVk->frameIndex].upload(&ubo, sizeof(LightUBO));
 
-	vk::DescriptorSet descSet = descriptorSets_[frame->frameIndex].getSet();
+	vk::DescriptorSet descSet = descriptorSets_[frameVk->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipeline_.getLayout(),
@@ -99,20 +97,19 @@ void LightVk::render(
 } // end of render()
 
 void LightVk::renderOffscreen(
-	const FrameContext* frame,
+	const FrameContext* frameVk,
+	const FrameContextDX12* frameDX12,
 	const glm::mat4& view,
 	const glm::mat4& proj,
 	uint32_t width,
 	uint32_t height
 )
 {
-	assert(frame->cmd && "Must be valid Vulkan frame context!");
-
-	if (!descriptorSetsOffscreen_[frame->frameIndex].valid() ||
-		!uboBuffersOffscreen_[frame->frameIndex].valid() ||
+	if (!descriptorSetsOffscreen_[frameVk->frameIndex].valid() ||
+		!uboBuffersOffscreen_[frameVk->frameIndex].valid() ||
 		!pipelineOffscreen_.valid()) return;
 
-	vk::CommandBuffer cmd = frame->cmd;
+	vk::CommandBuffer cmd = frameVk->cmd;
 
 	cmd.beginDebugUtilsLabelEXT({ "LightVk-Offscreen::cmd" });
 
@@ -145,9 +142,9 @@ void LightVk::renderOffscreen(
 	ubo.u_lightVisualColor = visualColor_;
 	ubo.u_sunRadius = SUN_SCALE / 2.0f;
 
-	uboBuffersOffscreen_[frame->frameIndex].upload(&ubo, sizeof(LightUBO));
+	uboBuffersOffscreen_[frameVk->frameIndex].upload(&ubo, sizeof(LightUBO));
 
-	vk::DescriptorSet descSet = descriptorSetsOffscreen_[frame->frameIndex].getSet();
+	vk::DescriptorSet descSet = descriptorSetsOffscreen_[frameVk->frameIndex].getSet();
 	cmd.bindDescriptorSets(
 		vk::PipelineBindPoint::eGraphics,
 		pipelineOffscreen_.getLayout(),

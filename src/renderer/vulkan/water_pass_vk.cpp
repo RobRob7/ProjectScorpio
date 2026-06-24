@@ -674,6 +674,7 @@ void WaterPassVk::waterReflectionPass(
 		{
 			in.light->renderOffscreen(
 				&frame,
+				nullptr,
 				reflView,
 				proj,
 				width_,

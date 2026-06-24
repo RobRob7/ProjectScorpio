@@ -223,6 +223,7 @@ void RendererGL::renderFrame(
 
     in.light->render(
         nullptr,
+        nullptr,
         view,
         proj
     );

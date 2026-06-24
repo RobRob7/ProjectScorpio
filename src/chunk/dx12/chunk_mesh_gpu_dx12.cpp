@@ -41,9 +41,16 @@ static void UploadBufferDX12(
 	dstBuffer.create(
 		size,
 		D3D12_HEAP_TYPE_DEFAULT,
-		D3D12_RESOURCE_STATE_COPY_DEST,
+		D3D12_RESOURCE_STATE_COMMON,
 		D3D12_RESOURCE_FLAG_NONE,
 		false
+	);
+
+	DX12Utils::TransitionResource(
+		cmd,
+		dstBuffer.getResource(),
+		dstBuffer.state(),
+		D3D12_RESOURCE_STATE_COPY_DEST
 	);
 
 	cmd->CopyBufferRegion(

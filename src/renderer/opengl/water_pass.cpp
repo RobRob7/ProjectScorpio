@@ -353,6 +353,7 @@ void WaterPass::waterReflectionPass(
     );
     in.light->render(
         nullptr,
+        nullptr,
         reflView,
         proj
     );

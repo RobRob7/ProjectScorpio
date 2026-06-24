@@ -525,6 +525,7 @@ void RendererVk::renderFrame(
 		{
 			in.light->render(
 				&frame,
+				nullptr,
 				view,
 				proj
 			);

@@ -13,7 +13,7 @@
 #include "render_target_dx12.h"
 
 #include "camera.h"
-//#include "i_light.h"
+#include "i_light.h"
 #include "cubemap_dx12.h"
 //#include "i_crosshair.h"
 #include "chunk_manager.h"
@@ -240,6 +240,13 @@ void RendererDX12::renderFrame(
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
+	// update light/sun
+	in.light->updateLight(
+		in.time,
+		in.camera->getCameraPosition(),
+		rs_->sunPaused
+	);
+
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), nullptr, &frame);
 	//if (vk_.supportsRayTracing() && rs_->useRT)
@@ -323,6 +330,15 @@ void RendererDX12::renderFrame(
 
 	{
 		in.skybox->render(
+			nullptr,
+			&frame,
+			view,
+			proj
+		);
+	}
+
+	{
+		in.light->render(
 			nullptr,
 			&frame,
 			view,
