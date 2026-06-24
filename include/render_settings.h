@@ -66,6 +66,8 @@ struct RenderSettings
 	bool enableVsync{ true };
 
 	// graphics options
+	bool useVRS{ false };
+
 	bool useRT{ false };
 	bool useRTAO{ true };
 	bool useRTShadow{ true };

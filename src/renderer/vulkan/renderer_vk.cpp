@@ -239,6 +239,12 @@ void RendererVk::renderFrame(
 
 	vk::CommandBuffer cmd = frame.cmd;
 
+	// update status (RT + VRS)
+	vk_.setRTStatus(rs_->useRT);
+	vk_.setVRSStatus(rs_->useVRS);
+
+	bool rtEnabled{ vk_.supportsRayTracing() && vk_.getRTStatus() };
+
 	// update light/sun
 	in.light->updateLight(
 		in.time, 
@@ -248,7 +254,7 @@ void RendererVk::renderFrame(
 
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), &frame);
-	if (vk_.supportsRayTracing() && rs_->useRT)
+	if (rtEnabled)
 	{
 		in.world->buildRTDrawList(view, proj);
 	}
@@ -271,7 +277,7 @@ void RendererVk::renderFrame(
 	}
 
 	// RT upload
-	if (vk_.supportsRayTracing() && rs_->useRT && rtWorld_)
+	if (rtEnabled)
 	{
 		rtWorld_->upload(
 			cmd,
@@ -281,7 +287,7 @@ void RendererVk::renderFrame(
 	}
 
 	// RTAO pass
-	if (vk_.supportsRayTracing() && rs_->useRT && rtaoPass_)
+	if (rtEnabled && rtaoPass_)
 	{
 		rtaoPass_->setInput(
 			gbufferPass_->getNormalImage(),
@@ -302,7 +308,7 @@ void RendererVk::renderFrame(
 	}
 
 	// RT shadow pass
-	if (vk_.supportsRayTracing() && rs_->useRT && rtShadowPass_)
+	if (rtEnabled && rtShadowPass_)
 	{
 		rtShadowPass_->setInput(
 			gbufferPass_->getNormalImage(),
@@ -529,7 +535,7 @@ void RendererVk::renderFrame(
 	cmd.endDebugUtilsLabelEXT();
 
 	// RT render
-	if (vk_.supportsRayTracing() && rs_->useRT && rtWorldPass_)
+	if (rtEnabled && rtWorldPass_)
 	{
 		CubemapVk* skybox = dynamic_cast<CubemapVk*>(in.skybox);
 		rtWorldPass_->setSkyboxTextures(
@@ -573,7 +579,7 @@ void RendererVk::renderFrame(
 	sceneDepth_.transitionToShaderRead(cmd, vk::ImageAspectFlagBits::eDepth);
 
 	// ----------------- HYBRID COMPOSITE PASS ----------------- //
-	if (vk_.supportsRayTracing() && rs_->useRT)
+	if (rtEnabled)
 	{
 		compositePassHybrid_->setInput(
 			{ sceneColor_, sceneDepth_ },
@@ -592,7 +598,7 @@ void RendererVk::renderFrame(
 	ImageVk* sceneColor = nullptr;
 	ImageVk* sceneDepth = nullptr;
 	ImageVk* currentColor = nullptr;
-	if (vk_.supportsRayTracing() && rs_->useRT)
+	if (rtEnabled)
 	{
 		sceneColor = &compositePassHybrid_->getOutColorImage();
 		sceneDepth = &compositePassHybrid_->getOutDepthImage();

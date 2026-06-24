@@ -624,10 +624,12 @@ void VulkanMain::pickPhysicalDevice()
 			vk::PhysicalDeviceBufferDeviceAddressFeatures bda{};
 			vk::PhysicalDeviceAccelerationStructureFeaturesKHR accel{};
 			vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
+			vk::PhysicalDeviceFragmentShadingRateFeaturesKHR vrs{};
 
 			feats2.pNext = &bda;
 			bda.pNext = &accel;
 			accel.pNext = &rt;
+			rt.pNext = &vrs;
 
 			physicalDevice_.getFeatures2(&feats2);
 
@@ -636,6 +638,10 @@ void VulkanMain::pickPhysicalDevice()
 				bda.bufferDeviceAddress &&
 				accel.accelerationStructure &&
 				rt.rayTracingPipeline;
+
+			supportsVRS_ =
+				HasExtensions(physicalDevice_, vrsDeviceExtensions_) &&
+				vrs.pipelineFragmentShadingRate;
 			break;
 		}
 	} // end for
@@ -693,34 +699,47 @@ void VulkanMain::createLogicalDevice()
 	deviceFeatures2.features.shaderClipDistance = VK_TRUE;
 	deviceFeatures2.features.shaderInt64 = VK_TRUE;
 
+	void** tail = &deviceFeatures2.pNext;
+
+	auto AppendFeature = [&](auto& feature)
+		{
+			*tail = &feature;
+			tail = &feature.pNext;
+		};
+
 	vk::PhysicalDeviceDynamicRenderingFeatures dynamicRendering{};
 	dynamicRendering.dynamicRendering = VK_TRUE;
+	AppendFeature(dynamicRendering);
 
 	vk::PhysicalDeviceBufferDeviceAddressFeatures bda{};
 	bda.bufferDeviceAddress = VK_TRUE;
+	AppendFeature(bda);
 
 	vk::PhysicalDeviceSynchronization2FeaturesKHR s2f{};
 	s2f.synchronization2 = VK_TRUE;
+	AppendFeature(s2f);
 
 	vk::PhysicalDeviceAccelerationStructureFeaturesKHR accel{};
 	vk::PhysicalDeviceRayTracingPipelineFeaturesKHR rt{};
-
-	deviceFeatures2.pNext = &dynamicRendering;
-	dynamicRendering.pNext = &bda;
-
 	if (supportsRayTracing_)
 	{
 		accel.accelerationStructure = VK_TRUE;
 		rt.rayTracingPipeline = VK_TRUE;
 
-		bda.pNext = &accel;
-		accel.pNext = &rt;
-		rt.pNext = &s2f;
+		AppendFeature(accel);
+		AppendFeature(rt);
 	}
-	else
+
+	vk::PhysicalDeviceFragmentShadingRateFeaturesKHR vrs{};
+	if (supportsVRS_)
 	{
-		bda.pNext = &s2f;
+		vrs.pipelineFragmentShadingRate = VK_TRUE;
+
+		AppendFeature(vrs);
 	}
+
+	// end of chain
+	*tail = nullptr;
 
 	vk::DeviceCreateInfo createInfo{};
 	createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
@@ -737,6 +756,14 @@ void VulkanMain::createLogicalDevice()
 			enabledExtensions.end(),
 			rayTracingDeviceExtensions_.begin(),
 			rayTracingDeviceExtensions_.end()
+		);
+	}
+	if (supportsVRS_)
+	{
+		enabledExtensions.insert(
+			enabledExtensions.end(),
+			vrsDeviceExtensions_.begin(),
+			vrsDeviceExtensions_.end()
 		);
 	}
 
