@@ -24,9 +24,9 @@
 //#include "rt_shadow_pass_vk.h"
 //#include "ray_tracing_world_pass_vk.h"
 //
-//#include "gbuffer_pass_vk.h"
+#include "gbuffer_pass_dx12.h"
 //#include "shadow_map_pass_vk.h"
-//#include "debug_pass_vk.h"
+#include "debug_pass_dx12.h"
 //#include "ssao_pass_vk.h"
 //#include "water_pass_vk.h"
 #include "chunk_pass_dx12.h"
@@ -34,7 +34,7 @@
 //#include "post_composite_pass_vk.h"
 //#include "fxaa_pass_vk.h"
 //#include "fog_pass_vk.h"
-//#include "god_ray_pass_vk.h"
+#include "god_ray_pass_dx12.h"
 #include "present_pass_dx12.h"
 
 #include <glm/glm.hpp>
@@ -103,24 +103,18 @@ void RendererDX12::init()
 	//	rs_->useRTShadow = false;
 	//}
 
-	//if (!gbufferPass_)
-	//{
-	//	gbufferPass_ = std::make_unique<GBufferPassVk>(vk_);
-	//}
+	if (!gbufferPass_)
+	{
+		gbufferPass_ = std::make_unique<GBufferPassDX12>(*dx_);
+	}
 	//if (!shadowMapPass_)
 	//{
 	//	shadowMapPass_ = std::make_unique<ShadowMapPassVk>(vk_);
 	//}
-	//if (!debugPass_)
-	//{
-	//	debugPass_ = std::make_unique<DebugPassVk>(
-	//		vk_
-	//		//gbufferPass_->getNormalImage(),
-	//		//gbufferPass_->getDepthImage(),
-	//		//shadowMapPass_->getDepthImage(),
-	//		//shadowMapPass_->getDepthImage()
-	//		////rtWorldPass_->getOutDepthImage()
-	//	);
+	if (!debugPass_)
+	{
+		debugPass_ = std::make_unique<DebugPassDX12>(*dx_);
+	}
 	//}
 	//if (!ssaoPass_)
 	//{
@@ -150,10 +144,10 @@ void RendererDX12::init()
 	//{
 	//	fogPass_ = std::make_unique<FogPassVk>(vk_, *rs_);
 	//}
-	//if (!godRayPass_)
-	//{
-	//	godRayPass_ = std::make_unique<GodRayPassVk>(vk_, *rs_);
-	//}
+	if (!godRayPass_)
+	{
+		godRayPass_ = std::make_unique<GodRayPassDX12>(*dx_, *rs_);
+	}
 	//if (!fxaaPass_)
 	//{
 	//	fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
@@ -164,9 +158,9 @@ void RendererDX12::init()
 		presentPass_ = std::make_unique<PresentPassDX12>(*dx_);
 	}
 
-	//gbufferPass_->init();
+	gbufferPass_->init();
 	//shadowMapPass_->init();
-	//debugPass_->init();
+	debugPass_->init();
 	//ssaoPass_->init();
 
 	//waterPass_->init();
@@ -199,8 +193,8 @@ void RendererDX12::resize(int w, int h)
 	//if (rtShadowPass_)	rtShadowPass_->resize();
 	//if (rtWorldPass_)	rtWorldPass_->resize();
 
-	//if (gbufferPass_)	gbufferPass_->resize();
-	//if (debugPass_)		debugPass_->resize();
+	if (gbufferPass_)	gbufferPass_->resize();
+	if (debugPass_)		debugPass_->resize();
 	//if (ssaoPass_)		ssaoPass_->resize();
 
 	//if (waterPass_)		waterPass_->resize();
@@ -258,7 +252,26 @@ void RendererDX12::renderFrame(
 	//	in.world->buildWaterDrawList(view, proj);
 	//}
 
+	// ----------------- PRE-PASSES ----------------- //
+	// gbuffer pass
+	if (gbufferPass_)
+	{
+		Gbuffer_Constants::GbufferUBO ubo{
+			.u_view = view,
+			.u_proj = proj
+		};
+		gbufferPass_->render(
+			ubo,
+			in,
+			frame
+		);
+	}
+	// --------------- END PRE-PASSES --------------- //
+
+
 	// --------------- FORWARD RENDER --------------- //
+	cmd->SetName({ L"RendererDX12-ForwardRaster::cmd" });
+
 	sceneColor_.transitionToRenderTarget(cmd);
 	sceneDepth_.transitionToDepthWrite(cmd);
 
@@ -349,6 +362,39 @@ void RendererDX12::renderFrame(
 
 	// --------------- END FORWARD RENDER --------------- //
 
+
+	// --------------- BEGIN DEBUG RENDER --------------- //
+	if (rs_->debugMode != DebugMode::None)
+	{
+		debugPass_->setInput(
+			gbufferPass_->getNormalImage(),
+			gbufferPass_->getDepthImage(),
+			gbufferPass_->getNormalImage(),
+			gbufferPass_->getDepthImage()
+			//shadowMapPass_->getDepthImage(),
+			//rtWorldPass_->getOutDepthImage()
+		);
+
+		Debug_Constants::DebugPassUBO ubo{
+			.u_mode = static_cast<int>(rs_->debugMode),
+			.u_near = in.camera->getNearPlane(),
+			.u_far = in.camera->getFarPlane()
+		};
+		debugPass_->render(
+			ubo,
+			frame
+		);
+
+		if (ui)
+		{
+			ui->renderDX12(frame);
+		}
+
+		// present
+		return;
+	}
+	// --------------- END DEBUG RENDER --------------- //
+
 	// scene color + depth transition to shader read
 	sceneColor_.transitionToShaderRead(cmd);
 	sceneDepth_.transitionToDepthWrite(cmd);
@@ -369,8 +415,6 @@ void RendererDX12::renderFrame(
 	//}
 	// --------------- END POST-PROCESSING --------------- //
 
-	// swap swapchain color image to color attachment
-	frame.transitionColorImageToAttachment(cmd);
 
 	// ----------------- PRESENT PASS ----------------- //
 	if (presentPass_)

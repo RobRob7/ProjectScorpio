@@ -98,7 +98,9 @@ void ImageDX12::createImage(
 	width_ = width;
 	height_ = height;
 	layers_ = layers;
-	format_ = format;
+    format_ = format;
+    dsvFormat_ = format;
+    srvFormat_ = format;
     state_ = initState;
     sampleCount_ = sampleCount;
 
@@ -145,6 +147,33 @@ void ImageDX12::createImage(
         "ImageDX12::createImage - failed to create texture resource"
     );
 } // end of createImage()
+
+void ImageDX12::createSampledDepthImage(
+    uint32_t width,
+    uint32_t height
+)
+{
+    D3D12_CLEAR_VALUE depthClear{};
+    depthClear.Format = DXGI_FORMAT_D32_FLOAT;
+    depthClear.DepthStencil.Depth = 1.0f;
+    depthClear.DepthStencil.Stencil = 0;
+
+    createImage(
+        width,
+        height,
+        1,
+        false,
+        DXGI_FORMAT_R32_TYPELESS,
+        D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        &depthClear
+    );
+
+    dsvFormat_ = DXGI_FORMAT_D32_FLOAT;
+    srvFormat_ = DXGI_FORMAT_R32_FLOAT;
+
+    createDSV();
+} // end of createSampledDepthImage()
 
 void ImageDX12::createRTV(
     D3D12_RTV_DIMENSION dimension
@@ -206,6 +235,30 @@ void ImageDX12::createDSV(
     );
 } // end of createDSV()
 
+void ImageDX12::destroy()
+{
+    image_.Reset();
+
+    rtvHeap_.Reset();
+    dsvHeap_.Reset();
+
+    state_ = D3D12_RESOURCE_STATE_COMMON;
+    format_ = DXGI_FORMAT_UNKNOWN;
+    dsvFormat_ = DXGI_FORMAT_UNKNOWN;
+    srvFormat_ = DXGI_FORMAT_UNKNOWN;
+
+    width_ = 0;
+    height_ = 0;
+    layers_ = 1;
+    mipLevels_ = 1;
+    sampleCount_ = 1;
+
+    rtvCpu_ = {};
+    dsvCpu_ = {};
+} // end of destroy()
+
+
+//--- PRIVATE ---//
 void ImageDX12::createRTV(
     D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
     D3D12_RTV_DIMENSION dimension
@@ -259,7 +312,7 @@ void ImageDX12::createDSV(
     dsvCpu_ = cpuHandle;
 
     D3D12_DEPTH_STENCIL_VIEW_DESC desc{};
-    desc.Format = format_;
+    desc.Format = dsvFormat_;
     desc.ViewDimension = dimension;
     desc.Flags = D3D12_DSV_FLAG_NONE;
 
@@ -284,23 +337,3 @@ void ImageDX12::createDSV(
         dsvCpu_
     );
 } // end of createDSV()
-
-void ImageDX12::destroy()
-{
-    image_.Reset();
-
-    rtvHeap_.Reset();
-    dsvHeap_.Reset();
-
-    state_ = D3D12_RESOURCE_STATE_COMMON;
-    format_ = DXGI_FORMAT_UNKNOWN;
-
-    width_ = 0;
-    height_ = 0;
-    layers_ = 1;
-    mipLevels_ = 1;
-    sampleCount_ = 1;
-
-    rtvCpu_ = {};
-    dsvCpu_ = {};
-} // end of destroy()

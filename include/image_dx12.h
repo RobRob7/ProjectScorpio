@@ -48,21 +48,16 @@ public:
         uint32_t sampleCount = 1
     );
 
+    void createSampledDepthImage(
+        uint32_t width,
+        uint32_t height
+    );
+
     void createRTV(
         D3D12_RTV_DIMENSION dimension = D3D12_RTV_DIMENSION_TEXTURE2D
     );
 
     void createDSV(
-        D3D12_DSV_DIMENSION dimension = D3D12_DSV_DIMENSION_TEXTURE2D
-    );
-
-    void createRTV(
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
-        D3D12_RTV_DIMENSION dimension = D3D12_RTV_DIMENSION_TEXTURE2D
-    );
-
-    void createDSV(
-        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
         D3D12_DSV_DIMENSION dimension = D3D12_DSV_DIMENSION_TEXTURE2D
     );
 
@@ -156,6 +151,8 @@ public:
     D3D12_RESOURCE_STATES& state() { return state_; }
 
     DXGI_FORMAT format() const { return format_; }
+    DXGI_FORMAT srvFormat() const { return srvFormat_; }
+    DXGI_FORMAT dsvFormat() const { return dsvFormat_; }
 
     uint32_t width() const { return width_; }
     uint32_t height() const { return height_; }
@@ -167,12 +164,24 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE dsvCPU() const { return dsvCpu_; }
 
 private:
+    void createRTV(
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+        D3D12_RTV_DIMENSION dimension = D3D12_RTV_DIMENSION_TEXTURE2D
+    );
+
+    void createDSV(
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+        D3D12_DSV_DIMENSION dimension = D3D12_DSV_DIMENSION_TEXTURE2D
+    );
+private:
     DX12Main* dx_{ nullptr };
 
     ComPtr<ID3D12Resource> image_;
 
     D3D12_RESOURCE_STATES state_{ D3D12_RESOURCE_STATE_COMMON };
     DXGI_FORMAT format_{ DXGI_FORMAT_UNKNOWN };
+    DXGI_FORMAT dsvFormat_{ DXGI_FORMAT_UNKNOWN };
+    DXGI_FORMAT srvFormat_{ DXGI_FORMAT_UNKNOWN };
 
     uint32_t width_{ 0 };
     uint32_t height_{ 0 };

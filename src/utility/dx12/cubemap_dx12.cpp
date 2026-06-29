@@ -89,6 +89,8 @@ void CubemapDX12::render(
 
 	ID3D12GraphicsCommandList* cmd = frameDX12->cmd;
 
+	cmd->SetName({ L"CubemapVk-Default::cmd" });
+
 	glm::mat4 viewStrippedTranslation = glm::mat4(glm::mat3(view));
 
 	if (time > 0.0f)

@@ -29,26 +29,6 @@ struct FrameContextDX12
     ID3D12Resource* depthImage{ nullptr };
     D3D12_CPU_DESCRIPTOR_HANDLE depthDSV{};
     D3D12_RESOURCE_STATES* depthState{ nullptr };
-
-    void transitionColorImageToAttachment(ID3D12GraphicsCommandList* cmd)
-    {
-        DX12Utils::TransitionResource(
-            cmd,
-            colorImage,
-            *colorState,
-            D3D12_RESOURCE_STATE_RENDER_TARGET
-        );
-    } // end of transitionColorImageToAttachment()
-
-    void transitionColorImageToPresent(ID3D12GraphicsCommandList* cmd)
-    {
-        DX12Utils::TransitionResource(
-            cmd,
-            colorImage,
-            *colorState,
-            D3D12_RESOURCE_STATE_PRESENT
-        );
-    } // end of transitionColorImageToPresent()
 };
 
 #endif

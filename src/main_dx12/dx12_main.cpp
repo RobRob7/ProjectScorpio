@@ -702,6 +702,11 @@ void DX12Main::createRenderTargetViews()
             "DX12Main::createRenderTargetViews - failed to get swapchain back buffer"
         );
 
+        setDebugName(
+            swapChainBuffers_[i].Get(),
+            (L"Swapchain Backbuffer " + std::to_wstring(i)).c_str()
+        );
+
         device_->CreateRenderTargetView(
             swapChainBuffers_[i].Get(),
             nullptr,

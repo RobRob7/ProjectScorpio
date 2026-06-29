@@ -114,14 +114,7 @@ void RendererVk::init()
 	}
 	if (!debugPass_)
 	{
-		debugPass_ = std::make_unique<DebugPassVk>(
-			vk_
-			//gbufferPass_->getNormalImage(),
-			//gbufferPass_->getDepthImage(),
-			//shadowMapPass_->getDepthImage(),
-			//shadowMapPass_->getDepthImage()
-			////rtWorldPass_->getOutDepthImage()
-		);
+		debugPass_ = std::make_unique<DebugPassVk>(vk_);
 	}
 	if (!ssaoPass_)
 	{
@@ -263,7 +256,7 @@ void RendererVk::renderFrame(
 		in.world->buildWaterDrawList(view, proj);
 	}
 
-	// ----------------- PASSES ----------------- //
+	// ----------------- PRE-PASSES ----------------- //
 	// gbuffer pass
 	if (gbufferPass_)
 	{
@@ -418,7 +411,7 @@ void RendererVk::renderFrame(
 		vk_.setSwapChainLayout(frame.imageIndex, vk::ImageLayout::ePresentSrcKHR);
 		return;
 	}
-	// --------------- END PASSES --------------- //
+	// --------------- END PRE-PASSES --------------- //
 
 
 	// ----------------- FORWARD RENDER ----------------- //

@@ -133,7 +133,7 @@ void ChunkPassDX12::renderOpaque(
 		const uint32_t width = frame.width;
 		const uint32_t height = frame.height;
 
-		//cmd.beginDebugUtilsLabelEXT({ "ChunkPassDX12-Default::cmd" });
+		cmd->SetName({ L"ChunkPassDX12-Default::cmd" });
 
 		DescriptorSetDX12& set = opaqueDescriptorSets_[frame.frameIndex];
 
@@ -152,9 +152,7 @@ void ChunkPassDX12::renderOpaque(
 		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
 
 		chunkUBOData_.u_lightDir = in.light->getDirection();
-		//chunkUBOData_.u_lightDir = in.light->getDirection();
 		chunkUBOData_.u_lightColor = in.light->getLightColor();
-		//chunkUBOData_.u_lightColor = glm::vec3(1.0f);
 
 		opaqueUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_));
 

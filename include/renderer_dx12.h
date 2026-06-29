@@ -20,9 +20,9 @@ struct ChunkDrawList;
 //class RTShadowPassVk;
 //class RayTracingWorldPassVk;
 //
-//class GBufferPassVk;
+class GBufferPassDX12;
 //class ShadowMapPassVk;
-//class DebugPassVk;
+class DebugPassDX12;
 //class SSAOPassVk;
 //
 class ChunkPassDX12;
@@ -33,7 +33,7 @@ class ChunkPassDX12;
 //
 //class FXAAPassVk;
 //class FogPassVk;
-//class GodRayPassVk;
+class GodRayPassDX12;
 class PresentPassDX12;
 
 class UI;
@@ -72,9 +72,9 @@ private:
 
 	std::unique_ptr<RenderSettings> rs_;
 
-	//std::unique_ptr<GBufferPassVk> gbufferPass_;
+	std::unique_ptr<GBufferPassDX12> gbufferPass_;
 	//std::unique_ptr<ShadowMapPassVk> shadowMapPass_;
-	//std::unique_ptr<DebugPassVk> debugPass_;
+	std::unique_ptr<DebugPassDX12> debugPass_;
 	//std::unique_ptr<SSAOPassVk> ssaoPass_;
 
 	//std::unique_ptr<WaterPassVk> waterPass_;
@@ -89,7 +89,7 @@ private:
 	//std::unique_ptr<PostCompositePassVk> compositePassPost_;
 
 	//std::unique_ptr<FogPassVk> fogPass_;
-	//std::unique_ptr<GodRayPassVk> godRayPass_;
+	std::unique_ptr<GodRayPassDX12> godRayPass_;
 	//std::unique_ptr<FXAAPassVk> fxaaPass_;
 
 	std::unique_ptr<PresentPassDX12> presentPass_;

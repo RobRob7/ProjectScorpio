@@ -127,12 +127,33 @@ void DescriptorSetDX12::createLayout(
 		.RegisterSpace = 0,
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	};
+	D3D12_STATIC_SAMPLER_DESC staticSampler1{
+		.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+		.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+		.MipLODBias = 0.0f,
+		.MaxAnisotropy = 1,
+		.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
+		.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+		.MinLOD = 0.0f,
+		.MaxLOD = D3D12_FLOAT32_MAX,
+		.ShaderRegister = 1, // register(s1)
+		.RegisterSpace = 0,
+		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
+	};
+
+	D3D12_STATIC_SAMPLER_DESC staticSamplers[] =
+	{
+		staticSampler,
+		staticSampler1
+	};
 	
 	D3D12_ROOT_SIGNATURE_DESC rootDesc{
 		.NumParameters = static_cast<UINT>(rootParams.size()),
 		.pParameters = rootParams.data(),
-		.NumStaticSamplers = 1,
-		.pStaticSamplers = &staticSampler,
+		.NumStaticSamplers = _countof(staticSamplers),
+		.pStaticSamplers = staticSamplers,
 		.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT
 	};
 
@@ -336,7 +357,7 @@ void DescriptorSetDX12::writeTextureSRV(
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
 	desc.Format = viewFormat == DXGI_FORMAT_UNKNOWN
-		? image.format()
+		? image.srvFormat()
 		: viewFormat;
 
 	desc.ViewDimension = dimension;
