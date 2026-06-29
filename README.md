@@ -1,5 +1,5 @@
 # Project Scorpio
-C++20 voxel rendering engine built for Windows featuring a multi-backend architecture supporting Vulkan 1.4, OpenGL 4.6 Core, and an in-progress DirectX 12 backend. Vulkan and OpenGL shaders are written in GLSL, while DirectX 12 shaders are written in HLSL. Uses custom graphics and compute pipeline abstractions across Vulkan and DirectX 12, with Vulkan ray-tracing support and ongoing DX12 backend integration.
+C++20 voxel rendering engine built for Windows featuring a multi-backend architecture supporting Vulkan 1.4, OpenGL 4.6 Core, and an in-progress DirectX 12 backend. Vulkan and OpenGL shaders are written in GLSL, while DirectX 12 shaders are written in HLSL. Uses custom graphics and compute pipeline abstractions across Vulkan and DirectX 12, with Vulkan ray-tracing support and ongoing DirectX 12 backend integration.
 
 ![Volumetric Fog](./milestones/demo/volumetric_fog.gif)
 
