@@ -41,7 +41,7 @@ ComputeShaderDX12::ComputeShaderDX12(std::string_view computePathFile)
 {
 	const auto computeFullPath = std::filesystem::path(RESOURCES_PATH) / "shader" / computePathFile;
 
-	computeCode_ = ReadFile(computePathFile);
+	computeCode_ = ReadFile(computeFullPath);
 } // end of constructor
 
 ComputeShaderDX12::~ComputeShaderDX12() noexcept = default;

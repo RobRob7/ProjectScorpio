@@ -33,7 +33,7 @@
 //#include "hybrid_composite_pass_vk.h"
 //#include "post_composite_pass_vk.h"
 //#include "fxaa_pass_vk.h"
-//#include "fog_pass_vk.h"
+#include "fog_pass_dx12.h"
 #include "god_ray_pass_dx12.h"
 #include "present_pass_dx12.h"
 
@@ -140,10 +140,10 @@ void RendererDX12::init()
 	//	compositePassPost_ = std::make_unique<PostCompositePassVk>(vk_);
 	//}
 
-	//if (!fogPass_)
-	//{
-	//	fogPass_ = std::make_unique<FogPassVk>(vk_, *rs_);
-	//}
+	if (!fogPass_)
+	{
+		fogPass_ = std::make_unique<FogPassDX12>(*dx_, *rs_);
+	}
 	if (!godRayPass_)
 	{
 		godRayPass_ = std::make_unique<GodRayPassDX12>(*dx_, *rs_);
@@ -175,7 +175,7 @@ void RendererDX12::init()
 	//compositePassHybrid_->init();
 	//compositePassPost_->init();
 
-	//fogPass_->init();
+	fogPass_->init();
 	//godRayPass_->init();
 	//fxaaPass_->init();
 	presentPass_->init();
@@ -203,7 +203,7 @@ void RendererDX12::resize(int w, int h)
 	//if (compositePassHybrid_)	compositePassHybrid_->resize();
 	//if (compositePassPost_)	compositePassPost_->resize();
 
-	//if (fogPass_)		fogPass_->resize();
+	if (fogPass_)		fogPass_->resize();
 	//if (godRayPass_)	godRayPass_->resize();
 	//if (fxaaPass_)		fxaaPass_->resize();
 
@@ -413,6 +413,30 @@ void RendererDX12::renderFrame(
 	//	sceneColor = &sceneColor_;
 	//	sceneDepth = &sceneDepth_;
 	//}
+	
+	// FOG
+	if (rs_->useFog)
+	{
+		fogPass_->setInput(*sceneDepth);
+
+		FogPassUBOs ubos
+		{
+			.ubo = {
+				.u_invViewProj = glm::inverse(proj * view),
+				.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f),
+				.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f),
+				.u_maxDistance = rs_->fogSettings.maxDistance,
+				.u_stepSize = rs_->fogSettings.stepSize,
+				.u_scatteringDensity = rs_->fogSettings.scatteringDensity,
+				.u_absorptionDensity = rs_->fogSettings.absorptionDensity
+			}
+		};
+		fogPass_->render(ubos, frame);
+	}
+	else
+	{
+		fogPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 1 });
+	}
 	// --------------- END POST-PROCESSING --------------- //
 
 

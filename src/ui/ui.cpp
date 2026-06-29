@@ -626,36 +626,35 @@ void UI::drawMenuBar(IScene& scene)
 				}
 			}
 
-			if (!dx_)
+
+			if (!enabledRT)
 			{
-				if (!enabledRT)
-				{
-					if (ImGui::Checkbox("Shadows##graphics", &renderSettings_.useShadowMap))
-					{
-					}
-					if (ImGui::Checkbox("SSAO##graphics", &renderSettings_.useSSAO))
-					{
-					}
-				}
-				if (enabledRT)
-				{
-					if (ImGui::Checkbox("RT Shadows##graphics", &renderSettings_.useRTShadow))
-					{
-					}
-					if (ImGui::Checkbox("RTAO##graphics", &renderSettings_.useRTAO))
-					{
-					}
-				}
-				if (ImGui::Checkbox("FXAA##graphics", &renderSettings_.useFXAA))
+				if (ImGui::Checkbox("Shadows##graphics", &renderSettings_.useShadowMap))
 				{
 				}
-				if (ImGui::Checkbox("Volumetric Fog##graphics", &renderSettings_.useFog))
-				{
-				}
-				if (ImGui::Checkbox("God Rays##graphics", &renderSettings_.useGodRays))
+				if (ImGui::Checkbox("SSAO##graphics", &renderSettings_.useSSAO))
 				{
 				}
 			}
+			if (enabledRT)
+			{
+				if (ImGui::Checkbox("RT Shadows##graphics", &renderSettings_.useRTShadow))
+				{
+				}
+				if (ImGui::Checkbox("RTAO##graphics", &renderSettings_.useRTAO))
+				{
+				}
+			}
+			if (ImGui::Checkbox("FXAA##graphics", &renderSettings_.useFXAA))
+			{
+			}
+			if (ImGui::Checkbox("Volumetric Fog##graphics", &renderSettings_.useFog))
+			{
+			}
+			if (ImGui::Checkbox("God Rays##graphics", &renderSettings_.useGodRays))
+			{
+			}
+
 			ImGui::EndMenu();
 		}
 
@@ -663,7 +662,7 @@ void UI::drawMenuBar(IScene& scene)
 		if (ImGui::BeginMenu("Renderer"))
 		{
 			// Pass Resolution Scale
-			if (vk_ && ImGui::BeginMenu("Res Scale"))
+			if (ImGui::BeginMenu("Res Scale"))
 			{
 				constexpr float LABEL_WIDTH = 200.0f;
 

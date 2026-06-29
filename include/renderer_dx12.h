@@ -32,7 +32,7 @@ class ChunkPassDX12;
 //class PostCompositePassVk;
 //
 //class FXAAPassVk;
-//class FogPassVk;
+class FogPassDX12;
 class GodRayPassDX12;
 class PresentPassDX12;
 
@@ -88,7 +88,7 @@ private:
 	//std::unique_ptr<HybridCompositePassVk> compositePassHybrid_;
 	//std::unique_ptr<PostCompositePassVk> compositePassPost_;
 
-	//std::unique_ptr<FogPassVk> fogPass_;
+	std::unique_ptr<FogPassDX12> fogPass_;
 	std::unique_ptr<GodRayPassDX12> godRayPass_;
 	//std::unique_ptr<FXAAPassVk> fxaaPass_;
 

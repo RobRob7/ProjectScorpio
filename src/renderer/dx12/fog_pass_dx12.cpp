@@ -1,4 +1,4 @@
-#include "god_ray_pass_dx12.h"
+#include "fog_pass_dx12.h"
 
 #include "render_settings.h"
 
@@ -13,16 +13,16 @@
 #include <algorithm>
 
 //--- PUBLIC ---//
-GodRayPassDX12::GodRayPassDX12(
-	DX12Main& dx,
+FogPassDX12::FogPassDX12(
+	DX12Main& dx, 
 	const RenderSettings& rs
 )
 	: dx_(&dx),
 	rs_(rs),
 	outputImage_(dx),
-	computePipeline_(dx)
+	pipeline_(dx)
 {
-	factor_ = std::max(1u, rs_.resScale.GOD_RAYS);
+	factor_ = std::max(1u, rs_.resScale.FOG);
 
 	const uint32_t frames = dx.getMaxFramesInFlight();
 
@@ -35,20 +35,19 @@ GodRayPassDX12::GodRayPassDX12(
 	} // end for
 } // end of constuctor
 
-GodRayPassDX12::~GodRayPassDX12() = default;
+FogPassDX12::~FogPassDX12() = default;
 
-void GodRayPassDX12::init()
+void FogPassDX12::init()
 {
 	Extent2D extent = dx_->getSwapChainExtent();
-
 	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
 	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
 
 	workGroupX_ = (width_ + numWorkGroups_ - 1) / numWorkGroups_;
 	workGroupY_ = (height_ + numWorkGroups_ - 1) / numWorkGroups_;
 
-	compShader_ = std::make_unique<ComputeShaderDX12>(
-		"hlsl/godraypass/godray.comp.cso"
+	shader_ = std::make_unique<ComputeShaderDX12>(
+		"hlsl/fogpass/fog.comp.cso"
 	);
 
 	createAttachment();
@@ -57,7 +56,7 @@ void GodRayPassDX12::init()
 	createPipeline();
 } // end of init()
 
-void GodRayPassDX12::resize()
+void FogPassDX12::resize()
 {
 	Extent2D extent = dx_->getSwapChainExtent();
 	if (extent.width <= 0 || extent.height <= 0) return;
@@ -82,17 +81,16 @@ void GodRayPassDX12::resize()
 	updateDescriptorSet(dx_->currentFrameIndex());
 } // end of resize()
 
-void GodRayPassDX12::render(
-	const GodRayUBOs& ubos, 
+void FogPassDX12::render(
+	const FogPassUBOs& ubos, 
 	const FrameContextDX12& frame
 )
 {
 	syncSettings();
 
-	if (!inputShadowMapImage_ ||
-		!inputDepthImage_ ||
+	if (!inputDepthImage_ ||
 		!outputImage_.valid() ||
-		!computePipeline_.valid())
+		!pipeline_.valid())
 	{
 		return;
 	}
@@ -100,6 +98,8 @@ void GodRayPassDX12::render(
 	updateDescriptorSet(frame.frameIndex);
 	
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
+
+	cmd->SetName({ L"FogPassDX12::cmd" });
 
 	outputImage_.transitionToUnorderedAccess(cmd);
 
@@ -114,7 +114,7 @@ void GodRayPassDX12::render(
 	cmd->SetDescriptorHeaps(1, &heaps);
 
 	cmd->SetComputeRootSignature(set.getRootSignature());
-	cmd->SetPipelineState(computePipeline_.getPipeline());
+	cmd->SetPipelineState(pipeline_.getPipeline());
 
 	cmd->SetComputeRootDescriptorTable(
 		set.getDescriptorTableRootIndex(),
@@ -122,19 +122,19 @@ void GodRayPassDX12::render(
 	);
 
 	cmd->Dispatch(
-		workGroupX_,
-		workGroupY_,
+		workGroupX_, 
+		workGroupY_, 
 		1
 	);
 
-	outputImage_.transitionToShaderRead(cmd, false);
+	outputImage_.transitionToShaderRead(cmd);
 } // end of render()
 
 
 //--- PRIVATE ---//
-void GodRayPassDX12::syncSettings()
+void FogPassDX12::syncSettings()
 {
-	uint32_t newFactor = std::max(1u, rs_.resScale.GOD_RAYS);
+	uint32_t newFactor = std::max(1u, rs_.resScale.FOG);
 
 	if (newFactor == factor_)
 		return;
@@ -143,7 +143,7 @@ void GodRayPassDX12::syncSettings()
 	resize();
 } // end of syncSettings()
 
-void GodRayPassDX12::updateDescriptorSet(uint32_t frameIndex)
+void FogPassDX12::updateDescriptorSet(uint32_t frameIndex)
 {
 	DescriptorSetDX12& set = descriptorSets_[frameIndex];
 	if (!set.valid())
@@ -154,7 +154,7 @@ void GodRayPassDX12::updateDescriptorSet(uint32_t frameIndex)
 	if (outputImage_.valid())
 	{
 		set.writeStorageImageUAV(
-			TO_API_FORM(GodRayPassBinding::OutColorTex),
+			TO_API_FORM(FogPassBinding::OutColorTex),
 			outputImage_
 		);
 	}
@@ -162,108 +162,93 @@ void GodRayPassDX12::updateDescriptorSet(uint32_t frameIndex)
 	if (inputDepthImage_ && inputDepthImage_->valid())
 	{
 		set.writeTextureSRV(
-			TO_API_FORM(GodRayPassBinding::ForwardDepthTex),
+			TO_API_FORM(FogPassBinding::ForwardDepthTex),
 			*inputDepthImage_
-		);
-	}
-
-	if (inputShadowMapImage_ && inputShadowMapImage_->valid())
-	{
-		set.writeTextureSRV(
-			TO_API_FORM(GodRayPassBinding::ShadowMapTex),
-			*inputShadowMapImage_
 		);
 	}
 } // end of updateDescriptorSet()
 
-void GodRayPassDX12::createAttachment()
+void FogPassDX12::createAttachment()
 {
 	outputImage_.createImage(
-		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_),
+		width_,
+		height_,
 		1,
 		false,
 		outputFormat_,
 		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 	);
-	outputImage_.setDebugName(L"GodRayPassDX12-OutputImage");
+	outputImage_.setDebugName(L"FogPassDX12-OutputImage");
 } // end of createAttachment()
 
-void GodRayPassDX12::createResources()
+void FogPassDX12::createResources()
 {
 	for (auto& buffer : uboBuffers_)
 	{
 		buffer.create(
-			sizeof(God_Ray_Constants::GodRayPassUBO),
-			D3D12_HEAP_TYPE_UPLOAD,
-			D3D12_RESOURCE_STATE_GENERIC_READ,
-			D3D12_RESOURCE_FLAG_NONE,
+			sizeof(Fog_Constants::FogPassUBO),
+				D3D12_HEAP_TYPE_UPLOAD,
+				D3D12_RESOURCE_STATE_GENERIC_READ,
+				D3D12_RESOURCE_FLAG_NONE,
 			true
 		);
 	} // end for
 } // end of createResources()
 
-void GodRayPassDX12::createDescriptorSet()
+void FogPassDX12::createDescriptorSet()
 {
 	const uint32_t frames = dx_->getMaxFramesInFlight();
 
 	for (uint32_t i = 0; i < frames; ++i)
 	{
 		DescriptorBindingDX12 uboBinding{
-			.binding = TO_API_FORM(GodRayPassBinding::UBO),
+			.binding = TO_API_FORM(FogPassBinding::UBO),
 			.type = DescriptorTypeDX12::UniformBuffer,
 			.count = 1,
 			.visibility = D3D12_SHADER_VISIBILITY_ALL
 		};
 		DescriptorBindingDX12 inputDepthBinding{
-			.binding = TO_API_FORM(GodRayPassBinding::ForwardDepthTex),
-			.type = DescriptorTypeDX12::TextureSRV,
-			.count = 1,
-			.visibility = D3D12_SHADER_VISIBILITY_ALL
-		};
-		DescriptorBindingDX12 inputShadowBinding{
-			.binding = TO_API_FORM(GodRayPassBinding::ShadowMapTex),
+			.binding = TO_API_FORM(FogPassBinding::ForwardDepthTex),
 			.type = DescriptorTypeDX12::TextureSRV,
 			.count = 1,
 			.visibility = D3D12_SHADER_VISIBILITY_ALL
 		};
 		DescriptorBindingDX12 outputColorBinding{
-			.binding = TO_API_FORM(GodRayPassBinding::OutColorTex),
+			.binding = TO_API_FORM(FogPassBinding::OutColorTex),
 			.type = DescriptorTypeDX12::StorageImageUAV,
 			.count = 1,
 			.visibility = D3D12_SHADER_VISIBILITY_ALL
 		};
 
 		descriptorSets_[i].createLayout({
-			uboBinding, 
+			uboBinding,
 			inputDepthBinding,
-			inputShadowBinding,
 			outputColorBinding
 			});
-		descriptorSets_[i].createPool(4);
+		descriptorSets_[i].createPool(3);
 		descriptorSets_[i].allocate();
 
 		descriptorSets_[i].writeUniformBuffer(
-			TO_API_FORM(GodRayPassBinding::UBO),
+			TO_API_FORM(FogPassBinding::UBO),
 			uboBuffers_[i],
-			sizeof(God_Ray_Constants::GodRayPassUBO)
+			sizeof(Fog_Constants::FogPassUBO)
 		);
 
 		descriptorSets_[i].setDebugName(
-			L"GodRayPassDX12::DescriptorSet frame " + std::to_wstring(i)
+			L"FogPassDX12::DescriptorSet frame " + std::to_wstring(i)
 		);
 	} // end for
 } // end of createDescriptorSet()
 
-void GodRayPassDX12::createPipeline()
+void FogPassDX12::createPipeline()
 {
 	ComputePipelineDescDX12 compDesc{
-		.computeShader = compShader_->computeShader(),
+		.computeShader = shader_->computeShader(),
 
 		.rootSignature = descriptorSets_[0].getRootSignature()
 	};
 
-	computePipeline_.create(compDesc);
-	computePipeline_.setDebugName(L"GodRayPassDX12::Pipeline");
+	pipeline_.create(compDesc);
+	pipeline_.setDebugName(L"FogPassDX12::Pipeline");
 } // end of createPipeline()

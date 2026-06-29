@@ -40,9 +40,9 @@ GLSLC_STAGE_MAP = {
 }
 
 HLSL_STAGE_MAP = {
-    ".vert.hlsl": ("vs_6_0", "VSMain"),
-    ".frag.hlsl": ("ps_6_0", "PSMain"),
-    ".comp.hlsl": ("cs_6_0", "CSMain"),
+    ".vert.hlsl": ("vs_6_8", "VSMain"),
+    ".frag.hlsl": ("ps_6_8", "PSMain"),
+    ".comp.hlsl": ("cs_6_8", "CSMain"),
 }
 
 
