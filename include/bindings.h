@@ -170,6 +170,7 @@ enum class PostCompositePassBinding : uint32_t
     FogTex = 1,
     GodRayTex = 2,
     SceneColorTex = 3,
+    PostOutColorTex = 4,
 };
 
 #endif

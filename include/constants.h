@@ -478,4 +478,9 @@ namespace Crosshair_Constants
 	};
 };
 
+namespace Post_Composite_Constants
+{
+	const uint32_t WORK_GROUPS = 16;
+};
+
 #endif

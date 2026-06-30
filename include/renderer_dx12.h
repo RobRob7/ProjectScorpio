@@ -29,7 +29,7 @@ class ChunkPassDX12;
 //class WaterPassVk;
 //
 //class HybridCompositePassVk;
-//class PostCompositePassVk;
+class PostCompositePassDX12;
 //
 //class FXAAPassVk;
 class FogPassDX12;
@@ -86,7 +86,7 @@ private:
 	//std::unique_ptr<RayTracingWorldPassVk> rtWorldPass_;
 
 	//std::unique_ptr<HybridCompositePassVk> compositePassHybrid_;
-	//std::unique_ptr<PostCompositePassVk> compositePassPost_;
+	std::unique_ptr<PostCompositePassDX12> compositePassPost_;
 
 	std::unique_ptr<FogPassDX12> fogPass_;
 	std::unique_ptr<GodRayPassDX12> godRayPass_;

@@ -31,7 +31,7 @@
 //#include "water_pass_vk.h"
 #include "chunk_pass_dx12.h"
 //#include "hybrid_composite_pass_vk.h"
-//#include "post_composite_pass_vk.h"
+#include "post_composite_pass_dx12.h"
 //#include "fxaa_pass_vk.h"
 #include "fog_pass_dx12.h"
 #include "god_ray_pass_dx12.h"
@@ -135,19 +135,19 @@ void RendererDX12::init()
 	//	compositePassHybrid_ = std::make_unique<HybridCompositePassVk>(vk_);
 	//}
 
-	//if (!compositePassPost_)
-	//{
-	//	compositePassPost_ = std::make_unique<PostCompositePassVk>(vk_);
-	//}
+	if (!compositePassPost_)
+	{
+		compositePassPost_ = std::make_unique<PostCompositePassDX12>(*dx_);
+	}
 
 	if (!fogPass_)
 	{
 		fogPass_ = std::make_unique<FogPassDX12>(*dx_, *rs_);
 	}
-	if (!godRayPass_)
-	{
-		godRayPass_ = std::make_unique<GodRayPassDX12>(*dx_, *rs_);
-	}
+	//if (!godRayPass_)
+	//{
+	//	godRayPass_ = std::make_unique<GodRayPassDX12>(*dx_, *rs_);
+	//}
 	//if (!fxaaPass_)
 	//{
 	//	fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
@@ -173,7 +173,7 @@ void RendererDX12::init()
 	);
 
 	//compositePassHybrid_->init();
-	//compositePassPost_->init();
+	compositePassPost_->init();
 
 	fogPass_->init();
 	//godRayPass_->init();
@@ -201,7 +201,7 @@ void RendererDX12::resize(int w, int h)
 	if (chunkPass_)		chunkPass_->resize();
 
 	//if (compositePassHybrid_)	compositePassHybrid_->resize();
-	//if (compositePassPost_)	compositePassPost_->resize();
+	if (compositePassPost_)	compositePassPost_->resize();
 
 	if (fogPass_)		fogPass_->resize();
 	//if (godRayPass_)	godRayPass_->resize();
@@ -234,6 +234,11 @@ void RendererDX12::renderFrame(
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
+
+	// update status (RT)
+	dx_->setRTStatus(rs_->useRT);
+	bool rtEnabled{ dx_->supportsRayTracing() && dx_->getRTStatus() };
+
 	// update light/sun
 	in.light->updateLight(
 		in.time,
@@ -243,14 +248,14 @@ void RendererDX12::renderFrame(
 
 	// update world state
 	in.world->updateDynamic(in.camera->getCameraPosition(), nullptr, &frame);
-	//if (vk_.supportsRayTracing() && rs_->useRT)
-	//{
-	//	in.world->buildRTDrawList(view, proj);
-	//}
-	//else
-	//{
-	//	in.world->buildWaterDrawList(view, proj);
-	//}
+	if (rtEnabled)
+	{
+		in.world->buildRTDrawList(view, proj);
+	}
+	else
+	{
+		in.world->buildWaterDrawList(view, proj);
+	}
 
 	// ----------------- PRE-PASSES ----------------- //
 	// gbuffer pass
@@ -306,7 +311,6 @@ void RendererDX12::renderFrame(
 	{
 		0.0f, 0.0f, 0.0f, 1.0f
 	};
-
 	cmd->ClearRenderTargetView(
 		colorRTV,
 		clearColor,
@@ -396,23 +400,25 @@ void RendererDX12::renderFrame(
 	// --------------- END DEBUG RENDER --------------- //
 
 	// scene color + depth transition to shader read
-	sceneColor_.transitionToShaderRead(cmd);
-	sceneDepth_.transitionToDepthWrite(cmd);
+	sceneColor_.transitionToShaderRead(cmd, false);
+	sceneDepth_.transitionToShaderRead(cmd, false);
 
 	// ----------------- POST-PROCESSING ----------------- //
 	ImageDX12* sceneColor = nullptr;
 	ImageDX12* sceneDepth = nullptr;
-	ImageDX12* currentColor = &sceneColor_;
-	//if (vk_.supportsRayTracing() && rs_->useRT)
-	//{
-	//	sceneColor = &compositePassHybrid_->getOutColorImage();
-	//	sceneDepth = &compositePassHybrid_->getOutDepthImage();
-	//}
-	//else
-	//{
-	//	sceneColor = &sceneColor_;
-	//	sceneDepth = &sceneDepth_;
-	//}
+	ImageDX12* currentColor = nullptr;
+	if (rtEnabled)
+	{
+		//sceneColor = &compositePassHybrid_->getOutColorImage();
+		//sceneDepth = &compositePassHybrid_->getOutDepthImage();
+	}
+	else
+	{
+		sceneColor = &sceneColor_;
+		sceneDepth = &sceneDepth_;
+	}
+
+	currentColor = sceneColor;
 	
 	// FOG
 	if (rs_->useFog)
@@ -437,6 +443,52 @@ void RendererDX12::renderFrame(
 	{
 		fogPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 1 });
 	}
+
+	// GOD RAYS
+	if (rs_->useGodRays)
+	{
+		//godRayPass_->setInput(
+		//	*sceneDepth,
+		//	shadowMapPass_->getDepthImage()
+		//);
+
+		//GodRayUBOs ubos
+		//{
+		//	.ubo = {
+		//		.u_invViewProj = glm::inverse(proj * view),
+		//		.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix(),
+		//		.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f),
+		//		.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f),
+		//		.u_lightDir = in.light->getDirection(),
+		//		.u_maxDistance = rs_->godRaySettings.maxDistance,
+		//		.u_stepSize = rs_->godRaySettings.stepSize,
+		//	}
+		//};
+		//godRayPass_->render(ubos, frame);
+	}
+	else
+	{
+		//godRayPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 0 });
+	}
+
+	// POST COMPOSITE
+	compositePassPost_->setInput(
+		fogPass_->getOutputImage(),
+		fogPass_->getOutputImage(),
+		*currentColor
+	);
+	compositePassPost_->render(frame);
+	currentColor = &compositePassPost_->getOutColorImage();
+
+
+	//// FXAA
+	//if (rs_->useFXAA)
+	//{
+	//	fxaaPass_->setInput(*currentColor);
+	//	fxaaPass_->render(frame);
+
+	//	currentColor = &fxaaPass_->getOutputImage();
+	//}
 	// --------------- END POST-PROCESSING --------------- //
 
 
@@ -488,25 +540,9 @@ void RendererDX12::createSceneAttachments()
 	sceneColor_.setDebugName(L"RendererDX12-SceneColor");
 
 	// SCENE DEPTH
-	D3D12_CLEAR_VALUE depthClear{
-		.Format = sceneDepthFormat_,
-		.DepthStencil = 
-		{
-			.Depth = 1.0f,
-			.Stencil = 0
-		}
-	};
-
-	sceneDepth_.createImage(
+	sceneDepth_.createSampledDepthImage(
 		static_cast<uint32_t>(width_),
-		static_cast<uint32_t>(height_),
-		1,
-		false,
-		sceneDepthFormat_,
-		D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL,
-		D3D12_RESOURCE_STATE_DEPTH_WRITE,
-		&depthClear
+		static_cast<uint32_t>(height_)
 	);
-	sceneDepth_.createDSV();
 	sceneDepth_.setDebugName(L"RendererDX12-SceneDepth");
 } // end of createSceneAttachments()

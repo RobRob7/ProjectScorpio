@@ -127,7 +127,7 @@ void FogPassDX12::render(
 		1
 	);
 
-	outputImage_.transitionToShaderRead(cmd);
+	outputImage_.transitionToShaderRead(cmd, false);
 } // end of render()
 
 
@@ -176,9 +176,11 @@ void FogPassDX12::createAttachment()
 		1,
 		false,
 		outputFormat_,
-		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS |
+			D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
 		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
 	);
+	outputImage_.createRTV();
 	outputImage_.setDebugName(L"FogPassDX12-OutputImage");
 } // end of createAttachment()
 
@@ -188,9 +190,9 @@ void FogPassDX12::createResources()
 	{
 		buffer.create(
 			sizeof(Fog_Constants::FogPassUBO),
-				D3D12_HEAP_TYPE_UPLOAD,
-				D3D12_RESOURCE_STATE_GENERIC_READ,
-				D3D12_RESOURCE_FLAG_NONE,
+			D3D12_HEAP_TYPE_UPLOAD,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			D3D12_RESOURCE_FLAG_NONE,
 			true
 		);
 	} // end for

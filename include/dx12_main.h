@@ -124,6 +124,8 @@ public:
     void setVSync(bool enabled) { vsyncEnabled_ = enabled; }
 
     bool supportsRayTracing() const { return supportsRayTracing_; }
+    bool getRTStatus() const { return rtEnabled_; }
+    void setRTStatus(bool enable) { rtEnabled_ = enable; }
 
     void retireBuffer(uint32_t frameIndex, BufferDX12&& buffer)
     {
@@ -180,6 +182,8 @@ private:
     bool vsyncEnabled_{ true };
     bool tearingSupported_{ false };
     bool supportsRayTracing_{ false };
+
+    bool rtEnabled_{ false };
 
     uint32_t currentFrame_{ 0 };
     uint32_t currentBackBufferIndex_{ 0 };

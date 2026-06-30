@@ -5,7 +5,7 @@ cbuffer UBO : register(b0)
     float4x4 u_invViewProj;
 
     float4 u_cameraPos;
-    float4 u_fogColor;
+    float4 u_sunColor;
 
     float u_maxDistance;
     float u_stepSize;
@@ -55,7 +55,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     {
         float3 marchPos = u_cameraPos.xyz + rayDir * t;
 
-        float3 ambientFog = u_fogColor.rgb
+        float3 ambientFog = u_sunColor.rgb
                         * ambientFogStrength
                         * u_scatteringDensity;
 
