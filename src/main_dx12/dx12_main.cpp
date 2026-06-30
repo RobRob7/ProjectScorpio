@@ -91,6 +91,33 @@ void DX12Main::dumpDebugMessages(const char* context)
     infoQueue_->ClearStoredMessages();
 } // end of dumpDebugMessages()
 
+void DX12Main::beginGPUEvent(
+    ID3D12GraphicsCommandList* cmd,
+    const wchar_t* name
+)
+{
+    if (!cmd || !name)
+    {
+        return;
+    }
+
+    cmd->BeginEvent(
+        0,
+        name,
+        static_cast<UINT>((wcslen(name) + 1) * sizeof(wchar_t))
+    );
+} // end of beginGPUEvent()
+
+void DX12Main::endGPUEvent(ID3D12GraphicsCommandList* cmd)
+{
+    if (!cmd)
+    {
+        return;
+    }
+
+    cmd->EndEvent();
+} // end of endGPUEvent()
+
 void DX12Main::setDebugName(ID3D12Object* object, const wchar_t* name) const
 {
     if (object)
@@ -143,6 +170,7 @@ void DX12Main::waitIdle()
     const uint64_t fenceValue = nextFenceValue_;
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         graphicsQueue_->Signal(frameFence_.Get(), fenceValue),
         "DX12Main::waitIdle - failed to signal waitIdle fence"
     );
@@ -150,6 +178,7 @@ void DX12Main::waitIdle()
     if (frameFence_->GetCompletedValue() < fenceValue)
     {
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             frameFence_->SetEventOnCompletion(fenceValue, frameFenceEvent_),
             "DX12Main::waitIdle - failed to set waitIdle fence event"
         );
@@ -171,6 +200,7 @@ bool DX12Main::beginFrame(FrameContextDX12& out)
     if (fenceValue != 0 && frameFence_->GetCompletedValue() < fenceValue)
     {
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             frameFence_->SetEventOnCompletion(fenceValue, frameFenceEvent_),
             "DX12Main::beginFrame - failed to set fence event"
         );
@@ -184,11 +214,13 @@ bool DX12Main::beginFrame(FrameContextDX12& out)
     currentBackBufferIndex_ = swapChain_->GetCurrentBackBufferIndex();
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         commandAllocators_[currentFrame_]->Reset(),
         "DX12Main::beginFrame - failed to reset command allocator"
     );
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         commandList_->Reset(commandAllocators_[currentFrame_].Get(), nullptr),
         "DX12Main::beginFrame - failed to reset command list"
     );
@@ -236,6 +268,7 @@ bool DX12Main::endFrame(const FrameContextDX12& frame)
     }
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         commandList_->Close(),
         "DX12Main::endFrame - failed to close command list"
     );
@@ -271,6 +304,7 @@ bool DX12Main::endFrame(const FrameContextDX12& frame)
     const uint64_t fenceValue = nextFenceValue_++;
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         graphicsQueue_->Signal(frameFence_.Get(), fenceValue),
         "DX12Main::endFrame - failed to signal frame fence"
     );
@@ -289,6 +323,7 @@ void DX12Main::submitUpload(
 )
 {
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         cmd->Close(),
         "DX12Main::submitUpload - failed to close upload command list"
     );
@@ -303,6 +338,7 @@ void DX12Main::submitUpload(
     const uint64_t fenceValue = nextFenceValue_++;
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         graphicsQueue_->Signal(frameFence_.Get(), fenceValue),
         "DX12Main::submitUpload - failed to signal upload fence"
     );
@@ -464,6 +500,7 @@ void DX12Main::createFactory()
 #endif
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         CreateDXGIFactory2(flags, IID_PPV_ARGS(&factory_)),
         "DX12Main::createFactory - failed to create DXGI factory"
     );
@@ -496,6 +533,7 @@ void DX12Main::pickAdapter()
             nullptr)))
         {
             DX12Utils::ThrowIfFailed(
+                device_.Get(),
                 candidate.As(&adapter_),
                 "DX12Main::pickAdapter - failed to cast adapter to IDXGIAdapter4"
             );
@@ -510,6 +548,7 @@ void DX12Main::pickAdapter()
 void DX12Main::createDevice()
 {
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         D3D12CreateDevice(
             adapter_.Get(),
             D3D_FEATURE_LEVEL_12_2,
@@ -569,6 +608,7 @@ void DX12Main::createCommandQueue()
     };
 
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             device_->CreateCommandQueue(&desc, IID_PPV_ARGS(&graphicsQueue_)),
             "DX12Main::createCommandQueue - failed to create graphics command queue"
         );
@@ -607,6 +647,7 @@ void DX12Main::createSwapChain()
     ComPtr<IDXGISwapChain1> swapChain;
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         factory_->CreateSwapChainForHwnd(
             graphicsQueue_.Get(),
             hwnd,
@@ -619,11 +660,13 @@ void DX12Main::createSwapChain()
     );
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         factory_->MakeWindowAssociation(hwnd, DXGI_MWA_NO_ALT_ENTER),
         "DX12Main::createSwapChain - failed to disable DXGI alt+enter"
     );
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         swapChain.As(&swapChain_),
         "DX12Main::createSwapChain - failed to cast swapchain to IDXGISwapChain3"
     );
@@ -644,6 +687,7 @@ void DX12Main::createDescriptorHeaps()
         };
 
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&rtvHeap_)),
             "DX12Main::createDescriptorHeaps - failed to create RTV descriptor heap"
         );
@@ -661,6 +705,7 @@ void DX12Main::createDescriptorHeaps()
         };
 
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&dsvHeap_)),
             "DX12Main::createDescriptorHeaps - failed to create DSV descriptor heap"
         );
@@ -678,6 +723,7 @@ void DX12Main::createDescriptorHeaps()
         };
 
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             device_->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&srvUavCbvHeap_)),
             "DX12Main::createDescriptorHeaps - failed to create CBV/SRV/UAV descriptor heap"
         );
@@ -698,6 +744,7 @@ void DX12Main::createRenderTargetViews()
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             swapChain_->GetBuffer(i, IID_PPV_ARGS(&swapChainBuffers_[i])),
             "DX12Main::createRenderTargetViews - failed to get swapchain back buffer"
         );
@@ -754,6 +801,7 @@ void DX12Main::createDepthResources()
     };
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         device_->CreateCommittedResource(
             &heapProps,
             D3D12_HEAP_FLAG_NONE,
@@ -781,6 +829,7 @@ void DX12Main::createCommandAllocators()
     for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
     {
         DX12Utils::ThrowIfFailed(
+            device_.Get(),
             device_->CreateCommandAllocator(
                 D3D12_COMMAND_LIST_TYPE_DIRECT,
                 IID_PPV_ARGS(&commandAllocators_[i])
@@ -793,6 +842,7 @@ void DX12Main::createCommandAllocators()
 void DX12Main::createCommandLists()
 {
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         device_->CreateCommandList(
             0,
             D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -804,6 +854,7 @@ void DX12Main::createCommandLists()
     );
 
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         commandList_->Close(),
         "DX12Main::createCommandLists - failed to close initial command list"
     );
@@ -812,6 +863,7 @@ void DX12Main::createCommandLists()
 void DX12Main::createSyncObjects()
 {
     DX12Utils::ThrowIfFailed(
+        device_.Get(),
         device_->CreateFence(
             0,
             D3D12_FENCE_FLAG_NONE,

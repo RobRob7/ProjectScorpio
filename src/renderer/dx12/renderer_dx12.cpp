@@ -258,6 +258,8 @@ void RendererDX12::renderFrame(
 	}
 
 	// ----------------- PRE-PASSES ----------------- //
+	dx_->beginGPUEvent(cmd, L"RendererDX12-PrePass");
+	
 	// gbuffer pass
 	if (gbufferPass_)
 	{
@@ -271,11 +273,13 @@ void RendererDX12::renderFrame(
 			frame
 		);
 	}
+
+	dx_->endGPUEvent(cmd);
 	// --------------- END PRE-PASSES --------------- //
 
 
 	// --------------- FORWARD RENDER --------------- //
-	cmd->SetName({ L"RendererDX12-ForwardRaster::cmd" });
+	dx_->beginGPUEvent(cmd, L"RendererDX12-ForwardRaster");
 
 	sceneColor_.transitionToRenderTarget(cmd);
 	sceneDepth_.transitionToDepthWrite(cmd);
@@ -364,6 +368,7 @@ void RendererDX12::renderFrame(
 		);
 	}
 
+	dx_->endGPUEvent(cmd);
 	// --------------- END FORWARD RENDER --------------- //
 
 
@@ -404,6 +409,8 @@ void RendererDX12::renderFrame(
 	sceneDepth_.transitionToShaderRead(cmd, false);
 
 	// ----------------- POST-PROCESSING ----------------- //
+	dx_->beginGPUEvent(cmd, L"RendererDX12-PostProcess");
+
 	ImageDX12* sceneColor = nullptr;
 	ImageDX12* sceneDepth = nullptr;
 	ImageDX12* currentColor = nullptr;
@@ -489,6 +496,8 @@ void RendererDX12::renderFrame(
 
 	//	currentColor = &fxaaPass_->getOutputImage();
 	//}
+
+	dx_->endGPUEvent(cmd);
 	// --------------- END POST-PROCESSING --------------- //
 
 
@@ -502,6 +511,8 @@ void RendererDX12::renderFrame(
 
 
 	// ----------------- UI ELEMENTS ----------------- //
+	dx_->beginGPUEvent(cmd, L"RendererDX12-UIElements");
+	
 	// CROSSHAIR RENDER
 	if (in.crosshair)
 	{
@@ -513,6 +524,8 @@ void RendererDX12::renderFrame(
 	{
 		ui->renderDX12(frame);
 	}
+
+	dx_->endGPUEvent(cmd);
 	// --------------- END UI ELEMENTS --------------- //
 } // end of renderFrame()
 

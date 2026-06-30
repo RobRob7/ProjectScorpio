@@ -110,8 +110,28 @@ public:
         DXGI_FORMAT viewFormat = DXGI_FORMAT_UNKNOWN
     );
 
+	void writeTextureSRVAtSlot(
+		uint32_t slot,
+		const ImageDX12& image,
+		D3D12_SRV_DIMENSION dimension = D3D12_SRV_DIMENSION_TEXTURE2D,
+		DXGI_FORMAT viewFormat = DXGI_FORMAT_UNKNOWN,
+		uint32_t mostDetailedMip = 0,
+		uint32_t mipCount = UINT32_MAX
+	);
+
+	void writeStorageImageUAVAtSlot(
+		uint32_t slot,
+		const ImageDX12& image,
+		D3D12_UAV_DIMENSION dimension = D3D12_UAV_DIMENSION_TEXTURE2D,
+		DXGI_FORMAT viewFormat = DXGI_FORMAT_UNKNOWN,
+		uint32_t mipSlice = 0
+	);
+
 	D3D12_GPU_DESCRIPTOR_HANDLE getGPUHandle(uint32_t binding) const;
 	D3D12_CPU_DESCRIPTOR_HANDLE getCPUHandle(uint32_t binding) const;
+	D3D12_CPU_DESCRIPTOR_HANDLE getCPUHandleAtSlot(uint32_t slot) const;
+	D3D12_GPU_DESCRIPTOR_HANDLE getGPUHandleAtSlot(uint32_t slot) const;
+
 	D3D12_GPU_DESCRIPTOR_HANDLE getTableGPUHandle() const;
 
 	bool valid() const 

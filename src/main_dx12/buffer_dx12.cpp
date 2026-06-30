@@ -71,6 +71,7 @@ void BufferDX12::create(
 	};
 
 	DX12Utils::ThrowIfFailed(
+		dx_->getDevice(),
 		dx_->getDevice()->CreateCommittedResource(
 			&heapProps,
 			D3D12_HEAP_FLAG_NONE,
@@ -126,6 +127,7 @@ void BufferDX12::upload(
 	};
 
 	DX12Utils::ThrowIfFailed(
+		dx_->getDevice(),
 		buffer_->Map(0, &readRange, &mappedData),
 		"BufferDX12::upload - failed to map DX12 upload buffer"
 	);

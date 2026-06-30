@@ -17,7 +17,26 @@ class ImageDX12;
 
 namespace DX12Utils 
 {
-	void ThrowIfFailed(HRESULT hr, const char* message);
+	void DumpInfoQueue(ID3D12Device* device);
+
+	void ThrowIfFailed(
+		ID3D12Device* device,
+		HRESULT hr, 
+		const char* message
+	);
+
+	void ThrowIfFailed(
+		ID3D12Device* device,
+		const char* message
+	);
+
+	void TransitionSubresource(
+		ID3D12GraphicsCommandList* cmd,
+		ID3D12Resource* resource,
+		uint32_t mip,
+		D3D12_RESOURCE_STATES& oldState,
+		D3D12_RESOURCE_STATES newState
+	);
 
 	void TransitionResource(
 		ID3D12GraphicsCommandList* cmd,

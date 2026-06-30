@@ -27,9 +27,10 @@ C++20 voxel rendering engine built for Windows featuring a multi-backend archite
   - [Custom Compute Pipeline](#custom-compute-pipeline)
   - [Custom Ray Tracing Pipeline](#custom-ray-tracing-pipeline)
 - [Milestones](#milestones)
-- [Requirements](#requirements)
-- [Build](#build)
+- [Requirements + Build](#build)
 - [Run](#run)
+
+
 
 <h3 id="features">
 Features
@@ -55,6 +56,7 @@ Features
 <h3 id="controls">
 Controls
 </h3>
+
 - WASD – Move
 - Mouse – Free-look camera (when in camera mode)
 - Left Click – Break block
@@ -383,7 +385,7 @@ Milestones
 | *Scene rendered with SSAO, shadow mapping, reflection/refraction textures for water.* | *Scene rendered with RTAO, RT shadows, RT reflections.* |
 | ![](milestones/15a_Rasterization.png) | ![](milestones/15b_RT.png) |
 
-<h2 id="requirements">
+<h2 id="build">
 Requirements
 </h2>
 
@@ -394,7 +396,7 @@ Requirements
 > -- Install workloads: *Desktop development with C++*.
 > - [Download](https://cmake.org/download/) and install CMake (>= v3.31.0).
 
-<h2 id="build">
+<h2>
 Build
 </h2>
 

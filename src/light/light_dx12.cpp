@@ -69,33 +69,37 @@ void LightDX12::render(
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
-	LightUBO ubo{};
-	ubo.u_invViewProj = glm::inverse(proj * view);
-	ubo.u_viewProj = proj * view;
-	ubo.u_camPos = camPos_;
-	ubo.u_sunDistance = SUN_DISTANCE;
-	ubo.u_lightPos = glm::vec4(position_, 1.0f);
-	ubo.u_lightVisualColor = visualColor_;
-	ubo.u_sunRadius = SUN_SCALE / 2.0f;
-
-	uboBuffers_[frame.frameIndex].upload(&ubo, sizeof(LightUBO));
-
-	ID3D12DescriptorHeap* heaps[] =
+	dx_->beginGPUEvent(cmd, L"LightDX12::render");
 	{
-		descriptorSets_[frame.frameIndex].getDescriptorHeap()
-	};
+		LightUBO ubo{};
+		ubo.u_invViewProj = glm::inverse(proj * view);
+		ubo.u_viewProj = proj * view;
+		ubo.u_camPos = camPos_;
+		ubo.u_sunDistance = SUN_DISTANCE;
+		ubo.u_lightPos = glm::vec4(position_, 1.0f);
+		ubo.u_lightVisualColor = visualColor_;
+		ubo.u_sunRadius = SUN_SCALE / 2.0f;
 
-	cmd->SetDescriptorHeaps(1, heaps);
-	cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
-	cmd->SetPipelineState(pipeline_.getPipeline());
+		uboBuffers_[frame.frameIndex].upload(&ubo, sizeof(LightUBO));
 
-	cmd->SetGraphicsRootDescriptorTable(
-		0,
-		descriptorSets_[frame.frameIndex].getTableGPUHandle()
-	);
+		ID3D12DescriptorHeap* heaps[] =
+		{
+			descriptorSets_[frame.frameIndex].getDescriptorHeap()
+		};
 
-	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	cmd->DrawInstanced(3, 1, 0, 0);
+		cmd->SetDescriptorHeaps(1, heaps);
+		cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
+		cmd->SetPipelineState(pipeline_.getPipeline());
+
+		cmd->SetGraphicsRootDescriptorTable(
+			0,
+			descriptorSets_[frame.frameIndex].getTableGPUHandle()
+		);
+
+		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		cmd->DrawInstanced(3, 1, 0, 0);
+	}
+	dx_->endGPUEvent(cmd);
 } // end of render()
 
 void LightDX12::renderOffscreen(
@@ -115,33 +119,37 @@ void LightDX12::renderOffscreen(
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
-	LightUBO ubo{};
-	ubo.u_invViewProj = glm::inverse(proj * view);
-	ubo.u_viewProj = proj * view;
-	ubo.u_camPos = camPos_;
-	ubo.u_sunDistance = SUN_DISTANCE;
-	ubo.u_lightPos = glm::vec4(position_, 1.0f);
-	ubo.u_lightVisualColor = visualColor_;
-	ubo.u_sunRadius = SUN_SCALE / 2.0f;
-
-	uboBuffersOffscreen_[frame.frameIndex].upload(&ubo, sizeof(LightUBO));
-
-	ID3D12DescriptorHeap* heaps[] =
+	dx_->beginGPUEvent(cmd, L"LightDX12::renderOffscreen");
 	{
-		descriptorSetsOffscreen_[frame.frameIndex].getDescriptorHeap()
-	};
+		LightUBO ubo{};
+		ubo.u_invViewProj = glm::inverse(proj * view);
+		ubo.u_viewProj = proj * view;
+		ubo.u_camPos = camPos_;
+		ubo.u_sunDistance = SUN_DISTANCE;
+		ubo.u_lightPos = glm::vec4(position_, 1.0f);
+		ubo.u_lightVisualColor = visualColor_;
+		ubo.u_sunRadius = SUN_SCALE / 2.0f;
 
-	cmd->SetDescriptorHeaps(1, heaps);
-	cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
-	cmd->SetPipelineState(pipeline_.getPipeline());
+		uboBuffersOffscreen_[frame.frameIndex].upload(&ubo, sizeof(LightUBO));
 
-	cmd->SetGraphicsRootDescriptorTable(
-		0,
-		descriptorSetsOffscreen_[frame.frameIndex].getTableGPUHandle()
-	);
+		ID3D12DescriptorHeap* heaps[] =
+		{
+			descriptorSetsOffscreen_[frame.frameIndex].getDescriptorHeap()
+		};
 
-	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	cmd->DrawInstanced(3, 1, 0, 0);
+		cmd->SetDescriptorHeaps(1, heaps);
+		cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
+		cmd->SetPipelineState(pipeline_.getPipeline());
+
+		cmd->SetGraphicsRootDescriptorTable(
+			0,
+			descriptorSetsOffscreen_[frame.frameIndex].getTableGPUHandle()
+		);
+
+		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+		cmd->DrawInstanced(3, 1, 0, 0);
+	}
+	dx_->endGPUEvent(cmd);
 } // end of renderOffscreen()
 
 void LightDX12::updateLight(

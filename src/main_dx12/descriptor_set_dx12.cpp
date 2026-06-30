@@ -7,6 +7,7 @@
 
 #include <stdexcept>
 #include <cstdint>
+#include <algorithm>
 
 //--- HELPER ---//
 static uint64_t AlignConstantBufferSize(uint64_t size)
@@ -122,13 +123,13 @@ void DescriptorSetDX12::createLayout(
 		.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS,
 		.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
 		.MinLOD = 0.0f,
-		.MaxLOD = D3D12_FLOAT32_MAX,
+		.MaxLOD = 7.0f,
 		.ShaderRegister = 0, // register(s0)
 		.RegisterSpace = 0,
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
 	};
 	D3D12_STATIC_SAMPLER_DESC staticSampler1{
-		.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT,
+		.Filter = D3D12_FILTER_MIN_MAG_POINT_MIP_LINEAR,
 		.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 		.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
 		.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
@@ -137,7 +138,7 @@ void DescriptorSetDX12::createLayout(
 		.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER,
 		.BorderColor = D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
 		.MinLOD = 0.0f,
-		.MaxLOD = D3D12_FLOAT32_MAX,
+		.MaxLOD = 7.0f,
 		.ShaderRegister = 1, // register(s1)
 		.RegisterSpace = 0,
 		.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL
@@ -173,6 +174,7 @@ void DescriptorSetDX12::createLayout(
 	}
 
 	DX12Utils::ThrowIfFailed(
+		dx_->getDevice(),
 		dx_->getDevice()->CreateRootSignature(
 			0,
 			signature->GetBufferPointer(),
@@ -200,6 +202,7 @@ void DescriptorSetDX12::createPool(uint32_t descriptorCount)
 	};
 
 	DX12Utils::ThrowIfFailed(
+		dx_->getDevice(),
 		dx_->getDevice()->CreateDescriptorHeap(
 			&desc,
 			IID_PPV_ARGS(&descriptorHeap_)
@@ -441,6 +444,100 @@ void DescriptorSetDX12::writeStorageImageUAV(
 	);
 } // end of writeStorageImageUAV()
 
+void DescriptorSetDX12::writeTextureSRVAtSlot(
+	uint32_t slot,
+	const ImageDX12& image,
+	D3D12_SRV_DIMENSION dimension,
+	DXGI_FORMAT viewFormat,
+	uint32_t mostDetailedMip,
+	uint32_t mipCount
+)
+{
+	if (!image.valid())
+	{
+		throw std::runtime_error("DescriptorSetDX12::writeTextureSRVAtSlot - invalid image");
+	}
+
+	if (mostDetailedMip >= image.mipLevels())
+	{
+		throw std::runtime_error("DescriptorSetDX12::writeTextureSRVAtSlot - invalid mip");
+	}
+
+	const UINT finalMipCount =
+		mipCount == UINT32_MAX
+		? image.mipLevels() - mostDetailedMip
+		: std::min(mipCount, image.mipLevels() - mostDetailedMip);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+	desc.Format = viewFormat == DXGI_FORMAT_UNKNOWN
+		? image.srvFormat()
+		: viewFormat;
+
+	desc.ViewDimension = dimension;
+	desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	if (dimension == D3D12_SRV_DIMENSION_TEXTURE2D)
+	{
+		desc.Texture2D.MostDetailedMip = mostDetailedMip;
+		desc.Texture2D.MipLevels = finalMipCount;
+		desc.Texture2D.PlaneSlice = 0;
+		desc.Texture2D.ResourceMinLODClamp = 0.0f;
+	}
+	else
+	{
+		throw std::runtime_error("DescriptorSetDX12::writeTextureSRVAtSlot - unsupported dimension");
+	}
+
+	dx_->getDevice()->CreateShaderResourceView(
+		image.resource(),
+		&desc,
+		getCPUHandleAtSlot(slot)
+	);
+} // end of writeTextureSRVAtSlot()
+
+void DescriptorSetDX12::writeStorageImageUAVAtSlot(
+	uint32_t slot,
+	const ImageDX12& image,
+	D3D12_UAV_DIMENSION dimension,
+	DXGI_FORMAT viewFormat,
+	uint32_t mipSlice
+)
+{
+	if (!image.valid())
+	{
+		throw std::runtime_error("DescriptorSetDX12::writeStorageImageUAVAtSlot - invalid image");
+	}
+
+	if (mipSlice >= image.mipLevels())
+	{
+		throw std::runtime_error("DescriptorSetDX12::writeStorageImageUAVAtSlot - invalid mip");
+	}
+
+	D3D12_UNORDERED_ACCESS_VIEW_DESC desc{};
+	desc.Format = viewFormat == DXGI_FORMAT_UNKNOWN
+		? image.format()
+		: viewFormat;
+
+	desc.ViewDimension = dimension;
+
+	if (dimension == D3D12_UAV_DIMENSION_TEXTURE2D)
+	{
+		desc.Texture2D.MipSlice = mipSlice;
+		desc.Texture2D.PlaneSlice = 0;
+	}
+	else
+	{
+		throw std::runtime_error("DescriptorSetDX12::writeStorageImageUAVAtSlot - unsupported dimension");
+	}
+
+	dx_->getDevice()->CreateUnorderedAccessView(
+		image.resource(),
+		nullptr,
+		&desc,
+		getCPUHandleAtSlot(slot)
+	);
+} // end of writeStorageImageUAVAtSlot()
+
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorSetDX12::getGPUHandle(uint32_t binding) const
 {
 	if (!descriptorHeap_)
@@ -470,6 +567,46 @@ D3D12_CPU_DESCRIPTOR_HANDLE DescriptorSetDX12::getCPUHandle(uint32_t binding) co
 
 	return handle;
 } // end of getCPUHandle()
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorSetDX12::getCPUHandleAtSlot(uint32_t slot) const
+{
+	if (!descriptorHeap_)
+	{
+		throw std::runtime_error("DescriptorSetDX12::getCPUHandleAtSlot - descriptor heap not created");
+	}
+
+	if (slot >= descriptorCount_)
+	{
+		throw std::runtime_error("DescriptorSetDX12::getCPUHandleAtSlot - slot out of range");
+	}
+
+	D3D12_CPU_DESCRIPTOR_HANDLE handle =
+		descriptorHeap_->GetCPUDescriptorHandleForHeapStart();
+
+	handle.ptr += static_cast<SIZE_T>(slot) * descriptorSize_;
+
+	return handle;
+} // end of getCPUHandleAtSlot()
+
+D3D12_GPU_DESCRIPTOR_HANDLE DescriptorSetDX12::getGPUHandleAtSlot(uint32_t slot) const
+{
+	if (!descriptorHeap_)
+	{
+		throw std::runtime_error("DescriptorSetDX12::getGPUHandleAtSlot - descriptor heap not created");
+	}
+
+	if (slot >= descriptorCount_)
+	{
+		throw std::runtime_error("DescriptorSetDX12::getGPUHandleAtSlot - slot out of range");
+	}
+
+	D3D12_GPU_DESCRIPTOR_HANDLE handle =
+		descriptorHeap_->GetGPUDescriptorHandleForHeapStart();
+
+	handle.ptr += static_cast<UINT64>(slot) * descriptorSize_;
+
+	return handle;
+} // end of getGPUHandleAtSlot()
 
 D3D12_GPU_DESCRIPTOR_HANDLE DescriptorSetDX12::getTableGPUHandle() const
 {

@@ -57,6 +57,12 @@ public:
 
     void dumpDebugMessages(const char* context = nullptr);
 
+    void beginGPUEvent(
+        ID3D12GraphicsCommandList* cmd,
+        const wchar_t* name
+    );
+    void endGPUEvent(ID3D12GraphicsCommandList* cmd);
+
     void setDebugName(ID3D12Object* object, const wchar_t* name) const;
     void setDebugName(IDXGIObject* object, const char* name) const;
 

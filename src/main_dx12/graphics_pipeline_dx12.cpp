@@ -84,12 +84,14 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 			}
 
 			DX12Utils::ThrowIfFailed(
+				dx_->getDevice(),
 				hr,
 				"GraphicsPipelineDX12::create - failed to serialize empty root signature"
 			);
 		}
 
 		DX12Utils::ThrowIfFailed(
+			dx_->getDevice(),
 			dx_->getDevice()->CreateRootSignature(
 				0,
 				signatureBlob->GetBufferPointer(),
@@ -219,6 +221,7 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 #endif
 
 	DX12Utils::ThrowIfFailed(
+		dx_->getDevice(),
 		hr,
 		"GraphicsPipelineDX12::create - failed to create graphics pipeline state"
 	);

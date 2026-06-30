@@ -16,9 +16,6 @@
 
 #include <cstdint>
 
-//[using namespace Gbuffer_Constants;
-//using namespace World; 
-
 //--- PUBLIC ---//
 GBufferPassDX12::GBufferPassDX12(DX12Main& dx)
 	: dx_(&dx),
@@ -66,91 +63,95 @@ void GBufferPassDX12::render(
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 	cmd->SetName({ L"GBufferPassDX12::cmd" });
 
-	gNormalImage_.transitionToRenderTarget(cmd);
-	gDepthImage_.transitionToDepthWrite(cmd);
-
-	D3D12_VIEWPORT viewport{};
-	viewport.TopLeftX = 0.0f;
-	viewport.TopLeftY = 0.0f;
-	viewport.Width = static_cast<float>(frame.width);
-	viewport.Height = static_cast<float>(frame.height);
-	viewport.MinDepth = 0.0f;
-	viewport.MaxDepth = 1.0f;
-
-	D3D12_RECT scissor{};
-	scissor.left = 0;
-	scissor.top = 0;
-	scissor.right = static_cast<LONG>(frame.width);
-	scissor.bottom = static_cast<LONG>(frame.height);
-
-	cmd->RSSetViewports(1, &viewport);
-	cmd->RSSetScissorRects(1, &scissor);
-
-	D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = gNormalImage_.rtvCPU();
-	D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = gDepthImage_.dsvCPU();
-
-	cmd->OMSetRenderTargets(
-		1,
-		&colorRTV,
-		FALSE,
-		&depthDSV
-	);
-
-	const float clearColor[4] =
+	dx_->beginGPUEvent(cmd, L"GBufferPassDX12::render");
 	{
-		0.0f, 0.0f, 0.0f, 1.0f
-	};
-	cmd->ClearRenderTargetView(
-		colorRTV,
-		clearColor,
-		0,
-		nullptr
-	);
+		gNormalImage_.transitionToRenderTarget(cmd);
+		gDepthImage_.transitionToDepthWrite(cmd);
 
-	cmd->ClearDepthStencilView(
-		depthDSV,
-		D3D12_CLEAR_FLAG_DEPTH,
-		1.0f,
-		0,
-		0,
-		nullptr
-	);
+		D3D12_VIEWPORT viewport{};
+		viewport.TopLeftX = 0.0f;
+		viewport.TopLeftY = 0.0f;
+		viewport.Width = static_cast<float>(frame.width);
+		viewport.Height = static_cast<float>(frame.height);
+		viewport.MinDepth = 0.0f;
+		viewport.MaxDepth = 1.0f;
 
-	uboBuffers_[frame.frameIndex].upload(&uboData, sizeof(uboData));
+		D3D12_RECT scissor{};
+		scissor.left = 0;
+		scissor.top = 0;
+		scissor.right = static_cast<LONG>(frame.width);
+		scissor.bottom = static_cast<LONG>(frame.height);
 
-	DescriptorSetDX12& set = descriptorSets_[frame.frameIndex];
-	ID3D12DescriptorHeap* heaps[] =
-	{
-		set.getDescriptorHeap()
-	};
+		cmd->RSSetViewports(1, &viewport);
+		cmd->RSSetScissorRects(1, &scissor);
 
-	cmd->SetDescriptorHeaps(1, heaps);
-	cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
-	cmd->SetPipelineState(pipeline_.getPipeline());
+		D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = gNormalImage_.rtvCPU();
+		D3D12_CPU_DESCRIPTOR_HANDLE depthDSV = gDepthImage_.dsvCPU();
 
-	cmd->SetGraphicsRootDescriptorTable(
-		set.getDescriptorTableRootIndex(),
-		set.getTableGPUHandle()
-	);
-
-	// render chunks
-	const ChunkDrawList& list = in.world->getOpaqueDrawList();
-	for (const auto& item : list.items)
-	{
-		Chunk_Constants::ChunkPushConstants pc{};
-		pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
-
-		set.setGraphicsPushConstants(
-			cmd,
-			0,
-			pc
+		cmd->OMSetRenderTargets(
+			1,
+			&colorRTV,
+			FALSE,
+			&depthDSV
 		);
 
-		item.gpu->drawOpaque(nullptr, &frame);
-	} // end for
-	
-	gNormalImage_.transitionToShaderRead(cmd);
-	gDepthImage_.transitionToShaderRead(cmd);
+		const float clearColor[4] =
+		{
+			0.0f, 0.0f, 0.0f, 1.0f
+		};
+		cmd->ClearRenderTargetView(
+			colorRTV,
+			clearColor,
+			0,
+			nullptr
+		);
+
+		cmd->ClearDepthStencilView(
+			depthDSV,
+			D3D12_CLEAR_FLAG_DEPTH,
+			1.0f,
+			0,
+			0,
+			nullptr
+		);
+
+		uboBuffers_[frame.frameIndex].upload(&uboData, sizeof(uboData));
+
+		DescriptorSetDX12& set = descriptorSets_[frame.frameIndex];
+		ID3D12DescriptorHeap* heaps[] =
+		{
+			set.getDescriptorHeap()
+		};
+
+		cmd->SetDescriptorHeaps(1, heaps);
+		cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
+		cmd->SetPipelineState(pipeline_.getPipeline());
+
+		cmd->SetGraphicsRootDescriptorTable(
+			set.getDescriptorTableRootIndex(),
+			set.getTableGPUHandle()
+		);
+
+		// render chunks
+		const ChunkDrawList& list = in.world->getOpaqueDrawList();
+		for (const auto& item : list.items)
+		{
+			Chunk_Constants::ChunkPushConstants pc{};
+			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+
+			set.setGraphicsPushConstants(
+				cmd,
+				0,
+				pc
+			);
+
+			item.gpu->drawOpaque(nullptr, &frame);
+		} // end for
+
+		gNormalImage_.transitionToShaderRead(cmd);
+		gDepthImage_.transitionToShaderRead(cmd);
+	}
+	dx_->endGPUEvent(cmd);
 } // end of render()
 
 

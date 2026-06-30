@@ -5,6 +5,8 @@
 
 #include <stdexcept>
 #include <vector>
+#include <sstream>
+#include <iostream>
 
 namespace
 {
@@ -14,6 +16,7 @@ namespace
 	)
 	{
 		DX12Utils::ThrowIfFailed(
+			dx.getDevice(),
 			cmd->Close(),
 			"DX12Utils::ExecuteAndWait - failed to close command list"
 		);
@@ -28,6 +31,7 @@ namespace
 		ComPtr<ID3D12Fence> fence;
 
 		DX12Utils::ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateFence(
 				0,
 				D3D12_FENCE_FLAG_NONE,
@@ -46,6 +50,7 @@ namespace
 		const uint64_t fenceValue = 1;
 
 		DX12Utils::ThrowIfFailed(
+			dx.getDevice(),
 			dx.getGraphicsQueue()->Signal(fence.Get(), fenceValue),
 			"DX12Utils::ExecuteAndWait - failed to signal fence"
 		);
@@ -53,6 +58,7 @@ namespace
 		if (fence->GetCompletedValue() < fenceValue)
 		{
 			DX12Utils::ThrowIfFailed(
+				dx.getDevice(),
 				fence->SetEventOnCompletion(fenceValue, fenceEvent),
 				"DX12Utils::ExecuteAndWait - failed to set fence event"
 			);
@@ -66,13 +72,113 @@ namespace
 
 namespace DX12Utils
 {
-	void ThrowIfFailed(HRESULT hr, const char* message)
+	void DumpInfoQueue(ID3D12Device* device)
+	{
+#if defined(_DEBUG)
+		if (!device)
+		{
+			return;
+		}
+
+		ComPtr<ID3D12InfoQueue> infoQueue;
+
+		if (FAILED(device->QueryInterface(IID_PPV_ARGS(&infoQueue))))
+		{
+			return;
+		}
+
+		const UINT64 messageCount = infoQueue->GetNumStoredMessagesAllowedByRetrievalFilter();
+
+		for (UINT64 i = 0; i < messageCount; ++i)
+		{
+			SIZE_T messageLength = 0;
+
+			infoQueue->GetMessage(i, nullptr, &messageLength);
+
+			std::vector<char> bytes(messageLength);
+			auto* message = reinterpret_cast<D3D12_MESSAGE*>(bytes.data());
+
+			if (SUCCEEDED(infoQueue->GetMessage(i, message, &messageLength)))
+			{
+				std::ostringstream oss;
+				oss << "[D3D12 InfoQueue] "
+					<< "Severity=" << message->Severity
+					<< " Category=" << message->Category
+					<< " ID=" << message->ID
+					<< "\n"
+					<< message->pDescription
+					<< "\n\n";
+
+				OutputDebugStringA(oss.str().c_str());
+				std::cerr << oss.str();
+			}
+		}
+
+		infoQueue->ClearStoredMessages();
+#endif
+	} // end of DumpInfoQueue()
+
+	void ThrowIfFailed(
+		ID3D12Device* device, 
+		HRESULT hr, 
+		const char* message
+	)
 	{
 		if (FAILED(hr))
 		{
-			throw std::runtime_error(message);
+			DumpInfoQueue(device);
+
+			char buffer[512];
+			sprintf_s(
+				buffer,
+				"%s HRESULT=0x%08X",
+				message,
+				static_cast<unsigned>(hr)
+			);
+		
+			throw std::runtime_error(buffer);
 		}
 	} // end of ThrowIfFailed()
+
+	void ThrowIfFailed(
+		ID3D12Device* device, 
+		const char* message
+	)
+	{
+		DumpInfoQueue(device);
+		
+		throw std::runtime_error(message);
+	} // end of ThrowIfFailed()
+
+	void TransitionSubresource(
+		ID3D12GraphicsCommandList* cmd,
+		ID3D12Resource* resource,
+		uint32_t mip,
+		D3D12_RESOURCE_STATES& oldState,
+		D3D12_RESOURCE_STATES newState
+	)
+	{
+		if (!cmd)
+		{
+			return;
+		}
+
+		if (oldState == newState)
+		{
+			return;
+		}
+
+		D3D12_RESOURCE_BARRIER barrier{};
+		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		barrier.Transition.pResource = resource;
+		barrier.Transition.Subresource = mip;
+		barrier.Transition.StateBefore = oldState;
+		barrier.Transition.StateAfter = newState;
+
+		cmd->ResourceBarrier(1, &barrier);
+
+		oldState = newState;
+	} // end of TransitionSubresource()
 
 	void TransitionResource(
 		ID3D12GraphicsCommandList* cmd,
@@ -123,6 +229,7 @@ namespace DX12Utils
 		ComPtr<ID3D12GraphicsCommandList4> cmd;
 
 		ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateCommandAllocator(
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
 				IID_PPV_ARGS(&allocator)
@@ -131,6 +238,7 @@ namespace DX12Utils
 		);
 
 		ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateCommandList(
 				0,
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -221,6 +329,7 @@ namespace DX12Utils
 		ComPtr<ID3D12GraphicsCommandList4> cmd;
 
 		ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateCommandAllocator(
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
 				IID_PPV_ARGS(&allocator)
@@ -229,6 +338,7 @@ namespace DX12Utils
 		);
 
 		ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateCommandList(
 				0,
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -317,6 +427,7 @@ namespace DX12Utils
 		readRange.End = 0;
 
 		DX12Utils::ThrowIfFailed(
+			dx.getDevice(),
 			uploadBuffer.getResource()->Map(0, &readRange, &mappedData),
 			"DX12Utils::UploadTexture2DArrayImmediate - failed to map upload buffer"
 		);
@@ -360,6 +471,7 @@ namespace DX12Utils
 		ComPtr<ID3D12GraphicsCommandList4> cmd;
 
 		DX12Utils::ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateCommandAllocator(
 				D3D12_COMMAND_LIST_TYPE_DIRECT,
 				IID_PPV_ARGS(&allocator)
@@ -368,6 +480,7 @@ namespace DX12Utils
 		);
 
 		DX12Utils::ThrowIfFailed(
+			dx.getDevice(),
 			dx.getDevice()->CreateCommandList(
 				0,
 				D3D12_COMMAND_LIST_TYPE_DIRECT,

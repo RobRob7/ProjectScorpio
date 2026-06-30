@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <string>
 #include <array>
+#include <vector>
 
 class DX12Main;
 
@@ -63,6 +64,25 @@ public:
 
     void destroy();
 
+    void transitionSubresource(
+        ID3D12GraphicsCommandList* cmd,
+        uint32_t mip,
+        D3D12_RESOURCE_STATES newState
+    )
+    {
+        if (!image_) return;
+
+        if (mip >= subresourceStates_.size()) return;
+
+        DX12Utils::TransitionSubresource(
+            cmd,
+            image_.Get(),
+            mip,
+            subresourceStates_[mip],
+            newState
+        );
+    } // end of transitionSubresource()
+
     void transitionToShaderRead(
         ID3D12GraphicsCommandList* cmd,
         bool pixelShader = true
@@ -79,9 +99,20 @@ public:
             cmd,
             image_.Get(),
             state_,
-            newState
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+                D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
         );
     } // end of transitionToShaderRead()
+
+    void setAllSubresourceStates(D3D12_RESOURCE_STATES state)
+    {
+        state_ = state;
+
+        for (auto& subState : subresourceStates_)
+        {
+            subState = state;
+        }
+    }
 
     void transitionToRenderTarget(ID3D12GraphicsCommandList* cmd)
     {
@@ -157,7 +188,11 @@ public:
     uint32_t width() const { return width_; }
     uint32_t height() const { return height_; }
     uint32_t layers() const { return layers_; }
+
     uint32_t mipLevels() const { return mipLevels_; }
+    uint32_t getMipWidth(uint32_t mip) const { return std::max(1u, width_ >> mip); }
+    uint32_t getMipHeight(uint32_t mip) const { return std::max(1u, height_ >> mip); }
+
     uint32_t sampleCount() const { return sampleCount_; }
 
     D3D12_CPU_DESCRIPTOR_HANDLE rtvCPU() const { return rtvCpu_; }
@@ -179,6 +214,7 @@ private:
     ComPtr<ID3D12Resource> image_;
 
     D3D12_RESOURCE_STATES state_{ D3D12_RESOURCE_STATE_COMMON };
+    std::vector<D3D12_RESOURCE_STATES> subresourceStates_;
     DXGI_FORMAT format_{ DXGI_FORMAT_UNKNOWN };
     DXGI_FORMAT dsvFormat_{ DXGI_FORMAT_UNKNOWN };
     DXGI_FORMAT srvFormat_{ DXGI_FORMAT_UNKNOWN };

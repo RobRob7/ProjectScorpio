@@ -77,12 +77,14 @@ void ComputePipelineDX12::create(const ComputePipelineDescDX12& desc)
 			}
 
 			DX12Utils::ThrowIfFailed(
+				dx_->getDevice(),
 				hr,
 				"ComputePipelineDX12::create - failed to serialize empty root signature"
 			);
 		}
 
 		DX12Utils::ThrowIfFailed(
+			dx_->getDevice(),
 			dx_->getDevice()->CreateRootSignature(
 				0,
 				signatureBlob->GetBufferPointer(),
@@ -118,6 +120,7 @@ void ComputePipelineDX12::create(const ComputePipelineDescDX12& desc)
 #endif
 
 	DX12Utils::ThrowIfFailed(
+		dx_->getDevice(),
 		hr,
 		"ComputePipelineDX12::create - failed to create Compute pipeline state"
 	);

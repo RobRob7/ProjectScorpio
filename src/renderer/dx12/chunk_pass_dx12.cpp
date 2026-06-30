@@ -135,55 +135,59 @@ void ChunkPassDX12::renderOpaque(
 
 		cmd->SetName({ L"ChunkPassDX12-Default::cmd" });
 
-		DescriptorSetDX12& set = opaqueDescriptorSets_[frame.frameIndex];
-
-		chunkUBOData_ = {};
-
-		chunkUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
-
-		chunkUBOData_.u_useSSAO = rs_->useSSAO ? 1 : 0;
-		chunkUBOData_.u_useShadowMap = rs_->useShadowMap ? 1 : 0;
-
-		chunkUBOData_.u_view = view;
-		chunkUBOData_.u_proj = proj;
-		chunkUBOData_.u_screenSize = glm::vec2(width, height);
-		chunkUBOData_.u_ambientStrength = in.world->getAmbientStrength();
-
-		chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
-
-		chunkUBOData_.u_lightDir = in.light->getDirection();
-		chunkUBOData_.u_lightColor = in.light->getLightColor();
-
-		opaqueUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_));
-
-		ID3D12DescriptorHeap* heaps[] =
+		dx_->beginGPUEvent(cmd, L"ChunkPassDX12-Default::render");
 		{
-			set.getDescriptorHeap()
-		};
+			DescriptorSetDX12& set = opaqueDescriptorSets_[frame.frameIndex];
 
-		cmd->SetDescriptorHeaps(1, heaps);
-		cmd->SetGraphicsRootSignature(opaquePipeline_.getRootSignature());
-		cmd->SetPipelineState(opaquePipeline_.getPipeline());
+			chunkUBOData_ = {};
 
-		cmd->SetGraphicsRootDescriptorTable(
-			set.getDescriptorTableRootIndex(),
-			set.getTableGPUHandle()
-		);
+			chunkUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
 
-		const ChunkDrawList& list = in.world->getOpaqueDrawList();
-		for (const auto& item : list.items)
-		{
-			ChunkPushConstants pc{};
-			pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+			chunkUBOData_.u_useSSAO = rs_->useSSAO ? 1 : 0;
+			chunkUBOData_.u_useShadowMap = rs_->useShadowMap ? 1 : 0;
 
-			set.setGraphicsPushConstants(
-				cmd,
-				0,
-				pc
+			chunkUBOData_.u_view = view;
+			chunkUBOData_.u_proj = proj;
+			chunkUBOData_.u_screenSize = glm::vec2(width, height);
+			chunkUBOData_.u_ambientStrength = in.world->getAmbientStrength();
+
+			chunkUBOData_.u_viewPos = in.camera->getCameraPosition();
+
+			chunkUBOData_.u_lightDir = in.light->getDirection();
+			chunkUBOData_.u_lightColor = in.light->getLightColor();
+
+			opaqueUBOBuffers_[frame.frameIndex].upload(&chunkUBOData_, sizeof(chunkUBOData_));
+
+			ID3D12DescriptorHeap* heaps[] =
+			{
+				set.getDescriptorHeap()
+			};
+
+			cmd->SetDescriptorHeaps(1, heaps);
+			cmd->SetGraphicsRootSignature(opaquePipeline_.getRootSignature());
+			cmd->SetPipelineState(opaquePipeline_.getPipeline());
+
+			cmd->SetGraphicsRootDescriptorTable(
+				set.getDescriptorTableRootIndex(),
+				set.getTableGPUHandle()
 			);
 
-			item.gpu->drawOpaque(nullptr, &frame);
-		} // end for
+			const ChunkDrawList& list = in.world->getOpaqueDrawList();
+			for (const auto& item : list.items)
+			{
+				ChunkPushConstants pc{};
+				pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+
+				set.setGraphicsPushConstants(
+					cmd,
+					0,
+					pc
+				);
+
+				item.gpu->drawOpaque(nullptr, &frame);
+			} // end for
+		}
+		dx_->endGPUEvent(cmd);
 	}
 	//// reflection
 	//else if (renderTarget == RenderTargetDX12::WaterReflection)

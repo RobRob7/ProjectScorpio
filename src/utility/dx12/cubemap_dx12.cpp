@@ -91,58 +91,62 @@ void CubemapDX12::render(
 
 	cmd->SetName({ L"CubemapVk-Default::cmd" });
 
-	glm::mat4 viewStrippedTranslation = glm::mat4(glm::mat3(view));
-
-	if (time > 0.0f)
+	dx_->beginGPUEvent(cmd, L"CubemapVk-Default::render");
 	{
-		float speed = 0.005f;
+		glm::mat4 viewStrippedTranslation = glm::mat4(glm::mat3(view));
 
-		glm::mat4 skyRot = glm::rotate(glm::mat4(1.0f),
-			time * speed,
-			glm::vec3(0.0f, 1.0f, 0.0f));
+		if (time > 0.0f)
+		{
+			float speed = 0.005f;
 
-		viewStrippedTranslation = viewStrippedTranslation * glm::mat4(glm::mat3(skyRot));
+			glm::mat4 skyRot = glm::rotate(glm::mat4(1.0f),
+				time * speed,
+				glm::vec3(0.0f, 1.0f, 0.0f));
+
+			viewStrippedTranslation = viewStrippedTranslation * glm::mat4(glm::mat3(skyRot));
+		}
+
+		CubemapUBO ubo{
+			.u_view = viewStrippedTranslation,
+			.u_proj = projection,
+			.u_dayNightMix = glm::clamp((sunDir.y + 0.15f) / 0.30f, 0.0f, 1.0f)
+		};
+
+		uboBuffers_[frameIndex].upload(&ubo, sizeof(ubo));
+
+		ID3D12DescriptorHeap* heaps[] =
+		{
+			descriptorSets_[frameIndex].getDescriptorHeap()
+		};
+
+		cmd->SetDescriptorHeaps(1, heaps);
+
+		cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
+
+		cmd->SetPipelineState(pipeline_.getPipeline());
+
+		cmd->SetGraphicsRootDescriptorTable(
+			0,
+			descriptorSets_[frameIndex].getTableGPUHandle()
+		);
+
+		D3D12_VERTEX_BUFFER_VIEW vbv{
+			.BufferLocation = vertexBuffer_.getGPUVirtualAddress(),
+			.SizeInBytes = static_cast<UINT>(vertexBuffer_.size()),
+			.StrideInBytes = sizeof(float) * 3
+		};
+
+		cmd->IASetVertexBuffers(0, 1, &vbv);
+		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+		cmd->DrawInstanced(
+			vertexCount_,
+			1,
+			0,
+			0
+		);
 	}
-
-	CubemapUBO ubo{
-		.u_view = viewStrippedTranslation,
-		.u_proj = projection,
-		.u_dayNightMix = glm::clamp((sunDir.y + 0.15f) / 0.30f, 0.0f, 1.0f)
-	};
-
-	uboBuffers_[frameIndex].upload(&ubo, sizeof(ubo));
-
-	ID3D12DescriptorHeap* heaps[] =
-	{
-		descriptorSets_[frameIndex].getDescriptorHeap()
-	};
-
-	cmd->SetDescriptorHeaps(1, heaps);
-
-	cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
-
-	cmd->SetPipelineState(pipeline_.getPipeline());
-
-	cmd->SetGraphicsRootDescriptorTable(
-		0,
-		descriptorSets_[frameIndex].getTableGPUHandle()
-	);
-
-	D3D12_VERTEX_BUFFER_VIEW vbv{
-		.BufferLocation = vertexBuffer_.getGPUVirtualAddress(),
-		.SizeInBytes = static_cast<UINT>(vertexBuffer_.size()),
-		.StrideInBytes = sizeof(float) * 3
-	};
-
-	cmd->IASetVertexBuffers(0, 1, &vbv);
-	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-
-	cmd->DrawInstanced(
-		vertexCount_,
-		1,
-		0,
-		0
-	);
+	dx_->endGPUEvent(cmd);
 } // end of render()
 
 void CubemapDX12::renderOffscreen(

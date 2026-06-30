@@ -30,7 +30,7 @@ Texture2D u_atlasTex : register(t1, space0);
 Texture2D u_ssaoRaw : register(t2, space0);
 Texture2D u_shadowTex : register(t3, space0);
 
-SamplerState u_sampler : register(s0, space0);
+SamplerState u_sampler : register(s1, space0);
 
 struct PSInput
 {

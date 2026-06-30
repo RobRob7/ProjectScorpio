@@ -75,38 +75,41 @@ void PostCompositePassDX12::render(FrameContextDX12& frame)
     updateDescriptorSet(frame.frameIndex);
 
     ID3D12GraphicsCommandList* cmd = frame.cmd;
-
     cmd->SetName({ L"PostCompositePassDX12::cmd" });
 
-    fogColorImage_->transitionToShaderRead(cmd, false);
-    godRayColorImage_->transitionToShaderRead(cmd, false);
-    sceneColorImage_->transitionToShaderRead(cmd, false);
-
-    postColorImage_.transitionToUnorderedAccess(cmd);
-
-    DescriptorSetDX12& set = descriptorSets_[frame.frameIndex];
-
-    ID3D12DescriptorHeap* heaps =
+    dx_->beginGPUEvent(cmd, L"PostCompositePassDX12::render");
     {
-        set.getDescriptorHeap()
-    };
-    cmd->SetDescriptorHeaps(1, &heaps);
+        fogColorImage_->transitionToShaderRead(cmd, false);
+        godRayColorImage_->transitionToShaderRead(cmd, false);
+        sceneColorImage_->transitionToShaderRead(cmd, false);
 
-    cmd->SetComputeRootSignature(set.getRootSignature());
-    cmd->SetPipelineState(pipeline_.getPipeline());
+        postColorImage_.transitionToUnorderedAccess(cmd);
 
-    cmd->SetComputeRootDescriptorTable(
-        set.getDescriptorTableRootIndex(),
-        set.getTableGPUHandle()
-    );
+        DescriptorSetDX12& set = descriptorSets_[frame.frameIndex];
 
-    cmd->Dispatch(
-        workGroupX_,
-        workGroupY_,
-        1
-    );
+        ID3D12DescriptorHeap* heaps =
+        {
+            set.getDescriptorHeap()
+        };
+        cmd->SetDescriptorHeaps(1, &heaps);
 
-    postColorImage_.transitionToShaderRead(cmd);
+        cmd->SetComputeRootSignature(set.getRootSignature());
+        cmd->SetPipelineState(pipeline_.getPipeline());
+
+        cmd->SetComputeRootDescriptorTable(
+            set.getDescriptorTableRootIndex(),
+            set.getTableGPUHandle()
+        );
+
+        cmd->Dispatch(
+            workGroupX_,
+            workGroupY_,
+            1
+        );
+
+        postColorImage_.transitionToShaderRead(cmd);
+    }
+    dx_->endGPUEvent(cmd);
 } // end of render()
 
 

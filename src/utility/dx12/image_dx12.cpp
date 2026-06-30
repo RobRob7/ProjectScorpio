@@ -6,14 +6,6 @@
 #include <algorithm>
 #include <cmath>
 
-//--- HELPER ---//
-static uint32_t CalculateMipLevels(uint32_t width, uint32_t height)
-{
-    const uint32_t largest = std::max(width, height);
-    return static_cast<uint32_t>(std::floor(std::log2(largest))) + 1;
-} // end of CalculateMipLevels()
-
-
 //--- PUBLIC ---//
 ImageDX12::ImageDX12(DX12Main& dx)
     : dx_(&dx)
@@ -104,12 +96,22 @@ void ImageDX12::createImage(
     state_ = initState;
     sampleCount_ = sampleCount;
 
-    mipLevels_ = autoMipLevels ? CalculateMipLevels(width, height) : 1;
+    mipLevels_ = 1;
+    if (autoMipLevels)
+    {
+        mipLevels_ = std::floor(std::log2(std::max(width_, height_))) + 1;
+    }
 
+    // MSAA mip map not allowed
     if (sampleCount_ > 1)
     {
         mipLevels_ = 1;
     }
+
+    subresourceStates_.assign(
+        mipLevels_ * layers_,
+        initState
+    );
 
     D3D12_HEAP_PROPERTIES heapProps{
         .Type = D3D12_HEAP_TYPE_DEFAULT,
@@ -136,6 +138,7 @@ void ImageDX12::createImage(
     };
 
     DX12Utils::ThrowIfFailed(
+        dx_->getDevice(),
         dx_->getDevice()->CreateCommittedResource(
             &heapProps,
             D3D12_HEAP_FLAG_NONE,
@@ -192,6 +195,7 @@ void ImageDX12::createRTV(
     };
 
     DX12Utils::ThrowIfFailed(
+        dx_->getDevice(),
         dx_->getDevice()->CreateDescriptorHeap(
             &heapDesc,
             IID_PPV_ARGS(&rtvHeap_)
@@ -222,6 +226,7 @@ void ImageDX12::createDSV(
     };
 
     DX12Utils::ThrowIfFailed(
+        dx_->getDevice(),
         dx_->getDevice()->CreateDescriptorHeap(
             &heapDesc,
             IID_PPV_ARGS(&dsvHeap_)
@@ -243,6 +248,7 @@ void ImageDX12::destroy()
     dsvHeap_.Reset();
 
     state_ = D3D12_RESOURCE_STATE_COMMON;
+    subresourceStates_.clear();
     format_ = DXGI_FORMAT_UNKNOWN;
     dsvFormat_ = DXGI_FORMAT_UNKNOWN;
     srvFormat_ = DXGI_FORMAT_UNKNOWN;

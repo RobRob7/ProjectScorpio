@@ -2,6 +2,7 @@
 #define TEXTURE_2D_DX12_H
 
 #include "image_dx12.h"
+#include "mip_gen_dx12.h"
 
 #include <string_view>
 #include <cstdint>
@@ -25,7 +26,8 @@ public:
 
     void loadFromFile(
         std::string_view path, 
-        const bool needToFlip = false
+        const bool needToFlip = false,
+        const bool generateMips = true
     );
 
     bool valid() const { return image_.valid(); }
@@ -44,6 +46,8 @@ private:
 private:
     DX12Main* dx_{ nullptr };
     ImageDX12 image_;
+
+    MipGenDX12 mipGen_;
 };
 
 #endif

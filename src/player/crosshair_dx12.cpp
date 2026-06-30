@@ -43,50 +43,55 @@ void CrosshairDX12::render(
 	if (!frameDX12->cmd || !vBuffer_.valid())
 		return;
 
-	const FrameContextDX12& frame = *frameDX12;
-
 	if (!vBuffer_.valid() ||
 		!pipeline_.valid()) return;
 
+	const FrameContextDX12& frame = *frameDX12;
+
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
+	cmd->SetName(L"CrosshairDX12::cmd");
 
-	D3D12_VIEWPORT viewport{
-		.TopLeftX = 0.0f,
-		.TopLeftY = 0.0f,
-		.Width = static_cast<float>(frame.width),
-		.Height = static_cast<float>(frame.height),
-		.MinDepth = 0.0f,
-		.MaxDepth = 1.0f
-	};	
-	D3D12_RECT scissor{
-		.left = 0,
-		.top = 0,
-		.right = static_cast<LONG>(frame.width),
-		.bottom = static_cast<LONG>(frame.height)
-	};
-	cmd->RSSetViewports(1, &viewport);
-	cmd->RSSetScissorRects(1, &scissor);
+	dx_->beginGPUEvent(cmd, L"CrosshairDX12::render");
+	{
+		D3D12_VIEWPORT viewport{
+			.TopLeftX = 0.0f,
+			.TopLeftY = 0.0f,
+			.Width = static_cast<float>(frame.width),
+			.Height = static_cast<float>(frame.height),
+			.MinDepth = 0.0f,
+			.MaxDepth = 1.0f
+		};
+		D3D12_RECT scissor{
+			.left = 0,
+			.top = 0,
+			.right = static_cast<LONG>(frame.width),
+			.bottom = static_cast<LONG>(frame.height)
+		};
+		cmd->RSSetViewports(1, &viewport);
+		cmd->RSSetScissorRects(1, &scissor);
 
-	D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
-	cmd->OMSetRenderTargets(
-		1,
-		&colorRTV,
-		FALSE,
-		nullptr
-	);
+		D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
+		cmd->OMSetRenderTargets(
+			1,
+			&colorRTV,
+			FALSE,
+			nullptr
+		);
 
-	cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
-	cmd->SetPipelineState(pipeline_.getPipeline());
+		cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
+		cmd->SetPipelineState(pipeline_.getPipeline());
 
-	D3D12_VERTEX_BUFFER_VIEW vbView{
-		.BufferLocation = vBuffer_.getGPUVirtualAddress(),
-		.SizeInBytes = static_cast<UINT>(vBuffer_.size()),
-		.StrideInBytes = sizeof(float) * 2
-	};
+		D3D12_VERTEX_BUFFER_VIEW vbView{
+			.BufferLocation = vBuffer_.getGPUVirtualAddress(),
+			.SizeInBytes = static_cast<UINT>(vBuffer_.size()),
+			.StrideInBytes = sizeof(float) * 2
+		};
 
-	cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
-	cmd->IASetVertexBuffers(0, 1, &vbView);
-	cmd->DrawInstanced(4, 1, 0, 0);
+		cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_LINELIST);
+		cmd->IASetVertexBuffers(0, 1, &vbView);
+		cmd->DrawInstanced(4, 1, 0, 0);
+	}
+	dx_->endGPUEvent(cmd);
 } // end of render()
 
 

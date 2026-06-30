@@ -321,25 +321,28 @@ void UI::renderDX12(FrameContextDX12& frame)
 	if (!dx_) return;
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
-
-	ID3D12DescriptorHeap* heaps[] =
+	dx_->beginGPUEvent(cmd, L"UI::render");
 	{
-		dx_->getImguiSrvHeap()
-	};
+		ID3D12DescriptorHeap* heaps[] =
+		{
+			dx_->getImguiSrvHeap()
+		};
 
-	cmd->OMSetRenderTargets(
-		1,
-		&frame.colorRTV,
-		FALSE,
-		nullptr
-	);
+		cmd->OMSetRenderTargets(
+			1,
+			&frame.colorRTV,
+			FALSE,
+			nullptr
+		);
 
-	cmd->SetDescriptorHeaps(1, heaps);
+		cmd->SetDescriptorHeaps(1, heaps);
 
-	ImGui_ImplDX12_RenderDrawData(
-		ImGui::GetDrawData(),
-		cmd
-	);
+		ImGui_ImplDX12_RenderDrawData(
+			ImGui::GetDrawData(),
+			cmd
+		);
+	}
+	dx_->endGPUEvent(cmd);
 } // end of renderDX12()
 
 std::string_view UI::backendToString(Backend backend) const

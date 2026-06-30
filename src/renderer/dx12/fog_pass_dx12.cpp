@@ -98,36 +98,39 @@ void FogPassDX12::render(
 	updateDescriptorSet(frame.frameIndex);
 	
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
-
 	cmd->SetName({ L"FogPassDX12::cmd" });
 
-	outputImage_.transitionToUnorderedAccess(cmd);
-
-	uboBuffers_[frame.frameIndex].upload(&ubos.ubo, sizeof(ubos.ubo));
-
-	DescriptorSetDX12& set = descriptorSets_[frame.frameIndex];
-
-	ID3D12DescriptorHeap* heaps =
+	dx_->beginGPUEvent(cmd, L"FogPassDX12::render");
 	{
-		set.getDescriptorHeap()
-	};
-	cmd->SetDescriptorHeaps(1, &heaps);
+		outputImage_.transitionToUnorderedAccess(cmd);
 
-	cmd->SetComputeRootSignature(set.getRootSignature());
-	cmd->SetPipelineState(pipeline_.getPipeline());
+		uboBuffers_[frame.frameIndex].upload(&ubos.ubo, sizeof(ubos.ubo));
 
-	cmd->SetComputeRootDescriptorTable(
-		set.getDescriptorTableRootIndex(),
-		set.getTableGPUHandle()
-	);
+		DescriptorSetDX12& set = descriptorSets_[frame.frameIndex];
 
-	cmd->Dispatch(
-		workGroupX_, 
-		workGroupY_, 
-		1
-	);
+		ID3D12DescriptorHeap* heaps =
+		{
+			set.getDescriptorHeap()
+		};
+		cmd->SetDescriptorHeaps(1, &heaps);
 
-	outputImage_.transitionToShaderRead(cmd, false);
+		cmd->SetComputeRootSignature(set.getRootSignature());
+		cmd->SetPipelineState(pipeline_.getPipeline());
+
+		cmd->SetComputeRootDescriptorTable(
+			set.getDescriptorTableRootIndex(),
+			set.getTableGPUHandle()
+		);
+
+		cmd->Dispatch(
+			workGroupX_,
+			workGroupY_,
+			1
+		);
+
+		outputImage_.transitionToShaderRead(cmd, false);
+	}
+	dx_->endGPUEvent(cmd);
 } // end of render()
 
 
@@ -170,6 +173,11 @@ void FogPassDX12::updateDescriptorSet(uint32_t frameIndex)
 
 void FogPassDX12::createAttachment()
 {
+	D3D12_CLEAR_VALUE clearValue{
+		.Format = outputFormat_,
+		.Color = {0.0f, 0.0f, 0.0f, 1.0f}
+	};
+
 	outputImage_.createImage(
 		width_,
 		height_,
@@ -178,7 +186,8 @@ void FogPassDX12::createAttachment()
 		outputFormat_,
 		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS |
 			D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		&clearValue
 	);
 	outputImage_.createRTV();
 	outputImage_.setDebugName(L"FogPassDX12-OutputImage");

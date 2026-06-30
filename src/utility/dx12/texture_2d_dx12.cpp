@@ -16,7 +16,8 @@
 //--- PUBLIC ---//
 Texture2DDX12::Texture2DDX12(DX12Main& dx)
 	: dx_(&dx), 
-	image_(dx)
+	image_(dx),
+    mipGen_(dx)
 {
 } // end of constructor
 
@@ -29,7 +30,8 @@ void Texture2DDX12::setDebugName(const std::wstring& name)
 
 void Texture2DDX12::loadFromFile(
 	std::string_view path, 
-	const bool needToFlip
+	const bool needToFlip,
+    const bool generateMips
 )
 {
 	destroy();
@@ -54,16 +56,21 @@ void Texture2DDX12::loadFromFile(
     const uint32_t height = static_cast<uint32_t>(texHeight);
 
     const DXGI_FORMAT textureFormat =
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        DXGI_FORMAT_R8G8B8A8_UNORM;
+
+    const D3D12_RESOURCE_FLAGS textureFlags =
+        generateMips
+        ? D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS
+        : D3D12_RESOURCE_FLAG_NONE;
 
     image_.createImage(
         width,
         height,
         1,
-        false, // no mip generation yet
+        generateMips,
         textureFormat,
-        D3D12_RESOURCE_FLAG_NONE,
-        D3D12_RESOURCE_STATE_COPY_DEST,
+        textureFlags,
+        D3D12_RESOURCE_STATE_COMMON,
         nullptr,
         1
     );
@@ -133,6 +140,7 @@ void Texture2DDX12::loadFromFile(
     ComPtr<ID3D12GraphicsCommandList4> cmd;
 
     DX12Utils::ThrowIfFailed(
+        dx_->getDevice(),
         dx_->getDevice()->CreateCommandAllocator(
             D3D12_COMMAND_LIST_TYPE_DIRECT,
             IID_PPV_ARGS(&allocator)
@@ -141,6 +149,7 @@ void Texture2DDX12::loadFromFile(
     );
 
     DX12Utils::ThrowIfFailed(
+        dx_->getDevice(),
         dx_->getDevice()->CreateCommandList(
             0,
             D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -161,6 +170,12 @@ void Texture2DDX12::loadFromFile(
     dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     dstLocation.SubresourceIndex = 0;
 
+    image_.transitionSubresource(
+        cmd.Get(),
+        0,
+        D3D12_RESOURCE_STATE_COPY_DEST
+    );
+
     cmd->CopyTextureRegion(
         &dstLocation,
         0,
@@ -170,10 +185,25 @@ void Texture2DDX12::loadFromFile(
         nullptr
     );
 
-    image_.transitionToShaderRead(
-        cmd.Get(),
-        true
-    );
+    // check for mips gen
+    if (generateMips && image_.mipLevels() > 1)
+    {
+        mipGen_.generate(image_, cmd.Get());
+    }
+    else
+    {
+        image_.transitionSubresource(
+            cmd.Get(),
+            0,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+        );
+
+        image_.setAllSubresourceStates(
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+        );
+    }
 
     std::vector<BufferDX12> uploadBuffers;
     uploadBuffers.push_back(std::move(staging));

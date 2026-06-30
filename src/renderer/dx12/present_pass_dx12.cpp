@@ -51,59 +51,64 @@ void PresentPassDX12::render(FrameContextDX12& frame)
     }
 
     ID3D12GraphicsCommandList* cmd = frame.cmd;
+    cmd->SetName({ L"PresentPassDX12::cmd" });
 
-    D3D12_VIEWPORT viewport{
-        .TopLeftX = 0.0f,
-        .TopLeftY = 0.0f,
-        .Width = static_cast<float>(frame.width),
-        .Height = static_cast<float>(frame.height),
-        .MinDepth = 0.0f,
-        .MaxDepth = 1.0f
-    };
-    D3D12_RECT scissor{
-        .left = 0,
-        .top = 0,
-        .right = static_cast<LONG>(frame.width),
-        .bottom = static_cast<LONG>(frame.height)
-    };
-    cmd->RSSetViewports(1, &viewport);
-    cmd->RSSetScissorRects(1, &scissor);
-
-    D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
-    cmd->OMSetRenderTargets(
-        1,
-        &colorRTV,
-        FALSE,
-        nullptr
-    );
-
-    const float clearColor[4] =
+    dx_->beginGPUEvent(cmd, L"PresentPassDX12::render");
     {
-        0.0f, 0.0f, 0.0f, 1.0f
-    };
-    cmd->ClearRenderTargetView(
-        colorRTV,
-        clearColor,
-        0,
-        nullptr
-    );
+        D3D12_VIEWPORT viewport{
+            .TopLeftX = 0.0f,
+            .TopLeftY = 0.0f,
+            .Width = static_cast<float>(frame.width),
+            .Height = static_cast<float>(frame.height),
+            .MinDepth = 0.0f,
+            .MaxDepth = 1.0f
+        };
+        D3D12_RECT scissor{
+            .left = 0,
+            .top = 0,
+            .right = static_cast<LONG>(frame.width),
+            .bottom = static_cast<LONG>(frame.height)
+        };
+        cmd->RSSetViewports(1, &viewport);
+        cmd->RSSetScissorRects(1, &scissor);
 
-    ID3D12DescriptorHeap* heaps[] =
-    {
-        descriptorSets_[frame.frameIndex].getDescriptorHeap()
-    };
+        D3D12_CPU_DESCRIPTOR_HANDLE colorRTV = frame.colorRTV;
+        cmd->OMSetRenderTargets(
+            1,
+            &colorRTV,
+            FALSE,
+            nullptr
+        );
 
-    cmd->SetDescriptorHeaps(1, heaps);
-    cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
-    cmd->SetPipelineState(pipeline_.getPipeline());
+        const float clearColor[4] =
+        {
+            0.0f, 0.0f, 0.0f, 1.0f
+        };
+        cmd->ClearRenderTargetView(
+            colorRTV,
+            clearColor,
+            0,
+            nullptr
+        );
 
-    cmd->SetGraphicsRootDescriptorTable(
-        0,
-        descriptorSets_[frame.frameIndex].getTableGPUHandle()
-    );
+        ID3D12DescriptorHeap* heaps[] =
+        {
+            descriptorSets_[frame.frameIndex].getDescriptorHeap()
+        };
 
-    cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    cmd->DrawInstanced(3, 1, 0, 0);
+        cmd->SetDescriptorHeaps(1, heaps);
+        cmd->SetGraphicsRootSignature(pipeline_.getRootSignature());
+        cmd->SetPipelineState(pipeline_.getPipeline());
+
+        cmd->SetGraphicsRootDescriptorTable(
+            0,
+            descriptorSets_[frame.frameIndex].getTableGPUHandle()
+        );
+
+        cmd->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+        cmd->DrawInstanced(3, 1, 0, 0);
+    }
+    dx_->endGPUEvent(cmd);
 } // end of render()
 
 
