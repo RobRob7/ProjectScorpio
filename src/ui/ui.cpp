@@ -92,7 +92,7 @@ UI::UI(
 	ImGui::CreateContext();
 
 	ImGuiIO& io = ImGui::GetIO();
-	io.FontGlobalScale = 1.25f;
+	io.FontGlobalScale = 1.50f;
 
 	std::filesystem::path path = std::filesystem::path(RESOURCES_PATH) / 
 		"fonts/Open_Sans/OpenSans-VariableFont_wdth,wght.ttf";
@@ -521,12 +521,12 @@ void UI::drawMenuBar(IScene& scene)
 			// font size
 			ImGuiIO& io = ImGui::GetIO();
 
-			static float fontScale = 1.25f;
+			static float fontScale = io.FontGlobalScale;
 			if (ImGui::SliderFloat(
 				"Font Scale",
 				&fontScale,
 				0.75f,
-				1.50f,
+				1.75f,
 				"%.2f"
 			))
 			{
