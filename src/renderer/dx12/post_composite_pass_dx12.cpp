@@ -130,7 +130,7 @@ void PostCompositePassDX12::updateDescriptorSet(uint32_t frameIndex)
         );
     }
 
-    if (fogColorImage_ &&  fogColorImage_->valid())
+    if (fogColorImage_ && fogColorImage_->valid())
     {
         set.writeTextureSRV(
             TO_API_FORM(PostCompositePassBinding::FogTex),
@@ -207,8 +207,7 @@ void PostCompositePassDX12::createDescriptorSet()
             godRayColorBinding,
             sceneColorBinding,
             postColorOutBinding
-            });
-
+        });
         descriptorSets_[i].createPool(4);
         descriptorSets_[i].allocate();
 

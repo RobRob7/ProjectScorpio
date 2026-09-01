@@ -21,6 +21,32 @@ void ImageDX12::setDebugName(const std::wstring& name)
     image_->SetName(name.c_str());
 } // end of setDebugName()
 
+void ImageDX12::clearUAVThenShaderRead(
+    ID3D12GraphicsCommandList* cmd,
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+    const std::array<float, 4>& color
+)
+{
+    if (!image_)
+    {
+        return;
+    }
+
+    transitionToUnorderedAccess(cmd);
+
+    cmd->ClearUnorderedAccessViewFloat(
+        gpuHandle,
+        cpuHandle,
+        image_.Get(),
+        color.data(),
+        0,
+        nullptr
+    );
+
+    transitionToShaderRead(cmd, false);
+} // end of clearUAVThenShaderRead()
+
 void ImageDX12::clearColorThenShaderRead(
     ID3D12GraphicsCommandList* cmd,
     const std::array<float, 4>& color

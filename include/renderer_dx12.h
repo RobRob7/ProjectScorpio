@@ -21,7 +21,7 @@ struct ChunkDrawList;
 //class RayTracingWorldPassVk;
 //
 class GBufferPassDX12;
-//class ShadowMapPassVk;
+class ShadowMapPassDX12;
 class DebugPassDX12;
 //class SSAOPassVk;
 //
@@ -73,7 +73,7 @@ private:
 	std::unique_ptr<RenderSettings> rs_;
 
 	std::unique_ptr<GBufferPassDX12> gbufferPass_;
-	//std::unique_ptr<ShadowMapPassVk> shadowMapPass_;
+	std::unique_ptr<ShadowMapPassDX12> shadowMapPass_;
 	std::unique_ptr<DebugPassDX12> debugPass_;
 	//std::unique_ptr<SSAOPassVk> ssaoPass_;
 

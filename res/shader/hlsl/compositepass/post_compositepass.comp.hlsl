@@ -26,7 +26,7 @@ void CSMain(uint3 dispatchThreadID : SV_DispatchThreadID)
     float3 sceneColor = SceneColorTex.Sample(LinearClampSampler, uv).rgb;
 
 	float3 finalColor = sceneColor * fogColor.a + fogColor.rgb;
-	//finalColor += godRayColor.rgb;
+    finalColor += godRayColor.rgb;
 
 	PostCompositeImage[pixel] = float4(finalColor.rgb, 1.0);
 }

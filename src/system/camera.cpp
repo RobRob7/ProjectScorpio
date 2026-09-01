@@ -200,6 +200,13 @@ const glm::mat4 Camera::getProjectionMatrixVk(float aspectRatio) const
 	return proj;
 } // end of getProjectionMatrixVk()
 
+const glm::mat4 Camera::getProjectionMatrixDX12(float aspectRatio) const
+{
+	glm::mat4 proj = glm::perspectiveRH_ZO(glm::radians(zoom_), aspectRatio, nearPlane_, farPlane_);
+
+	return proj;
+} // end of getProjectionMatrixDX12()
+
 const glm::mat4 Camera::getJitterProjectionMatrixVk(float aspectRatio, const glm::vec2& jitter) const
 {
 	glm::mat4 jitterProj = glm::perspectiveRH_ZO(glm::radians(zoom_), aspectRatio, nearPlane_, farPlane_);

@@ -7,7 +7,7 @@ cbuffer UBO : register(b0, space0)
 {
     // vert
     float4x4 u_lightSpaceMatrix;
-
+    
     float3 u_chunkOrigin;
     float _pad0;
 

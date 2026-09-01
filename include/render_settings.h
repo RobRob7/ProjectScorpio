@@ -72,7 +72,7 @@ struct RenderSettings
 	bool useRTAO{ true };
 	bool useRTShadow{ true };
 
-	bool useShadowMap{ true };
+	bool useShadowMap{ false };
 	bool useSSAO{ true };
 	bool useFXAA{ false };
 	bool useFog{ false };

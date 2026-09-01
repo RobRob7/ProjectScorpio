@@ -83,15 +83,15 @@ void ChunkPassDX12::init(
 		"hlsl/chunk/chunk.frag.cso"
 	);
 	(void)gbufferFormats;
-	(void)shadowFormats;
+	//(void)shadowFormats;
 	//opaqueGBufferShader_ = std::make_unique<ShaderDX12>(
 	//	"hlsl/gbuffer/gbuffer.vert.cso",
 	//	"hlsl/gbuffer/gbuffer.frag.cso"
 	//);
-	//opaqueShadowShader_ = std::make_unique<ShaderDX12>(
-	//	"hlsl/shadowmappass/shadowmappass.vert.cso",
-	//	"hlsl/shadowmappass/shadowmappass.frag.cso"
-	//);
+	opaqueShadowShader_ = std::make_unique<ShaderDX12>(
+		"hlsl/shadowmappass/shadowmappass.vert.cso",
+		"hlsl/shadowmappass/shadowmappass.frag.cso"
+	);
 
 	atlas_.loadFromFile("blocks_padded.png", true);
 	atlas_.setDebugName(L"ChunkPassDX12-AtlasTexture");
@@ -358,48 +358,52 @@ void ChunkPassDX12::renderOpaque(
 
 	//	cmd.endDebugUtilsLabelEXT();
 	//}
-	//// shadow
-	//else if (renderTarget == RenderTargetDX12::Shadow)
-	//{
-	//	cmd.beginDebugUtilsLabelEXT({ "ChunkPassDX12-Shadow::cmd" });
+	// shadow
+	else if (renderTarget == RenderTargetDX12::Shadow)
+	{
+		cmd->SetName({ L"ChunkPassDX12-Shadow::cmd" });
 
-	//	cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, opaqueShadowPipeline_.getPipeline());
+		dx_->beginGPUEvent(cmd, L"ChunkPassDX12-Default::render");
+		{
+			DescriptorSetDX12& set = opaqueShadowDescriptorSets_[frame.frameIndex];
 
-	//	vk::DescriptorSet set = opaqueShadowDescriptorSets_[frame.frameIndex].getSet();
+			shadowUBOData_ = {
+				.u_lightSpaceMatrix = lightSpaceMatrix
+			};
 
-	//	shadowUBOData_ = {};
+			opaqueShadowUBOBuffers_[frame.frameIndex].upload(&shadowUBOData_, sizeof(shadowUBOData_));
+			
+			ID3D12DescriptorHeap* heaps[] =
+			{
+				set.getDescriptorHeap()
+			};
 
-	//	shadowUBOData_.u_lightSpaceMatrix = lightSpaceMatrix;
+			cmd->SetDescriptorHeaps(1, heaps);
+			cmd->SetGraphicsRootSignature(opaqueShadowPipeline_.getRootSignature());
+			cmd->SetPipelineState(opaqueShadowPipeline_.getPipeline());
 
-	//	opaqueShadowUBOBuffers_[frame.frameIndex].upload(&shadowUBOData_, sizeof(shadowUBOData_), 0);
+			cmd->SetGraphicsRootDescriptorTable(
+				set.getDescriptorTableRootIndex(),
+				set.getTableGPUHandle()
+			);
 
-	//	cmd.bindDescriptorSets(
-	//		vk::PipelineBindPoint::eGraphics,
-	//		opaqueShadowPipeline_.getLayout(),
-	//		0,
-	//		1, &set,
-	//		0, nullptr
-	//	);
+			const ChunkDrawList& list = in.world->getOpaqueDrawList();
+			for (const auto& item : list.items)
+			{
+				ChunkPushConstants pc{};
+				pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
 
-	//	const ChunkDrawList& list = in.world->getOpaqueDrawList();
-	//	for (const auto& item : list.items)
-	//	{
-	//		ChunkPushConstants pc{};
-	//		pc.u_chunkOrigin = glm::vec4(item.chunkOrigin, 0.0f);
+				set.setGraphicsPushConstants(
+					cmd,
+					0,
+					pc
+				);
 
-	//		cmd.pushConstants(
-	//			opaqueShadowPipeline_.getLayout(),
-	//			vk::ShaderStageFlagBits::eVertex,
-	//			0,
-	//			sizeof(ChunkPushConstants),
-	//			&pc
-	//		);
-
-	//		item.gpu->drawOpaque(&frame, nullptr);
-	//	} // end for
-
-	//	cmd.endDebugUtilsLabelEXT();
-	//}
+				item.gpu->drawOpaque(nullptr, &frame);
+			} // end for
+		}
+		dx_->endGPUEvent(cmd);
+	}
 } // end of renderOpaque()
 
 
@@ -550,23 +554,23 @@ void ChunkPassDX12::updateDescriptorSet(uint32_t frameIndex)
 	//	}
 	//}
 
-	//// SHADOW
-	//{
-	//	DescriptorSetDX12& set = opaqueShadowDescriptorSets_[frameIndex];
-	//	if (!set.valid())
-	//	{
-	//		return;
-	//	}
+	// SHADOW
+	{
+		DescriptorSetDX12& set = opaqueShadowDescriptorSets_[frameIndex];
+		if (!set.valid())
+		{
+			return;
+		}
 
-	//	if (opaqueShadowUBOBuffers_[frameIndex].valid())
-	//	{
-	//		set.writeUniformBuffer(
-	//			TO_API_FORM(ShadowMapPassBinding::UBO),
-	//			opaqueShadowUBOBuffers_[frameIndex],
-	//			sizeof(ShadowMapPassUBO)
-	//		);
-	//	}
-	//}
+		if (opaqueShadowUBOBuffers_[frameIndex].valid())
+		{
+			set.writeUniformBuffer(
+				TO_API_FORM(ShadowMapPassBinding::UBO),
+				opaqueShadowUBOBuffers_[frameIndex],
+				sizeof(ShadowMapPassUBO)
+			);
+		}
+	}
 } // end of updateDescriptorSet()
 
 void ChunkPassDX12::updateSingleDescriptorSet(uint32_t frameIndex, RenderTargetDX12 renderTarget)
@@ -723,26 +727,26 @@ void ChunkPassDX12::updateSingleDescriptorSet(uint32_t frameIndex, RenderTargetD
 	//		}
 	//	}
 	//}
-	//else if (renderTarget == RenderTargetDX12::Shadow)
-	//{
-	//	// SHADOW
-	//	{
-	//		DescriptorSetDX12& set = opaqueShadowDescriptorSets_[frameIndex];
-	//		if (!set.valid())
-	//		{
-	//			return;
-	//		}
+	else if (renderTarget == RenderTargetDX12::Shadow)
+	{
+		// SHADOW
+		{
+			DescriptorSetDX12& set = opaqueShadowDescriptorSets_[frameIndex];
+			if (!set.valid())
+			{
+				return;
+			}
 
-	//		if (opaqueShadowUBOBuffers_[frameIndex].valid())
-	//		{
-	//			set.writeUniformBuffer(
-	//				TO_API_FORM(ShadowMapPassBinding::UBO),
-	//				opaqueShadowUBOBuffers_[frameIndex],
-	//				sizeof(ShadowMapPassUBO)
-	//			);
-	//		}
-	//	}
-	//}
+			if (opaqueShadowUBOBuffers_[frameIndex].valid())
+			{
+				set.writeUniformBuffer(
+					TO_API_FORM(ShadowMapPassBinding::UBO),
+					opaqueShadowUBOBuffers_[frameIndex],
+					sizeof(ShadowMapPassUBO)
+				);
+			}
+		}
+	}
 } // end of updateSingleDescriptorSet()
 
 void ChunkPassDX12::createResources()
@@ -788,14 +792,14 @@ void ChunkPassDX12::createResources()
 		//	true
 		//);
 
-		//// shadow
-		//opaqueShadowUBOBuffers_[i].create(
-		//	sizeof(ShadowMapPassUBO),
-		//	D3D12_HEAP_TYPE_UPLOAD,
-		//	D3D12_RESOURCE_STATE_GENERIC_READ,
-		//	D3D12_RESOURCE_FLAG_NONE,
-		//	true
-		//);
+		// shadow
+		opaqueShadowUBOBuffers_[i].create(
+			sizeof(ShadowMapPassUBO),
+			D3D12_HEAP_TYPE_UPLOAD,
+			D3D12_RESOURCE_STATE_GENERIC_READ,
+			D3D12_RESOURCE_FLAG_NONE,
+			true
+		);
 	} // end for
 } // end of createResources()
 
@@ -963,26 +967,37 @@ void ChunkPassDX12::createDescriptorSets()
 		//	);
 		//}
 
-		//// shadow
-		//{
-		//	DescriptorBindingDX12 uboBinding{
-		//		.binding = TO_API_FORM(ShadowMapPassBinding::UBO),
-		//		.type = DescriptorTypeDX12::UniformBuffer,
-		//		.count = 1,
-		//		.visibility = D3D12_SHADER_VISIBILITY_ALL
-		//	};
+		// shadow
+		{
+			DescriptorBindingDX12 uboBinding{
+				.binding = TO_API_FORM(ShadowMapPassBinding::UBO),
+				.type = DescriptorTypeDX12::UniformBuffer,
+				.count = 1,
+				.visibility = D3D12_SHADER_VISIBILITY_ALL
+			};
+			PushConstantRangeDX12 chunkPushConstants{
+				.binding = 0,
+				.num32BitValues = sizeof(ChunkPushConstants) / 4,
+				.registerSpace = 1,
+				.visibility = D3D12_SHADER_VISIBILITY_VERTEX
+			};
 
-		//	opaqueShadowDescriptorSets_[i].createLayout({
-		//		uboBinding
-		//		});
+			opaqueShadowDescriptorSets_[i].createLayout(
+				{
+					uboBinding
+				},
+				{
+					chunkPushConstants
+				}
+			);
 
-		//	opaqueShadowDescriptorSets_[i].createPool(1);
-		//	opaqueShadowDescriptorSets_[i].allocate();
+			opaqueShadowDescriptorSets_[i].createPool(1);
+			opaqueShadowDescriptorSets_[i].allocate();
 
-		//	opaqueShadowDescriptorSets_[i].setDebugName(
-		//		L"ChunkPassDX12-Shadow::DescriptorSet frame " + std::to_wstring(i)
-		//	);
-		//}
+			opaqueShadowDescriptorSets_[i].setDebugName(
+				L"ChunkPassDX12-Shadow::DescriptorSet frame " + std::to_wstring(i)
+			);
+		}
 	} // end for
 } // end of createDescriptorSets()
 
@@ -1064,39 +1079,39 @@ void ChunkPassDX12::createPipelines(
 	//	opaqueGBufferPipeline_.setDebugName(L"ChunkPassDX12-GBuffer::Pipeline");
 	//}
 
-	//// shadow
-	//{
-	//	GraphicsPipelineDescDX12 desc{
-	//	.vertShader = opaqueShadowShader_->vertShader(),
-	//	.fragShader = opaqueShadowShader_->fragShader(),
+	// shadow
+	{
+		GraphicsPipelineDescDX12 desc{
+			.vertShader = opaqueShadowShader_->vertShader(),
+			.fragShader = opaqueShadowShader_->fragShader(),
 
-	//	.rootSignature = opaqueShadowDescriptorSets_[0].getRootSignature(),
+			.rootSignature = opaqueShadowDescriptorSets_[0].getRootSignature(),
 
-	//	.inputElements =
-	//	{
-	//		D3D12_INPUT_ELEMENT_DESC{
-	//			.SemanticName = "POSITION",
-	//			.SemanticIndex = 0,
-	//			.Format = DXGI_FORMAT_R32_UINT,
-	//			.InputSlot = 0,
-	//			.AlignedByteOffset = 0,
-	//			.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-	//			.InstanceDataStepRate = 0
-	//		}
-	//	},
+			.inputElements =
+			{
+				D3D12_INPUT_ELEMENT_DESC{
+					.SemanticName = "POSITION",
+					.SemanticIndex = 0,
+					.Format = DXGI_FORMAT_R32_UINT,
+					.InputSlot = 0,
+					.AlignedByteOffset = 0,
+					.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+					.InstanceDataStepRate = 0
+				}
+			},
 
-	//	.cullMode = D3D12_CULL_MODE_BACK,
-	//	.frontCCW = FALSE,
+			.cullMode = D3D12_CULL_MODE_BACK,
+			.frontCCW = FALSE,
 
-	//	.depthTestEnable = TRUE,
-	//	.depthWriteEnable = TRUE,
-	//	.depthCompareFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
+			.depthTestEnable = TRUE,
+			.depthWriteEnable = TRUE,
+			.depthCompareFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL,
 
-	//	.colorFormat = shadowFormats.colorFormat,
-	//	.depthFormat = shadowFormats.depthFormat,
-	//	};
+			.colorFormat = shadowFormats.colorFormat,
+			.depthFormat = shadowFormats.depthFormat
+		};
 
-	//	opaqueShadowPipeline_.create(desc);
-	//	opaqueShadowPipeline_.setDebugName(L"ChunkPassDX12-Shadow::Pipeline");
-	//}
+		opaqueShadowPipeline_.create(desc);
+		opaqueShadowPipeline_.setDebugName(L"ChunkPassDX12-Shadow::Pipeline");
+	}
 } // end of createPipelines()

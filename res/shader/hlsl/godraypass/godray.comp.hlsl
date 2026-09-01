@@ -32,7 +32,8 @@ float SampleShadowMap(float3 worldPos)
 //     proj = proj * 0.5 + 0.5;
 // #endif
 
-    proj.xy = proj.xy * 0.5 + 0.5;
+    proj.x = proj.x * 0.5 + 0.5;
+    proj.y = -proj.y * 0.5 + 0.5;
 
     if(proj.x < 0.0 || proj.x > 1.0 ||
        proj.y < 0.0 || proj.y > 1.0 ||

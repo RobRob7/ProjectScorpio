@@ -26,6 +26,13 @@ public:
 
     void setDebugName(const std::wstring& name);
 
+    void clearUAVThenShaderRead(
+        ID3D12GraphicsCommandList* cmd,
+        D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle,
+        D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle,
+        const std::array<float, 4>& color
+    );
+
     void clearColorThenShaderRead(
         ID3D12GraphicsCommandList* cmd,
         const std::array<float, 4>& color

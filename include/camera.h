@@ -73,6 +73,7 @@ public:
 
 	const glm::mat4 getProjectionMatrix(float aspectRatio) const;
 	const glm::mat4 getProjectionMatrixVk(float aspectRatio) const;
+	const glm::mat4 getProjectionMatrixDX12(float aspectRatio) const;
 
 	const glm::mat4 getJitterProjectionMatrixVk(float aspectRatio, const glm::vec2& jitter) const;
 

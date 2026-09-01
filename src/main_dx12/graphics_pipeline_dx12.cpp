@@ -102,12 +102,12 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 		);
 	}
 
-	if (desc.colorFormat == DXGI_FORMAT_UNKNOWN)
-	{
-		throw std::runtime_error(
-			"GraphicsPipelineDX12::create - colorFormat is DXGI_FORMAT_UNKNOWN"
-		);
-	}
+	//if (desc.colorFormat == DXGI_FORMAT_UNKNOWN)
+	//{
+	//	throw std::runtime_error(
+	//		"GraphicsPipelineDX12::create - colorFormat is DXGI_FORMAT_UNKNOWN"
+	//	);
+	//}
 
 	if (desc.depthTestEnable && desc.depthFormat == DXGI_FORMAT_UNKNOWN)
 	{
@@ -191,8 +191,15 @@ void GraphicsPipelineDX12::create(const GraphicsPipelineDescDX12& desc)
 	psoDesc.DepthStencilState = depth;
 
 	// formats
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = desc.colorFormat;
+	if (desc.colorFormat != DXGI_FORMAT_UNKNOWN)
+	{
+		psoDesc.NumRenderTargets = 1;
+		psoDesc.RTVFormats[0] = desc.colorFormat;
+	}
+	else
+	{
+		psoDesc.NumRenderTargets = 0;
+	}
 	psoDesc.DSVFormat = desc.depthTestEnable
 		? desc.depthFormat
 		: DXGI_FORMAT_UNKNOWN;

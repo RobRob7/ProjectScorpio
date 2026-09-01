@@ -133,6 +133,21 @@ void FogPassDX12::render(
 	dx_->endGPUEvent(cmd);
 } // end of render()
 
+void FogPassDX12::clearOutputImage(
+	const FrameContextDX12& frame,
+	const std::array<float, 4>& color
+)
+{
+	if (!outputImage_.valid())
+	{
+		return;
+	}
+
+	ID3D12GraphicsCommandList* cmd = frame.cmd;
+
+	outputImage_.clearColorThenShaderRead(cmd, color);
+} // end of clearOutputImage()
+
 
 //--- PRIVATE ---//
 void FogPassDX12::syncSettings()

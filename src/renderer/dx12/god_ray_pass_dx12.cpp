@@ -40,7 +40,6 @@ GodRayPassDX12::~GodRayPassDX12() = default;
 void GodRayPassDX12::init()
 {
 	Extent2D extent = dx_->getSwapChainExtent();
-
 	width_ = std::max(1u, (extent.width + factor_ - 1) / factor_);
 	height_ = std::max(1u, (extent.height + factor_ - 1) / factor_);
 
@@ -130,6 +129,21 @@ void GodRayPassDX12::render(
 	outputImage_.transitionToShaderRead(cmd, false);
 } // end of render()
 
+void GodRayPassDX12::clearOutputImage(
+	const FrameContextDX12& frame,
+	const std::array<float, 4>& color
+)
+{
+	if (!outputImage_.valid())
+	{
+		return;
+	}
+
+	ID3D12GraphicsCommandList* cmd = frame.cmd;
+
+	outputImage_.clearColorThenShaderRead(cmd, color);
+} // end of clearOutputImage()
+
 
 //--- PRIVATE ---//
 void GodRayPassDX12::syncSettings()
@@ -178,15 +192,23 @@ void GodRayPassDX12::updateDescriptorSet(uint32_t frameIndex)
 
 void GodRayPassDX12::createAttachment()
 {
+	D3D12_CLEAR_VALUE clearValue{
+		.Format = outputFormat_,
+		.Color = {0.0f, 0.0f, 0.0f, 0.0f}
+	};
+
 	outputImage_.createImage(
 		static_cast<uint32_t>(width_),
 		static_cast<uint32_t>(height_),
 		1,
 		false,
 		outputFormat_,
-		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-		D3D12_RESOURCE_STATE_UNORDERED_ACCESS
+		D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS |
+			D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET,
+		D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+		&clearValue
 	);
+	outputImage_.createRTV();
 	outputImage_.setDebugName(L"GodRayPassDX12-OutputImage");
 } // end of createAttachment()
 
@@ -240,7 +262,7 @@ void GodRayPassDX12::createDescriptorSet()
 			inputDepthBinding,
 			inputShadowBinding,
 			outputColorBinding
-			});
+		});
 		descriptorSets_[i].createPool(4);
 		descriptorSets_[i].allocate();
 

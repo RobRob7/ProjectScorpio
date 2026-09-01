@@ -39,6 +39,11 @@ public:
 		const FrameContextDX12& frame
 	);
 
+	void clearOutputImage(
+		const FrameContextDX12& frame,
+		const std::array<float, 4>& color
+	);
+
 	void setInput(
 		ImageDX12& inputDepth, 
 		ImageDX12& inputShadowMap

@@ -123,7 +123,7 @@ float ShadowCalculation(float4 fragPosLightSpace, float3 normalInput)
 } // end of ShadowCalculation()
 
 float4 PSMain(PSInput input) : SV_Target0
-{
+{   
     // get correct UV due to greedy meshing
     float2 tiled = input.TileUV;
     float2 local = frac(tiled);
@@ -204,15 +204,15 @@ float4 PSMain(PSInput input) : SV_Target0
 
     // shadow
     float shadowFactor = 1.0;
-    //if (u_useShadowMap != 0)
-    //{
-    //    float shadow = ShadowCalculation(
-    //        input.FragPosLightSpace,
-    //        input.Normal
-    //    );
+    if (u_useShadowMap != 0)
+    {
+        float shadow = ShadowCalculation(
+            input.FragPosLightSpace,
+            input.Normal
+        );
 
-    //    shadowFactor = clamp(1.0 - shadow, 0.0, 1.0);
-    //}
+        shadowFactor = clamp(1.0 - shadow, 0.0, 1.0);
+    }
 
     float aoDirect = lerp(1.0, ao, 0.5);
     float3 direct = (diffuse + specular) * aoDirect;

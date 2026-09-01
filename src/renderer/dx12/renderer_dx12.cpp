@@ -25,7 +25,7 @@
 //#include "ray_tracing_world_pass_vk.h"
 //
 #include "gbuffer_pass_dx12.h"
-//#include "shadow_map_pass_vk.h"
+#include "shadow_map_pass_dx12.h"
 #include "debug_pass_dx12.h"
 //#include "ssao_pass_vk.h"
 //#include "water_pass_vk.h"
@@ -107,10 +107,10 @@ void RendererDX12::init()
 	{
 		gbufferPass_ = std::make_unique<GBufferPassDX12>(*dx_);
 	}
-	//if (!shadowMapPass_)
-	//{
-	//	shadowMapPass_ = std::make_unique<ShadowMapPassVk>(vk_);
-	//}
+	if (!shadowMapPass_)
+	{
+		shadowMapPass_ = std::make_unique<ShadowMapPassDX12>(*dx_);
+	}
 	if (!debugPass_)
 	{
 		debugPass_ = std::make_unique<DebugPassDX12>(*dx_);
@@ -144,10 +144,10 @@ void RendererDX12::init()
 	{
 		fogPass_ = std::make_unique<FogPassDX12>(*dx_, *rs_);
 	}
-	//if (!godRayPass_)
-	//{
-	//	godRayPass_ = std::make_unique<GodRayPassDX12>(*dx_, *rs_);
-	//}
+	if (!godRayPass_)
+	{
+		godRayPass_ = std::make_unique<GodRayPassDX12>(*dx_, *rs_);
+	}
 	//if (!fxaaPass_)
 	//{
 	//	fxaaPass_ = std::make_unique<FXAAPassVk>(vk_);
@@ -159,7 +159,7 @@ void RendererDX12::init()
 	}
 
 	gbufferPass_->init();
-	//shadowMapPass_->init();
+	shadowMapPass_->init();
 	debugPass_->init();
 	//ssaoPass_->init();
 
@@ -167,16 +167,16 @@ void RendererDX12::init()
 	chunkPass_->init(
 		{sceneColorFormat_, sceneDepthFormat_},
 		{ sceneColorFormat_, sceneDepthFormat_ },
-		{ sceneColorFormat_, sceneDepthFormat_ }
+		//{ sceneColorFormat_, sceneDepthFormat_ }
 		//{gbufferPass_->getNormalImage().format(), gbufferPass_->getDepthImage().format()},
-		//{vk::Format::eUndefined, shadowMapPass_->getDepthImage().format()}
+		{DXGI_FORMAT_UNKNOWN, shadowMapPass_->getDepthImage().dsvFormat()}
 	);
 
 	//compositePassHybrid_->init();
 	compositePassPost_->init();
 
 	fogPass_->init();
-	//godRayPass_->init();
+	godRayPass_->init();
 	//fxaaPass_->init();
 	presentPass_->init();
 } // end of init()
@@ -204,7 +204,7 @@ void RendererDX12::resize(int w, int h)
 	if (compositePassPost_)	compositePassPost_->resize();
 
 	if (fogPass_)		fogPass_->resize();
-	//if (godRayPass_)	godRayPass_->resize();
+	if (godRayPass_)	godRayPass_->resize();
 	//if (fxaaPass_)		fxaaPass_->resize();
 
 	if (presentPass_)	presentPass_->resize();
@@ -230,7 +230,7 @@ void RendererDX12::renderFrame(
 	const float aspect = (height_ > 0)
 		? (static_cast<float>(width_) / static_cast<float>(height_))
 		: 1.0f;
-	glm::mat4 proj = in.camera->getProjectionMatrix(aspect);
+	glm::mat4 proj = in.camera->getProjectionMatrixDX12(aspect);
 
 	ID3D12GraphicsCommandList* cmd = frame.cmd;
 
@@ -269,6 +269,17 @@ void RendererDX12::renderFrame(
 		};
 		gbufferPass_->render(
 			ubo,
+			in,
+			frame
+		);
+	}
+
+	// shadow map pass
+	if ((!rs_->useRT && shadowMapPass_) ||
+		rs_->useGodRays)
+	{
+		shadowMapPass_->render(
+			*chunkPass_,
 			in,
 			frame
 		);
@@ -335,7 +346,7 @@ void RendererDX12::renderFrame(
 	{
 		chunkPass_->setInput(
 			sceneColor_,
-			sceneColor_
+			shadowMapPass_->getDepthImage()
 		);
 
 		chunkPass_->renderOpaque(
@@ -344,8 +355,7 @@ void RendererDX12::renderFrame(
 			frame,
 			view,
 			proj,
-			glm::mat4(1.0)
-			//shadowMapPass_->getLightSpaceMatrix()
+			shadowMapPass_->getLightSpaceMatrix()
 		);
 	}
 
@@ -378,9 +388,8 @@ void RendererDX12::renderFrame(
 		debugPass_->setInput(
 			gbufferPass_->getNormalImage(),
 			gbufferPass_->getDepthImage(),
-			gbufferPass_->getNormalImage(),
+			shadowMapPass_->getDepthImage(),
 			gbufferPass_->getDepthImage()
-			//shadowMapPass_->getDepthImage(),
 			//rtWorldPass_->getOutDepthImage()
 		);
 
@@ -448,40 +457,40 @@ void RendererDX12::renderFrame(
 	}
 	else
 	{
-		fogPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 1 });
+		fogPass_->clearOutputImage(frame, { 0, 0, 0, 1 });
 	}
 
 	// GOD RAYS
 	if (rs_->useGodRays)
 	{
-		//godRayPass_->setInput(
-		//	*sceneDepth,
-		//	shadowMapPass_->getDepthImage()
-		//);
+		godRayPass_->setInput(
+			*sceneDepth,
+			shadowMapPass_->getDepthImage()
+		);
 
-		//GodRayUBOs ubos
-		//{
-		//	.ubo = {
-		//		.u_invViewProj = glm::inverse(proj * view),
-		//		.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix(),
-		//		.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f),
-		//		.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f),
-		//		.u_lightDir = in.light->getDirection(),
-		//		.u_maxDistance = rs_->godRaySettings.maxDistance,
-		//		.u_stepSize = rs_->godRaySettings.stepSize,
-		//	}
-		//};
-		//godRayPass_->render(ubos, frame);
+		GodRayUBOs ubos
+		{
+			.ubo = {
+				.u_invViewProj = glm::inverse(proj * view),
+				.u_lightSpaceMatrix = shadowMapPass_->getLightSpaceMatrix(),
+				.u_cameraPos = glm::vec4(in.camera->getCameraPosition(), 1.0f),
+				.u_sunColor = glm::vec4(in.light->getLightColor(), 1.0f),
+				.u_lightDir = in.light->getDirection(),
+				.u_maxDistance = rs_->godRaySettings.maxDistance,
+				.u_stepSize = rs_->godRaySettings.stepSize,
+			}
+		};
+		godRayPass_->render(ubos, frame);
 	}
 	else
 	{
-		//godRayPass_->getOutputImage().clearColorThenShaderRead(cmd, { 0, 0, 0, 0 });
+		godRayPass_->clearOutputImage(frame, { 0, 0, 0, 0 });
 	}
 
 	// POST COMPOSITE
 	compositePassPost_->setInput(
 		fogPass_->getOutputImage(),
-		fogPass_->getOutputImage(),
+		godRayPass_->getOutputImage(),
 		*currentColor
 	);
 	compositePassPost_->render(frame);
